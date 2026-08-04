@@ -1,0 +1,5 @@
+node_modules/
+vendor/
+# Apple's domain association file is issued per merchant account and is not
+# ours to publish. It goes in the plugin directory on the live site.
+apple-developer-merchantid-domain-association
