@@ -31,12 +31,12 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * @return array{ok:true,url:string}|array{ok:false,reason:string,retriable:bool,message:string}
  */
-function uwp_checkout_create_session( string $plan, int $quantity = 1, ?string $bump = null ): array {
-	if ( ! uwp_checkout_is_configured() ) {
-		return uwp_checkout_error(
+function wpdc_create_session( string $plan, int $quantity = 1, ?string $bump = null ): array {
+	if ( ! wpdc_is_configured() ) {
+		return wpdc_error(
 			'not_configured',
 			false,
-			__( 'Checkout is not set up on this site yet.', 'uwp-checkout' )
+			__( 'Checkout is not set up on this site yet.', 'wp-dodo-checkout' )
 		);
 	}
 
@@ -49,12 +49,12 @@ function uwp_checkout_create_session( string $plan, int $quantity = 1, ?string $
 	}
 
 	$response = wp_remote_post(
-		uwp_checkout_endpoint() . '/api/checkout-session',
+		wpdc_endpoint() . '/api/checkout-session',
 		array(
-			'timeout' => UWP_CHECKOUT_TIMEOUT,
+			'timeout' => WPDC_TIMEOUT,
 			'headers' => array(
 				'content-type'             => 'application/json',
-				'x-lumo-checkout-secret'   => uwp_checkout_secret(),
+				'x-lumo-checkout-secret'   => wpdc_secret(),
 			),
 			'body'    => wp_json_encode( $body ),
 		)
@@ -63,10 +63,10 @@ function uwp_checkout_create_session( string $plan, int $quantity = 1, ?string $
 	if ( is_wp_error( $response ) ) {
 		// Never the WP_Error message: it can carry the endpoint host, and this
 		// string is on its way to a browser.
-		return uwp_checkout_error(
+		return wpdc_error(
 			'unreachable',
 			true,
-			__( 'The checkout could not be opened. Please try again in a moment.', 'uwp-checkout' )
+			__( 'The checkout could not be opened. Please try again in a moment.', 'wp-dodo-checkout' )
 		);
 	}
 
@@ -81,40 +81,40 @@ function uwp_checkout_create_session( string $plan, int $quantity = 1, ?string $
 	// about and no amount of retrying will fix. Separated from a 5xx for
 	// exactly that reason: one is a page to fix, the other is a minute to wait.
 	if ( 401 === $status ) {
-		return uwp_checkout_error(
+		return wpdc_error(
 			'unauthorized',
 			false,
-			__( 'Checkout is not set up correctly on this site.', 'uwp-checkout' )
+			__( 'Checkout is not set up correctly on this site.', 'wp-dodo-checkout' )
 		);
 	}
 
 	if ( 400 === $status ) {
-		return uwp_checkout_error(
+		return wpdc_error(
 			'unknown_plan',
 			false,
-			__( 'That option is not available.', 'uwp-checkout' )
+			__( 'That option is not available.', 'wp-dodo-checkout' )
 		);
 	}
 
 	if ( 429 === $status ) {
-		return uwp_checkout_error(
+		return wpdc_error(
 			'rate_limited',
 			true,
-			__( 'Too many attempts just now. Please try again in a minute.', 'uwp-checkout' )
+			__( 'Too many attempts just now. Please try again in a minute.', 'wp-dodo-checkout' )
 		);
 	}
 
-	return uwp_checkout_error(
+	return wpdc_error(
 		'unavailable',
 		true,
-		__( 'The checkout could not be opened. Please try again in a moment.', 'uwp-checkout' )
+		__( 'The checkout could not be opened. Please try again in a moment.', 'wp-dodo-checkout' )
 	);
 }
 
 /**
  * @return array{ok:false,reason:string,retriable:bool,message:string}
  */
-function uwp_checkout_error( string $reason, bool $retriable, string $message ): array {
+function wpdc_error( string $reason, bool $retriable, string $message ): array {
 	return array(
 		'ok'        => false,
 		'reason'    => $reason,

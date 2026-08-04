@@ -19,12 +19,12 @@ $root = dirname( __DIR__ );
 
 define( 'ABSPATH', $root . '/' );
 
-$GLOBALS['uwp_test_options']  = array();
-$GLOBALS['uwp_test_response'] = null;
-$GLOBALS['uwp_test_request']  = null;
+$GLOBALS['wpdc_test_options']  = array();
+$GLOBALS['wpdc_test_response'] = null;
+$GLOBALS['wpdc_test_request']  = null;
 
 function get_option( string $name, $default = false ) {
-	return $GLOBALS['uwp_test_options'][ $name ] ?? $default;
+	return $GLOBALS['wpdc_test_options'][ $name ] ?? $default;
 }
 function untrailingslashit( string $value ): string {
 	return rtrim( $value, '/\\' );
@@ -36,8 +36,8 @@ function is_wp_error( $thing ): bool {
 	return $thing instanceof WP_Error;
 }
 function wp_remote_post( string $url, array $args ) {
-	$GLOBALS['uwp_test_request'] = array( 'url' => $url, 'args' => $args );
-	return $GLOBALS['uwp_test_response'];
+	$GLOBALS['wpdc_test_request'] = array( 'url' => $url, 'args' => $args );
+	return $GLOBALS['wpdc_test_response'];
 }
 function wp_remote_retrieve_response_code( $response ): int {
 	return (int) ( $response['response']['code'] ?? 0 );
@@ -80,14 +80,14 @@ function source( string $path ): string {
 }
 
 function configure(): void {
-	$GLOBALS['uwp_test_options'] = array(
-		'uwp_checkout_endpoint' => 'https://mcp.example/',
-		'uwp_checkout_secret'   => 's3cret',
+	$GLOBALS['wpdc_test_options'] = array(
+		'wpdc_endpoint' => 'https://mcp.example/',
+		'wpdc_secret'   => 's3cret',
 	);
 }
 
 function respond( int $status, array $body ): void {
-	$GLOBALS['uwp_test_response'] = array(
+	$GLOBALS['wpdc_test_response'] = array(
 		'response' => array( 'code' => $status ),
 		'body'     => json_encode( $body ),
 	);
@@ -100,27 +100,27 @@ function respond( int $status, array $body ): void {
 configure();
 
 respond( 200, array( 'checkoutUrl' => 'https://checkout.dodo/x' ) );
-$ok = uwp_checkout_create_session( 'pro' );
+$ok = wpdc_create_session( 'pro' );
 check( 'SILENCE: a good response yields the url', true === $ok['ok'] && 'https://checkout.dodo/x' === $ok['url'] );
 
 respond( 401, array() );
-$unauth = uwp_checkout_create_session( 'pro' );
+$unauth = wpdc_create_session( 'pro' );
 check( 'BELL: 401 is not retriable, because retrying cannot fix a wrong secret', false === $unauth['ok'] && 'unauthorized' === $unauth['reason'] && false === $unauth['retriable'] );
 
 respond( 400, array() );
-$plan = uwp_checkout_create_session( 'nope' );
+$plan = wpdc_create_session( 'nope' );
 check( 'BELL: 400 is not retriable, because the shortcode is wrong', false === $plan['ok'] && 'unknown_plan' === $plan['reason'] && false === $plan['retriable'] );
 
 respond( 429, array() );
-$rate = uwp_checkout_create_session( 'pro' );
+$rate = wpdc_create_session( 'pro' );
 check( 'BELL: 429 IS retriable', 'rate_limited' === $rate['reason'] && true === $rate['retriable'] );
 
 respond( 503, array() );
-$down = uwp_checkout_create_session( 'pro' );
+$down = wpdc_create_session( 'pro' );
 check( 'BELL: 5xx IS retriable', 'unavailable' === $down['reason'] && true === $down['retriable'] );
 
-$GLOBALS['uwp_test_response'] = new WP_Error( 'http_request_failed', 'cURL error 6: Could not resolve host: mcp.example' );
-$err = uwp_checkout_create_session( 'pro' );
+$GLOBALS['wpdc_test_response'] = new WP_Error( 'http_request_failed', 'cURL error 6: Could not resolve host: mcp.example' );
+$err = wpdc_create_session( 'pro' );
 check( 'BELL: a transport error is retriable', 'unreachable' === $err['reason'] && true === $err['retriable'] );
 check(
 	'BELL: the transport error message never reaches the visitor',
@@ -128,25 +128,25 @@ check(
 );
 
 respond( 200, array() );
-$empty = uwp_checkout_create_session( 'pro' );
+$empty = wpdc_create_session( 'pro' );
 check( 'BELL: a 200 with no url is a failure, not an empty redirect', false === $empty['ok'] );
 
-$GLOBALS['uwp_test_options'] = array();
-$GLOBALS['uwp_test_request']  = null;
-$unconfigured = uwp_checkout_create_session( 'pro' );
+$GLOBALS['wpdc_test_options'] = array();
+$GLOBALS['wpdc_test_request']  = null;
+$unconfigured = wpdc_create_session( 'pro' );
 check( 'BELL: unconfigured is not retriable', 'not_configured' === $unconfigured['reason'] && false === $unconfigured['retriable'] );
 // Asserted against the recorded request, not against a constant. The previous
 // version of this line was `check( ..., true )`: a check that cannot fail,
 // counted toward the total, which is exactly the false all-clear the rest of
 // this file exists to catch.
-check( 'BELL: unconfigured makes no request at all', null === $GLOBALS['uwp_test_request'] );
+check( 'BELL: unconfigured makes no request at all', null === $GLOBALS['wpdc_test_request'] );
 
 // ─── What reaches the outbound request ───────────────────────────────────────
 
 configure();
 respond( 200, array( 'checkoutUrl' => 'u' ) );
-uwp_checkout_create_session( 'pro', 20, 'ebook' );
-$sent = json_decode( $GLOBALS['uwp_test_request']['args']['body'], true );
+wpdc_create_session( 'pro', 20, 'ebook' );
+$sent = json_decode( $GLOBALS['wpdc_test_request']['args']['body'], true );
 
 check( 'SILENCE: the plan key is sent', 'pro' === $sent['plan'] );
 check( 'SILENCE: the seat count is sent', 20 === $sent['quantity'] );
@@ -160,25 +160,25 @@ check(
 );
 check(
 	'BELL: the secret travels in a header, never in the url or the body',
-	's3cret' === $GLOBALS['uwp_test_request']['args']['headers']['x-lumo-checkout-secret']
-		&& ! str_contains( $GLOBALS['uwp_test_request']['url'], 's3cret' )
-		&& ! str_contains( $GLOBALS['uwp_test_request']['args']['body'], 's3cret' )
+	's3cret' === $GLOBALS['wpdc_test_request']['args']['headers']['x-lumo-checkout-secret']
+		&& ! str_contains( $GLOBALS['wpdc_test_request']['url'], 's3cret' )
+		&& ! str_contains( $GLOBALS['wpdc_test_request']['args']['body'], 's3cret' )
 );
 check(
 	'BELL: a trailing slash on the endpoint does not double up',
-	'https://mcp.example/api/checkout-session' === $GLOBALS['uwp_test_request']['url']
+	'https://mcp.example/api/checkout-session' === $GLOBALS['wpdc_test_request']['url']
 );
 
-uwp_checkout_create_session( 'pro' );
-$plain = json_decode( $GLOBALS['uwp_test_request']['args']['body'], true );
+wpdc_create_session( 'pro' );
+$plain = json_decode( $GLOBALS['wpdc_test_request']['args']['body'], true );
 check( 'SILENCE: no bump means no bump key', ! array_key_exists( 'bump', $plain ) );
 
 // ─── Configuration precedence ────────────────────────────────────────────────
 
-define( 'UWP_CHECKOUT_SECRET', 'from-wp-config' );
+define( 'WPDC_SECRET', 'from-wp-config' );
 check(
 	'BELL: a wp-config constant beats the stored option',
-	'from-wp-config' === uwp_checkout_secret()
+	'from-wp-config' === wpdc_secret()
 );
 
 // ─── Source contracts ────────────────────────────────────────────────────────
@@ -212,6 +212,21 @@ check(
 	str_contains( $js, 'uwpFromServer' ) && ! str_contains( $js, 'say(root, err.message' )
 );
 check(
+	// The rename shipped docs that named a shortcode the plugin did not
+	// register, and every check still passed. A tag nobody registers is a
+	// page that renders nothing, found by the customer rather than here.
+	'BELL: the shortcode the README documents is the one that is registered',
+	( static function ( string $root ): bool {
+		$code = (string) file_get_contents( $root . '/includes/shortcode.php' );
+		if ( ! preg_match( "/add_shortcode\\(\\s*'([a-z0-9_]+)'/", $code, $m ) ) {
+			return false;
+		}
+		$tag = $m[1];
+		$readme = (string) file_get_contents( $root . '/README.md' );
+		return str_contains( $readme, '[' . $tag . ' ' ) && str_contains( $code, '[' . $tag . ' ' );
+	} )( $root )
+);
+check(
 	'BELL: the browser never names a product id',
 	! str_contains( $js, 'product_id' ) && ! str_contains( $js, 'pdt_' )
 );
@@ -224,7 +239,7 @@ check(
 	// string, dropping it from `plan` and leaving it on `bump` looked
 	// identical -- which a mutation showed.
 	'BELL: the REST route validates BOTH plan keys before they leave the site',
-	2 === substr_count( $rest, "'validate_callback' => 'uwp_checkout_is_plan_key'" )
+	2 === substr_count( $rest, "'validate_callback' => 'wpdc_is_plan_key'" )
 );
 check(
 	'BELL: the request is same-origin, so the nonce cookie is actually sent',
@@ -232,7 +247,7 @@ check(
 );
 check(
 	'BELL: Apple Pay is served on init, before canonical redirects',
-	str_contains( $applepay, "add_action( 'init'" ) || str_contains( source( $root . '/uwp-checkout.php' ), "'init', 'uwp_checkout_serve_apple_pay_association'" )
+	str_contains( $applepay, "add_action( 'init'" ) || str_contains( source( $root . '/wp-dodo-checkout.php' ), "'init', 'wpdc_serve_apple_pay_association'" )
 );
 check(
 	'BELL: a missing association file falls through rather than serving an empty 200',

@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: UWP Checkout
+ * Plugin Name: WP Dodo Checkout
  * Plugin URI: https://unleash-wp.com
  * Description: Puts a Dodo Payments checkout on a WordPress page via shortcode, inline or as an overlay, with an optional order bump. The payment API key never reaches this site.
  * Version: 0.1.0
@@ -9,7 +9,7 @@
  * Author: UnleashWP
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: uwp-checkout
+ * Text Domain: wp-dodo-checkout
  *
  * ── What this plugin is, and what it refuses to be ──────────────────────────
  *
@@ -37,15 +37,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'UWP_CHECKOUT_VERSION', '0.1.0' );
-define( 'UWP_CHECKOUT_DIR', plugin_dir_path( __FILE__ ) );
+define( 'WPDC_VERSION', '0.1.0' );
+define( 'WPDC_DIR', plugin_dir_path( __FILE__ ) );
 
-require_once UWP_CHECKOUT_DIR . 'includes/config.php';
-require_once UWP_CHECKOUT_DIR . 'includes/client.php';
-require_once UWP_CHECKOUT_DIR . 'includes/shortcode.php';
-require_once UWP_CHECKOUT_DIR . 'includes/rest.php';
-require_once UWP_CHECKOUT_DIR . 'includes/apple-pay.php';
+require_once WPDC_DIR . 'includes/config.php';
+require_once WPDC_DIR . 'includes/client.php';
+require_once WPDC_DIR . 'includes/shortcode.php';
+require_once WPDC_DIR . 'includes/rest.php';
+require_once WPDC_DIR . 'includes/apple-pay.php';
 
-add_action( 'init', 'uwp_checkout_register_shortcode' );
-add_action( 'init', 'uwp_checkout_serve_apple_pay_association' );
-add_action( 'rest_api_init', 'uwp_checkout_register_rest' );
+add_action( 'init', 'wpdc_register_shortcode' );
+add_action( 'init', 'wpdc_serve_apple_pay_association' );
+add_action( 'rest_api_init', 'wpdc_register_rest' );

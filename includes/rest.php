@@ -29,22 +29,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-function uwp_checkout_register_rest(): void {
+function wpdc_register_rest(): void {
 	register_rest_route(
-		'uwp-checkout/v1',
+		'wp-dodo-checkout/v1',
 		'/session',
 		array(
 			'methods'             => 'POST',
-			'callback'            => 'uwp_checkout_rest_session',
+			'callback'            => 'wpdc_rest_session',
 			'permission_callback' => '__return_true',
 			'args'                => array(
 				'plan'     => array(
 					'required'          => true,
-					'validate_callback' => 'uwp_checkout_is_plan_key',
+					'validate_callback' => 'wpdc_is_plan_key',
 				),
 				'bump'     => array(
 					'required'          => false,
-					'validate_callback' => 'uwp_checkout_is_plan_key',
+					'validate_callback' => 'wpdc_is_plan_key',
 				),
 				'quantity' => array(
 					'required'          => false,
@@ -57,23 +57,23 @@ function uwp_checkout_register_rest(): void {
 }
 
 /** Lowercase, digits, underscores. The same shape the server registers. */
-function uwp_checkout_is_plan_key( $value ): bool {
+function wpdc_is_plan_key( $value ): bool {
 	return is_string( $value ) && 1 === preg_match( '/^[a-z0-9_]{1,64}$/', $value );
 }
 
-function uwp_checkout_rest_session( WP_REST_Request $request ): WP_REST_Response {
+function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 	$nonce = $request->get_header( 'x-wp-nonce' );
 	if ( ! is_string( $nonce ) || ! wp_verify_nonce( $nonce, 'wp_rest' ) ) {
 		return new WP_REST_Response(
 			array(
-				'message'   => __( 'Please reload the page and try again.', 'uwp-checkout' ),
+				'message'   => __( 'Please reload the page and try again.', 'wp-dodo-checkout' ),
 				'retriable' => true,
 			),
 			403
 		);
 	}
 
-	$result = uwp_checkout_create_session(
+	$result = wpdc_create_session(
 		(string) $request->get_param( 'plan' ),
 		(int) ( $request->get_param( 'quantity' ) ?? 1 ),
 		// A plan key of "0" is falsy in PHP. Comparing against null is what the

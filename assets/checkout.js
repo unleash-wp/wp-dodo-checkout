@@ -9,15 +9,15 @@
 (function () {
   'use strict';
 
-  var cfg = window.uwpCheckout || {};
+  var cfg = window.wpdcCheckout || {};
 
   function say(root, text) {
-    var el = root.querySelector('.uwp-checkout__message');
+    var el = root.querySelector('.wpdc__message');
     if (el) el.textContent = text;
   }
 
   function requestUrl(root) {
-    var bump = root.querySelector('.uwp-checkout__bump-input');
+    var bump = root.querySelector('.wpdc__bump-input');
     var body = {
       plan: root.dataset.plan,
       quantity: Number(root.dataset.quantity || 1),
@@ -61,10 +61,10 @@
   }
 
   document.addEventListener('click', function (event) {
-    var button = event.target.closest('.uwp-checkout__button');
+    var button = event.target.closest('.wpdc__button');
     if (!button) return;
 
-    var root = button.closest('.uwp-checkout');
+    var root = button.closest('.wpdc');
     if (!root) return;
 
     event.preventDefault();

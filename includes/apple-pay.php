@@ -25,20 +25,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const UWP_APPLE_PAY_PATH = '/.well-known/apple-developer-merchantid-domain-association';
+const WPDC_APPLE_PAY_PATH = '/.well-known/apple-developer-merchantid-domain-association';
 
-function uwp_checkout_serve_apple_pay_association(): void {
+function wpdc_serve_apple_pay_association(): void {
 	$path = wp_parse_url( $_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH );
 	if ( ! is_string( $path ) ) {
 		return;
 	}
 	// Exact match, and no trailing slash tolerated: Apple fetches this one
 	// path and follows nothing.
-	if ( untrailingslashit( $path ) !== UWP_APPLE_PAY_PATH ) {
+	if ( untrailingslashit( $path ) !== WPDC_APPLE_PAY_PATH ) {
 		return;
 	}
 
-	$file = UWP_CHECKOUT_DIR . 'apple-developer-merchantid-domain-association';
+	$file = WPDC_DIR . 'apple-developer-merchantid-domain-association';
 	if ( ! is_readable( $file ) ) {
 		// Nothing to serve. Deliberately falls through to WordPress rather
 		// than emitting an empty 200: an empty file passes the fetch and

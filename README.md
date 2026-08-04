@@ -1,4 +1,4 @@
-# UWP Checkout
+# WP Dodo Checkout
 
 A WordPress shortcode that opens a Dodo Payments checkout. The payment API key
 never reaches the site.
@@ -24,11 +24,11 @@ copy. Two constants point it at a different site.
 ```php
 // wp-config.php — keeps both out of the database, which travels in backups,
 // staging copies and support exports.
-define( 'UWP_CHECKOUT_ENDPOINT', 'https://mcp.unleash-wp.com' );
-define( 'UWP_CHECKOUT_SECRET', '…' );
+define( 'WPDC_ENDPOINT', 'https://mcp.unleash-wp.com' );
+define( 'WPDC_SECRET', '…' );
 ```
 
-Both fall back to options (`uwp_checkout_endpoint`, `uwp_checkout_secret`) if
+Both fall back to options (`wpdc_endpoint`, `wpdc_secret`) if
 the constants are absent. The constant wins.
 
 The server needs the matching `LUMO_CHECKOUT_SECRET`, plus
@@ -37,10 +37,10 @@ The server needs the matching `LUMO_CHECKOUT_SECRET`, plus
 ## Usage
 
 ```
-[uwp_checkout plan="pro"]
-[uwp_checkout plan="team" quantity="20" label="Get Team 20"]
-[uwp_checkout plan="pro" bump="ebook" bump_label="Add the eBook for 9 EUR"]
-[uwp_checkout plan="pro" display="overlay"]
+[wpdc_checkout plan="pro"]
+[wpdc_checkout plan="team" quantity="20" label="Get Team 20"]
+[wpdc_checkout plan="pro" bump="ebook" bump_label="Add the eBook for 9 EUR"]
+[wpdc_checkout plan="pro" display="overlay"]
 ```
 
 | Attribute | Default | Notes |

@@ -1,17 +1,17 @@
 /* Deliberately minimal. A checkout button belongs to the theme it sits in;
    anything opinionated here would fight Impreza rather than fit it. Only
    layout and states the theme cannot know about. */
-.uwp-checkout__bump {
+.wpdc__bump {
   display: flex;
   gap: .5rem;
   align-items: flex-start;
   margin-bottom: .75rem;
   cursor: pointer;
 }
-.uwp-checkout__button[disabled] {
+.wpdc__button[disabled] {
   opacity: .6;
   cursor: default;
 }
-.uwp-checkout__message:empty {
+.wpdc__message:empty {
   display: none;
 }

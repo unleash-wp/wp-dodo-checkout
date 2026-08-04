@@ -17,29 +17,29 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /** How long to wait on the checkout server before calling it unreachable. */
-const UWP_CHECKOUT_TIMEOUT = 15;
+const WPDC_TIMEOUT = 15;
 
-function uwp_checkout_endpoint_is_constant(): bool {
-	return defined( 'UWP_CHECKOUT_ENDPOINT' ) && is_string( UWP_CHECKOUT_ENDPOINT );
+function wpdc_endpoint_is_constant(): bool {
+	return defined( 'WPDC_ENDPOINT' ) && is_string( WPDC_ENDPOINT );
 }
 
-function uwp_checkout_secret_is_constant(): bool {
-	return defined( 'UWP_CHECKOUT_SECRET' ) && is_string( UWP_CHECKOUT_SECRET );
+function wpdc_secret_is_constant(): bool {
+	return defined( 'WPDC_SECRET' ) && is_string( WPDC_SECRET );
 }
 
 /** Base URL of the server that mints sessions, without a trailing slash. */
-function uwp_checkout_endpoint(): string {
-	$value = uwp_checkout_endpoint_is_constant()
-		? UWP_CHECKOUT_ENDPOINT
-		: (string) get_option( 'uwp_checkout_endpoint', '' );
+function wpdc_endpoint(): string {
+	$value = wpdc_endpoint_is_constant()
+		? WPDC_ENDPOINT
+		: (string) get_option( 'wpdc_endpoint', '' );
 
 	return untrailingslashit( trim( $value ) );
 }
 
-function uwp_checkout_secret(): string {
-	$value = uwp_checkout_secret_is_constant()
-		? UWP_CHECKOUT_SECRET
-		: (string) get_option( 'uwp_checkout_secret', '' );
+function wpdc_secret(): string {
+	$value = wpdc_secret_is_constant()
+		? WPDC_SECRET
+		: (string) get_option( 'wpdc_secret', '' );
 
 	return trim( $value );
 }
@@ -51,6 +51,6 @@ function uwp_checkout_secret(): string {
  * cannot be created is worse than no button: the visitor has already decided
  * to buy by the time it fails.
  */
-function uwp_checkout_is_configured(): bool {
-	return '' !== uwp_checkout_endpoint() && '' !== uwp_checkout_secret();
+function wpdc_is_configured(): bool {
+	return '' !== wpdc_endpoint() && '' !== wpdc_secret();
 }
