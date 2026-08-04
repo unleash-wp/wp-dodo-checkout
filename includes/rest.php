@@ -76,7 +76,10 @@ function uwp_checkout_rest_session( WP_REST_Request $request ): WP_REST_Response
 	$result = uwp_checkout_create_session(
 		(string) $request->get_param( 'plan' ),
 		(int) ( $request->get_param( 'quantity' ) ?? 1 ),
-		$request->get_param( 'bump' ) ? (string) $request->get_param( 'bump' ) : null
+		// A plan key of "0" is falsy in PHP. Comparing against null is what the
+		// route's own validator already guarantees, and a truthiness test here
+		// would silently drop a bump the customer ticked.
+		null !== $request->get_param( 'bump' ) ? (string) $request->get_param( 'bump' ) : null
 	);
 
 	if ( ! $result['ok'] ) {

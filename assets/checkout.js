@@ -37,7 +37,13 @@
         if (res.ok && data.url) return data.url;
         // The server's sentence when it sent one; it is written for a
         // visitor. The generic line only when there was none.
-        throw new Error(data && data.message ? data.message : cfg.failed);
+        // Only a sentence the SERVER wrote. A parse failure or a browser
+        // network error carries text nobody wrote for a customer, and
+        // client.php takes care never to pass one on -- this is the other
+        // end of the same rule.
+        const err = new Error(typeof data?.message === 'string' ? data.message : cfg.failed);
+        err.uwpFromServer = typeof data?.message === 'string';
+        throw err;
       });
     });
   }
@@ -70,7 +76,9 @@
         open(root, url);
       })
       .catch(function (err) {
-        say(root, err.message || cfg.failed);
+        // err.message is only ever a server sentence (see above) or a browser
+        // failure. Anything not recognised falls back to our own wording.
+        say(root, err && err.uwpFromServer ? err.message : cfg.failed);
       })
       .finally(function () {
         // Re-enabled even on success: an overlay can be dismissed, and a

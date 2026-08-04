@@ -132,9 +132,14 @@ $empty = uwp_checkout_create_session( 'pro' );
 check( 'BELL: a 200 with no url is a failure, not an empty redirect', false === $empty['ok'] );
 
 $GLOBALS['uwp_test_options'] = array();
+$GLOBALS['uwp_test_request']  = null;
 $unconfigured = uwp_checkout_create_session( 'pro' );
 check( 'BELL: unconfigured is not retriable', 'not_configured' === $unconfigured['reason'] && false === $unconfigured['retriable'] );
-check( 'BELL: unconfigured makes no request at all', true );
+// Asserted against the recorded request, not against a constant. The previous
+// version of this line was `check( ..., true )`: a check that cannot fail,
+// counted toward the total, which is exactly the false all-clear the rest of
+// this file exists to catch.
+check( 'BELL: unconfigured makes no request at all', null === $GLOBALS['uwp_test_request'] );
 
 // ─── What reaches the outbound request ───────────────────────────────────────
 
@@ -197,6 +202,16 @@ check(
 	! preg_match( '/\b(price|amount|total)\s*[=:]/i', $js )
 );
 check(
+	// A plan key of "0" is falsy in PHP; a truthiness test would drop a bump
+	// the customer ticked and charge them for something else.
+	'BELL: the bump is read by comparison, not by truthiness',
+	str_contains( $rest, "null !== \$request->get_param( 'bump' )" )
+);
+check(
+	'BELL: only a server-written sentence is shown to the visitor',
+	str_contains( $js, 'uwpFromServer' ) && ! str_contains( $js, 'say(root, err.message' )
+);
+check(
 	'BELL: the browser never names a product id',
 	! str_contains( $js, 'product_id' ) && ! str_contains( $js, 'pdt_' )
 );
@@ -226,7 +241,13 @@ check(
 check(
 	'BELL: every include refuses to run outside WordPress',
 	( static function ( string $root ): bool {
-		foreach ( glob( $root . '/includes/*.php' ) as $file ) {
+		$files = glob( $root . '/includes/*.php' );
+		// Zero files scanned must not read as "scanned, all fine" -- a moved
+		// directory would have made this pass forever.
+		if ( ! $files || count( $files ) < 5 ) {
+			return false;
+		}
+		foreach ( $files as $file ) {
 			if ( ! str_contains( (string) file_get_contents( $file ), "defined( 'ABSPATH' )" ) ) {
 				return false;
 			}
