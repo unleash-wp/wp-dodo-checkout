@@ -31,8 +31,13 @@ define( 'WPDC_SECRET', '…' );
 Both fall back to options (`wpdc_endpoint`, `wpdc_secret`) if
 the constants are absent. The constant wins.
 
-The server needs the matching `LUMO_CHECKOUT_SECRET`, plus
-`LUMO_DODO_CHECKOUT_PRODUCTS` mapping plan keys to Dodo product ids.
+The server needs the matching `LUMO_CHECKOUT_SECRET`.
+
+A `plan` is not a Dodo product id and never travels as one: the server holds
+that mapping, or anybody who obtained the secret could mint a checkout for any
+product in the account at any price. The plan key comes from the product's own
+`lumo_plan` metadata in Dodo, so making something buyable from a page is one
+field on the product, with no server configuration and no deploy.
 
 ## Usage
 
