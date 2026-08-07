@@ -368,6 +368,88 @@ check(
 	} )( $rendered, $hunted, $root )
 );
 
+// ─── The overlay, and the three reasons it never opened ──────────────────────
+//
+// Same shape as the selector check above, one layer out: a name pulled from one
+// place and asserted in another. Here the other place is Dodo's own shipped
+// bundle, because the mismatch was with THEIR global, not with ours.
+//
+// checkout.js tested `window.DodoPayments`. The UMD build attaches exactly one
+// global and exports the namespace inside it:
+//
+//   (globalThis).DodoPaymentsCheckout = {} ... e.DodoPayments = W
+//
+// so `window.DodoPayments` is never set, the overlay branch was unreachable,
+// and every display="overlay" navigated instead. Nothing failed: falling
+// through to a navigation is a real branch with a comment explaining it. The
+// overlay had never once opened, and thirty-nine checks passed throughout.
+
+/**
+ * checkout.js with its comments removed.
+ *
+ * Every rule below asserts on EXECUTABLE text, and this is why. Two of them
+ * were first written against the whole file and two mutations walked straight
+ * through: replacing the SDK lookup with `null` left the name standing in the
+ * paragraph explaining the lookup, and gutting the warning left `console.warn`
+ * standing in the guard beside it. A check that a comment can satisfy is a
+ * check that the code can fail.
+ */
+$jsCode = ( static function ( string $js ): string {
+	$js = preg_replace( '#/\*.*?\*/#s', '', $js );
+	// Line comments, but not the // in a URL.
+	return (string) preg_replace( '#(?<!:)//[^\n]*#', '', (string) $js );
+} )( $js );
+
+check(
+	'BELL: the overlay reads the global the CDN bundle actually sets',
+	// The assignment, not the name: the name also appears in the paragraph above it.
+	preg_match( '/ns\s*=\s*window\.DodoPaymentsCheckout/', $jsCode ) === 1
+);
+
+check(
+	'BELL: mode is the environment Dodo requires, not a display type',
+	// The contract is `mode: "test" | "live"`, required. This passed 'overlay',
+	// which is neither -- and there was no setting to get wrong, because there
+	// was no setting. It is derived from the session URL now, so it cannot
+	// disagree with the environment that minted it.
+	! preg_match( "/mode:\s*'overlay'/", $jsCode )
+		&& preg_match( "/mode:\s*environmentFor\(/", $jsCode ) === 1
+);
+
+check(
+	'BELL: an unrecognised checkout host resolves to live, not test',
+	// The asymmetry is the point. A live session opened in test mode is the
+	// direction that quietly walks a real card into a test flow; the reverse
+	// fails where somebody can see it.
+	preg_match( "/return\s+\/\(\^\|\\\.\)test\\\.\/\.test\(host\)\s*\?\s*'test'\s*:\s*'live'/", $js ) === 1
+);
+
+check(
+	'BELL: onEvent is passed, so a failed checkout says something',
+	// Required by the SDK contract and absent before: a failed or abandoned
+	// checkout produced no message for the customer and no line for anyone
+	// debugging it.
+	str_contains( $jsCode, 'onEvent:' ) && str_contains( $jsCode, 'checkout.error' )
+);
+
+check(
+	'BELL: a missing SDK is reported, never swallowed',
+	// The navigation still happens -- a customer trying to pay must not be
+	// stopped by our script loader -- but silence is what hid the bug above for
+	// as long as it existed.
+	// The CALL. `console.warn` alone also matches the guard `&& console.warn)`.
+	str_contains( $jsCode, 'console.warn(' )
+);
+
+check(
+	'SILENCE: the false Apple Pay claim is gone',
+	// It said the redirect was "the only mode where Apple Pay is available at
+	// all". Dodo's documentation says the opposite in as many words: all
+	// digital wallets are supported in overlay checkout. That sentence was
+	// about to decide which mode this site shipped.
+	! preg_match( '/only mode where Apple Pay/i', $js )
+);
+
 // ─── Report ──────────────────────────────────────────────────────────────────
 
 if ( $failures ) {
