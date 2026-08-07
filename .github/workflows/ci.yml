@@ -1,0 +1,114 @@
+# Syntax, and the contracts that keep the plugin honest.
+#
+# This repo had no workflows at all while replacing two others, and
+# tests/run.php sat here as a suite nothing invoked. That is how a buy button
+# that matched no element in the page shipped and stayed shipped: thirty-three
+# checks were green and none of them ever ran.
+#
+# Same shape as lumo-wp/.github/workflows/ci.yml, minus the jobs that do not
+# apply -- there is no build, no bundle to compare, no release archive.
+#
+# Deliberately NOT here, and each omission is a decision:
+#
+#   No WordPress bootstrap, no wp-env, no PHPUnit, no Composer. tests/run.php
+#   states the reason in its own header and it is right: a guard nobody can run
+#   is a guard nobody runs. A WP harness on a 545-line no-build plugin buys
+#   brittleness and a six-minute CI.
+#
+#   No live call to mcp.unleash-wp.com/api/checkout-session. It answers 401 to
+#   anything unsigned, so proving more would mean putting LUMO_CHECKOUT_SECRET
+#   -- a credential that mints real checkout sessions -- into a runner, to
+#   demonstrate something lumo-pro's own tests already demonstrate.
+#
+#   No PHPCS / WordPress-Coding-Standards. It would produce hundreds of
+#   findings on day one and end up behind enough --ignore flags to be
+#   decorative.
+#
+#   No release workflow. This plugin is installed on our own site, not
+#   distributed. A pipeline for a delivery that does not happen is a pipeline
+#   nobody maintains.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint + contracts
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 8.0 is the floor the plugin header declares; 8.3 is what most hosts
+        # actually run. A syntax error that appears on only one of them is
+        # exactly what this matrix is for.
+        php: ['8.0', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Lint every PHP file
+        run: |
+          set -euo pipefail
+          for f in wp-dodo-checkout.php includes/*.php tests/*.php; do
+            php -l "$f"
+          done
+
+      - name: Contract checks
+        run: php tests/run.php
+
+      - name: No payment credential is in the tree
+        run: |
+          set -euo pipefail
+          # The plugin's central claim is that the Dodo API key never reaches
+          # the site. A claim in a README that nothing enforces is a claim a
+          # well-meaning refactor will break, and the breakage is invisible
+          # until somebody dumps the database.
+          #
+          # VALUES, not names. The first draft of this gate matched the bare
+          # string DODO_API_KEY and went red immediately -- on README.md and on
+          # the plugin header, both of which name the variable in the sentence
+          # explaining why it must never be here. A check that fails on day one
+          # for the correct thing being documented is a check somebody silences,
+          # and a silenced check is worse than none.
+          # Verified against a planted leak before being trusted, and it took
+          # three attempts. `\b` does not exist in POSIX ERE, which is what
+          # `git grep -E` speaks, so the first version could not fire at all --
+          # indistinguishable from a clean repo.
+          #
+          # ONE pattern, not two. A second gate matching "a secret name near a
+          # quoted literal" was written and dropped: on this tree it hit an
+          # editor-facing message that names the constants in prose, and the
+          # test fixture `define( 'WPDC_SECRET', 'from-wp-config' )` -- which is
+          # exactly what a test fixture should look like. Telling a real secret
+          # from a placeholder needs entropy, not a regex, and a gate that needs
+          # an allowlist on the day it lands is one that gets silenced.
+          #
+          # What survives is precise: a real payment key has a shape nothing
+          # else in a WordPress plugin has.
+          if git grep -nE "(sk|pk)_(live|test)_[A-Za-z0-9]{8,}" -- . ':!.github/workflows/ci.yml'; then
+            echo 'a payment key literal is tracked in this repo'
+            exit 1
+          fi
+          echo 'clean'
+
+      - name: The Apple Pay association file stays untracked
+        run: |
+          set -euo pipefail
+          # Per-merchant, issued by Apple, and not ours to publish. It is
+          # already in .gitignore; this is the check that notices when somebody
+          # adds it with -f.
+          if git ls-files --error-unmatch apple-developer-merchantid-domain-association 2>/dev/null; then
+            echo 'the Apple Pay domain-association file is tracked; it must not be'
+            exit 1
+          fi
+          echo 'clean'

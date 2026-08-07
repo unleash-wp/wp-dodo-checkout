@@ -227,6 +227,30 @@ check(
 	} )( $root )
 );
 check(
+	// The third place the name appears, and the one nothing watched: the two
+	// editor-facing notices. Both said 'uwp_checkout' while the registered tag
+	// is 'wpdc_checkout', so an editor who mistyped a plan was told to fix a
+	// shortcode that does not exist and would search the docs for it in vain.
+	// Same defect as the README check above, one file further along.
+	'BELL: the notices an editor reads name the registered tag',
+	( static function ( string $code ): bool {
+		if ( ! preg_match( "/add_shortcode\\(\\s*'([a-z0-9_]+)'/", $code, $m ) ) {
+			return false;
+		}
+		$tag = $m[1];
+		preg_match_all( "/esc_html__\\(\\s*'([a-z0-9_]+):/", $code, $named );
+		if ( array() === $named[1] ) {
+			return false; // a notice that names no tag is not proof of anything
+		}
+		foreach ( $named[1] as $mentioned ) {
+			if ( $mentioned !== $tag ) {
+				return false;
+			}
+		}
+		return true;
+	} )( $shortcode )
+);
+check(
 	'BELL: the browser never names a product id',
 	! str_contains( $js, 'product_id' ) && ! str_contains( $js, 'pdt_' )
 );
@@ -277,6 +301,71 @@ check(
 check(
 	'BELL: nothing in here is specific to one product catalogue',
 	! preg_match( '/pdt_[a-z0-9_]+/i', $shortcode . $js . $rest )
+);
+
+// ─── Markup, and the selectors that hunt it ──────────────────────────────────
+//
+// The defect this exists for: checkout.js looked for '.wpdc' while
+// shortcode.php rendered 'wp-dodo-checkout'. Every click on every buy button
+// was swallowed at that line -- no request, no message, nothing in the console
+// -- while the REST route, the secret, the session mint, the webhook and the
+// ledger behind it were all correct. Thirty-five checks passed the whole time,
+// because every one of them looked at a single file.
+//
+// Same shape as the shortcode-tag check above: pull a name out of one file and
+// assert it in another. Both directions, because they catch different faults --
+// a selector with no markup is a dead button, and markup with no selector is
+// dead weight that outlives whoever added it.
+
+/** Every class checkout.js hunts, from closest() and querySelector(). */
+$hunted = ( static function ( string $js ): array {
+	preg_match_all( "/\\.(?:closest|querySelector(?:All)?)\\(\\s*'\\.([\\w-]+)'/", $js, $m );
+	return array_values( array_unique( $m[1] ) );
+} )( $js );
+
+/** Every class shortcode.php renders, from every class="..." attribute. */
+$rendered = ( static function ( string $php ): array {
+	preg_match_all( '/class="([^"<]*)"/', $php, $m );
+	$out = array();
+	foreach ( $m[1] as $attr ) {
+		foreach ( preg_split( '/\s+/', trim( $attr ) ) as $cls ) {
+			if ( '' !== $cls ) {
+				$out[] = $cls;
+			}
+		}
+	}
+	return array_values( array_unique( $out ) );
+} )( $shortcode );
+
+check(
+	// A regex that matches nothing reads as "everything is fine": both checks
+	// below pass trivially on an empty set. This file already guards one regex
+	// that way, and without the same guard here the whole section is decoration.
+	'BELL: both extractions actually found something',
+	count( $hunted ) > 0 && count( $rendered ) > 0
+);
+check(
+	'BELL: every class the JS hunts is rendered by the shortcode',
+	array_values( array_diff( $hunted, $rendered ) ) === array()
+);
+check(
+	// The other face of the same defect: wpdc__frame was rendered for months,
+	// referenced by no script and styled by no rule, left over from an
+	// embedded-iframe design that never shipped.
+	'BELL: every rendered class is used by the JS or styled by the CSS',
+	( static function ( array $rendered, array $hunted, string $root ): bool {
+		$css = (string) file_get_contents( $root . '/assets/checkout.css' );
+		foreach ( $rendered as $cls ) {
+			if ( in_array( $cls, $hunted, true ) ) {
+				continue;
+			}
+			if ( str_contains( $css, '.' . $cls ) ) {
+				continue;
+			}
+			return false;
+		}
+		return true;
+	} )( $rendered, $hunted, $root )
 );
 
 // ─── Report ──────────────────────────────────────────────────────────────────
