@@ -48,15 +48,101 @@
     });
   }
 
-  function open(root, url) {
-    if (root.dataset.display === 'overlay' && window.DodoPayments) {
-      window.DodoPayments.Initialize({ mode: 'overlay', displayType: 'overlay' });
-      window.DodoPayments.Checkout.open({ checkoutUrl: url });
-      return;
+  /**
+   * The SDK, where the CDN build actually puts it.
+   *
+   * The UMD bundle attaches ONE global and exports the namespace inside it:
+   *
+   *   (globalThis).DodoPaymentsCheckout = {} ... e.DodoPayments = W
+   *
+   * so the path is window.DodoPaymentsCheckout.DodoPayments. This used to look
+   * for window.DodoPayments, which the bundle never sets, so the overlay branch
+   * was unreachable and every `display="overlay"` silently navigated instead.
+   * It looked deliberate, because falling through to a navigation IS a real
+   * branch with a comment explaining it. The overlay had never once opened.
+   *
+   * The older name is still accepted in case a future build exposes it, but a
+   * miss is reported rather than swallowed: see openOverlay.
+   */
+  function sdk() {
+    var ns = window.DodoPaymentsCheckout;
+    return (ns && ns.DodoPayments) || window.DodoPayments || null;
+  }
+
+  /**
+   * Which Dodo environment the SDK should talk to, read off the URL it is about
+   * to open.
+   *
+   * `mode` is required and is "test" or "live". This passed 'overlay', which is
+   * neither, and nothing in the plugin configured it -- there was no setting to
+   * get wrong because there was no setting.
+   *
+   * Deriving it from the session URL rather than adding one is deliberate: the
+   * server already decided which environment it minted this session in, and a
+   * second setting beside that decision is a thing that can disagree with it.
+   * A mismatch is not cosmetic -- test and live are different accounts with
+   * different money.
+   *
+   * Unknown host shapes resolve to 'live'. A live session opened in test mode
+   * is the direction that quietly takes a real card into a test flow; the
+   * reverse fails visibly, which is what an unknown should do.
+   */
+  function environmentFor(url) {
+    var host = '';
+    try {
+      host = new URL(url, window.location.href).hostname;
+    } catch (e) {
+      return 'live';
     }
-    // Inline is a navigation to Dodo's own page. That is what keeps card
-    // fields off this origin, and it is the only mode where Apple Pay is
-    // available at all.
+    return /(^|\.)test\./.test(host) ? 'test' : 'live';
+  }
+
+  function openOverlay(root, url) {
+    var dodo = sdk();
+    if (!dodo) {
+      // Not silent. The navigation still happens, because a customer trying to
+      // pay must not be stopped by our script loader, but the reason is stated
+      // where a developer will see it. Swallowing this is what hid the bug
+      // above for as long as it existed.
+      if (window.console && console.warn) {
+        console.warn(
+          '[wp-dodo-checkout] Dodo checkout SDK not found on the page; ' +
+            'falling back to a redirect. Expected window.DodoPaymentsCheckout.DodoPayments.',
+        );
+      }
+      return false;
+    }
+
+    dodo.Initialize({
+      mode: environmentFor(url),
+      displayType: 'overlay',
+      // Required by the SDK contract, and absent here before. Without it a
+      // failed or abandoned checkout produced nothing at all: no message for
+      // the customer and no line for anyone debugging it.
+      onEvent: function (event) {
+        if (!event) return;
+        if (event.event_type === 'checkout.error') {
+          say(root, (event.data && event.data.message) || 'The checkout could not be opened.');
+        }
+      },
+    });
+    dodo.Checkout.open({ checkoutUrl: url });
+    return true;
+  }
+
+  function open(root, url) {
+    if (root.dataset.display === 'overlay' && openOverlay(root, url)) return;
+    // Otherwise a navigation to Dodo's own page. That is what keeps card fields
+    // off this origin.
+    //
+    // It is NOT the only place Apple Pay works, whatever a previous version of
+    // this comment claimed. Dodo's own documentation is explicit: "All digital
+    // wallets are fully supported in: Overlay Checkout, Inline Checkout, Direct
+    // API integration." That sentence had been read the other way round, and it
+    // was about to decide which mode this site shipped.
+    //
+    // Note also that "inline" here means a redirect, while Dodo's "Inline
+    // Checkout" means an embedded iframe. Same word, different things.
     window.location.assign(url);
   }
 
