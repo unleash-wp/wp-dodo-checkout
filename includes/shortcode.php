@@ -95,10 +95,6 @@ function wpdc_render( $atts ): string {
 		</button>
 
 		<p class="wpdc__message" role="status" aria-live="polite"></p>
-
-		<?php if ( ! $overlay ) : ?>
-			<div class="wpdc__frame"></div>
-		<?php endif; ?>
 	</div>
 	<?php
 	return (string) ob_get_clean();

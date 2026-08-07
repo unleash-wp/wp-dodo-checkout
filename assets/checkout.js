@@ -64,7 +64,12 @@
     var button = event.target.closest('.wpdc__button');
     if (!button) return;
 
-    var root = button.closest('.wpdc');
+    // The block class as shortcode.php renders it. It was '.wpdc' here and
+    // has never been rendered by anything, so every click on every buy button
+    // was swallowed at this line: no request, no message, nothing in the
+    // console. The whole chain behind it -- REST route, secret, session mint,
+    // webhook, ledger -- was correct and unreachable.
+    var root = button.closest('.wp-dodo-checkout');
     if (!root) return;
 
     event.preventDefault();
