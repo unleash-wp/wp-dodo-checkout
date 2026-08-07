@@ -227,6 +227,30 @@ check(
 	} )( $root )
 );
 check(
+	// The third place the name appears, and the one nothing watched: the two
+	// editor-facing notices. Both said 'uwp_checkout' while the registered tag
+	// is 'wpdc_checkout', so an editor who mistyped a plan was told to fix a
+	// shortcode that does not exist and would search the docs for it in vain.
+	// Same defect as the README check above, one file further along.
+	'BELL: the notices an editor reads name the registered tag',
+	( static function ( string $code ): bool {
+		if ( ! preg_match( "/add_shortcode\\(\\s*'([a-z0-9_]+)'/", $code, $m ) ) {
+			return false;
+		}
+		$tag = $m[1];
+		preg_match_all( "/esc_html__\\(\\s*'([a-z0-9_]+):/", $code, $named );
+		if ( array() === $named[1] ) {
+			return false; // a notice that names no tag is not proof of anything
+		}
+		foreach ( $named[1] as $mentioned ) {
+			if ( $mentioned !== $tag ) {
+				return false;
+			}
+		}
+		return true;
+	} )( $shortcode )
+);
+check(
 	'BELL: the browser never names a product id',
 	! str_contains( $js, 'product_id' ) && ! str_contains( $js, 'pdt_' )
 );

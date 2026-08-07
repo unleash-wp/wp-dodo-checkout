@@ -52,13 +52,13 @@ function wpdc_render( $atts ): string {
 		// Only an editor sees this, and only where the mistake is. A visitor
 		// gets nothing rather than a broken button.
 		return current_user_can( 'edit_posts' )
-			? '<p>' . esc_html__( 'uwp_checkout: a valid plan attribute is required.', 'wp-dodo-checkout' ) . '</p>'
+			? '<p>' . esc_html__( 'wpdc_checkout: a valid plan attribute is required.', 'wp-dodo-checkout' ) . '</p>'
 			: '';
 	}
 
 	if ( ! wpdc_is_configured() ) {
 		return current_user_can( 'manage_options' )
-			? '<p>' . esc_html__( 'uwp_checkout: set WPDC_ENDPOINT and WPDC_SECRET.', 'wp-dodo-checkout' ) . '</p>'
+			? '<p>' . esc_html__( 'wpdc_checkout: set WPDC_ENDPOINT and WPDC_SECRET.', 'wp-dodo-checkout' ) . '</p>'
 			: '';
 	}
 
