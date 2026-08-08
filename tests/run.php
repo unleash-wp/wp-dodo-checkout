@@ -1099,9 +1099,24 @@ check(
 	// screen permanently, on the one surface where the pay button has to come
 	// into view. The window scrolls as one document, the way a page does -- and
 	// the close button rides with the header it belongs to.
-	'BELL: on a phone the window scrolls as one, header included',
-	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1400}overflow-y: auto/', $css )
+	// The header rides with the content -- the operator's call, and right for a
+	// phone, where a pinned header costs 3.4rem permanently on the surface the
+	// pay button has to reach.
+	'BELL: on a phone the header scrolls with the content',
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,2000}\.wpdc__scroll \{[^}]*overflow-y: auto/', $css )
 		&& ! preg_match( '/\.wpdc__close \{[^}]*position: fixed/', $css )
+);
+check(
+	// THE reason the extra element exists. An absolutely positioned button
+	// inside a scrolling box scrolls away with it, which is how the only way out
+	// of a checkout disappeared on a phone -- and `position: fixed` pins to the
+	// VIEWPORT rather than the dialog, so it floated mid-screen attached to
+	// nothing. The scrolling happens one level in; the button hangs off the
+	// dialog and stays.
+	'BELL: the scroller is inside the dialog, so the close button cannot scroll away',
+	str_contains( $shortcode, '<div class="wpdc__scroll">' )
+		&& 1 === preg_match( '/\.wpdc__scroll \{[^}]*overflow/', $css . ' ' )
+		&& ! preg_match( '/\.wpdc__dialog \{[^}]*overflow-y: auto/', $css )
 );
 check(
 	// Dodo's own inset is a few pixels on a narrow screen, so their fields ran to

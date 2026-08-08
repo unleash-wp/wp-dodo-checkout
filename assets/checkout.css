@@ -102,6 +102,15 @@
   background: #fff;
   overflow: hidden;
 
+  /* The dialog holds ONE child that can shrink, and the scrolling happens
+     inside it. The close button hangs off the dialog itself, so it never
+     scrolls away. */
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.wpdc__scroll {
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr 640px;
   /* minmax(0, 1fr), not 1fr: a `1fr` track has an automatic minimum of its
@@ -338,12 +347,18 @@
      strip is at the top, so it is on screen exactly when the header is, and the
      header is where it belongs. */
   .wpdc__dialog {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
-    overflow-y: auto;
     width: min(30rem, calc(100vw - 2.5rem));
     max-height: calc(100dvh - 5rem);
     border-radius: 14px;
+  }
+  /* One scroller, and the header rides in it -- the operator's call, and right
+     for a phone: a pinned header costs 3.4rem permanently on the surface where
+     the pay button has to come into view. The close button is NOT in here, so
+     it stays put while everything else moves. */
+  .wpdc__scroll {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    overflow-y: auto;
   }
   .wpdc__panel,
   .wpdc__dialog .wpdc__frame {

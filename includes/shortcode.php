@@ -166,6 +166,21 @@ function wpdc_render( $atts ): string {
 			// not typed yet, so anything computed here would be a guess that
 			// disagrees with the frame the moment they type it.
 			?>
+			<?php
+			// One level more than looks necessary, and it is what makes the close
+			// button reachable.
+			//
+			// The dialog itself must not scroll: an absolutely positioned button
+			// inside a scrolling box scrolls away with the content, which is how
+			// the only way out of a checkout disappeared on a phone. `position:
+			// fixed` was tried and pins to the VIEWPORT, not the dialog, so it
+			// floated mid-screen attached to nothing.
+			//
+			// So the scrolling happens one level in. The button hangs off the
+			// dialog and stays where it is; the header scrolls with the content,
+			// which is what the operator asked for and what a phone wants.
+			?>
+			<div class="wpdc__scroll">
 			<aside class="wpdc__panel">
 				<?php wpdc_render_item( $atts['product'] ); ?>
 
@@ -187,6 +202,7 @@ function wpdc_render( $atts ): string {
 			</aside>
 
 			<div class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"></div>
+			</div>
 		</dialog>
 
 		<p class="wpdc__message" role="status" aria-live="polite"></p>
