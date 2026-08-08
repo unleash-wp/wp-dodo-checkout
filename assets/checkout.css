@@ -257,6 +257,12 @@
   font-size: 12px;
   cursor: pointer;
 }
+/* The browser's own ring is blue, and blue on navy is a ring nobody sees. The
+   accent is the same colour the rest of this panel uses to point at things. */
+.wpdc__discount-apply:focus-visible {
+  outline: 2px solid var(--wpdc-panel-accent);
+  outline-offset: 1px;
+}
 .wpdc__discount-apply:hover:not([disabled]) {
   background: rgb(255 255 255 / .1);
 }

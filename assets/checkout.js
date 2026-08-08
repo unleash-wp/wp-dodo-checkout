@@ -333,6 +333,12 @@
     el.textContent = ' (' + shown + ' %)';
   }
 
+  /** One place for a refusal, so every one of them looks the same. */
+  function fail(note, message) {
+    note.textContent = message;
+    note.classList.add('is-error');
+  }
+
   function money(minor, currency) {
     var amount = minor / 100;
     try {
@@ -527,7 +533,24 @@
     if (!root || !input || !note) return;
 
     var code = input.value.trim();
-    if (!code) return;
+
+    // Silence was the old behaviour, and on a button that reports nothing it is
+    // indistinguishable from a broken button: the customer clicks, waits, and
+    // concludes the code does not work. Both refusals say which one they are.
+    if (!code) {
+      fail(note, cfg.discountEmpty);
+      input.focus();
+      return;
+    }
+    // The same shape the server enforces, checked here so a typo answers
+    // instantly instead of after a round trip -- and so a customer is told WHAT
+    // is wrong rather than that something is.
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(code)) {
+      fail(note, cfg.discountShape);
+      input.focus();
+      input.select();
+      return;
+    }
 
     var previous = root.dataset.discount || '';
     root.dataset.discount = code;

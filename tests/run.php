@@ -1502,6 +1502,25 @@ check(
 );
 
 check(
+	// Silence was the old behaviour, and on a button that reports nothing it is
+	// indistinguishable from a broken button: the customer clicks, waits, and
+	// concludes the code does not work. Both refusals say which one they are,
+	// and the shape check answers instantly instead of after a round trip.
+	'BELL: an empty or malformed code is refused out loud, not silently',
+	str_contains( $js, 'fail(note, cfg.discountEmpty)' )
+		&& str_contains( $js, 'fail(note, cfg.discountShape)' )
+		&& str_contains( $js, "/^[A-Za-z0-9_-]{1,64}$/.test(code)" )
+		&& str_contains( $shortcode, "'discountEmpty'" )
+);
+check(
+	// The browser's own ring is blue, and blue on navy is a ring nobody sees.
+	// Both controls in the panel use the accent the rest of it uses.
+	'BELL: the panel controls have a focus ring anyone can see',
+	1 === preg_match( '/\.wpdc__discount-input:focus-visible \{[^}]*var\(--wpdc-panel-accent\)/', $css )
+		&& 1 === preg_match( '/\.wpdc__discount-apply:focus-visible \{[^}]*var\(--wpdc-panel-accent\)/', $css )
+);
+
+check(
 	// Dodo's own guidance: show a loading indicator until the frame reports
 	// itself open. Without it there are seconds of empty white beside a panel
 	// that is already full, which is what a broken embed looks like.

@@ -132,3 +132,9 @@ msgstr "Code eingelöst."
 msgid "That code was not accepted."
 msgstr "Dieser Code wurde nicht akzeptiert."
 
+msgid "Enter a code first."
+msgstr "Bitte zuerst einen Code eingeben."
+
+msgid "A code has letters, digits, dashes and underscores only."
+msgstr "Ein Code besteht nur aus Buchstaben, Ziffern, Binde- und Unterstrichen."
+
