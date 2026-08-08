@@ -404,7 +404,7 @@
        is absolutely positioned in that corner, so without room reserved for it
        it sat ON the total -- "24,99" cut in half behind a white disc, on the
        one line of this strip that has to be readable. */
-    padding: .875rem 3.75rem .875rem 1rem;
+    padding: 1rem 4rem 1rem 1.25rem;
   }
   .wpdc__item {
     display: contents;
@@ -446,7 +446,7 @@
   /* Room down both sides. Dodo's own inset is a few pixels on a narrow screen,
      so their fields ran to the glass and the window read as unfinished. */
   .wpdc__dialog .wpdc__frame {
-    padding: .5rem .875rem 1rem;
+    padding: .75rem 1.25rem 1.25rem;
   }
 
   .wpdc__close {

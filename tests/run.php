@@ -1108,7 +1108,7 @@ check(
 	// the glass and the window read as unfinished.
 	'BELL: their frame gets room down both sides, on both sizes',
 	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: \.75rem 1\.25rem 1rem/', $css )
-		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,5000}padding: \.5rem \.875rem 1rem/', $css )
+		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,5000}padding: \.75rem 1\.25rem 1\.25rem/', $css )
 );
 check(
 	// Subtotal, VAT and Total are rendered by us, in WordPress's locale, while
@@ -1292,7 +1292,7 @@ check(
 	// sat ON the total, "24,99" cut in half behind a white disc, on the one line
 	// of that strip that has to be readable.
 	'BELL: on a phone the strip reserves room for the close button',
-	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,2400}padding: \.875rem 3\.75rem/', $css )
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,2400}padding: 1rem 4rem/', $css )
 );
 check(
 	// Dodo's breakdown carries an amount and no rate, and a customer reading
