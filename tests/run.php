@@ -224,8 +224,19 @@ check(
 check(
 	// The exact key set, so adding one is a deliberate act rather than a drift.
 	// A price here would mean a browser could argue about what it owes.
+	//
+	// This is also what keeps `customization.theme_config` out. Branding belongs
+	// on Dodo's Design page -- one place, three surfaces, test and live held
+	// apart -- and a source grep for it failed here because client.php explains
+	// that decision in a comment. Third time today a substring check matched
+	// prose instead of behaviour. The key set cannot.
 	'BELL: exactly these keys are sent, and no price among them',
-	array( 'product_cart', 'minimal_address', 'feature_flags' ) === array_keys( $sent )
+	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags' ) === array_keys( $sent )
+);
+check(
+	// The only field reduction that improves the more somebody buys.
+	'BELL: a returning customer is offered the card they already used',
+	true === $sent['show_saved_payment_methods']
 );
 check(
 	// Street, city and state skipped. This plugin sells digital goods: the

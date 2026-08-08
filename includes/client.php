@@ -243,6 +243,12 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		// products would have to turn this off.
 		'minimal_address' => true,
 
+		// A returning customer sees the card they used last time instead of
+		// typing it again. Off by default at Dodo. It costs nothing here and it
+		// is the only field-count reduction that gets BETTER the more somebody
+		// buys.
+		'show_saved_payment_methods' => true,
+
 		'feature_flags' => array(
 			// Dodo shows it by default and nobody here reads it. An optional
 			// field on a payment form is not free: it is one more thing between
@@ -250,6 +256,12 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 			'allow_phone_number_collection' => false,
 		),
 	);
+
+	// Deliberately NOT sent: `customization.theme_config`. Dodo's dashboard has
+	// a Design page that does the same thing visually and applies it to the
+	// checkout, the customer portal AND the storefront at once, with test and
+	// live held separately. Branding from here would cover one of those three
+	// and disagree with the other two the first time somebody used the page.
 
 	$return = wpdc_return_url();
 	if ( '' !== $return ) {

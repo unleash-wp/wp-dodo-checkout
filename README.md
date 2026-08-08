@@ -176,6 +176,24 @@ turn `minimal_address` off** — there is nothing to ship here.
 The "buy as a business" checkbox stays. A WordPress audience contains people who
 need a VAT invoice, and it is one collapsed line.
 
+### What is NOT done here, and where it belongs instead
+
+**Branding.** Dodo's dashboard has a **Design page** that sets colours, fonts,
+radius and the pay button's text, and applies them to the checkout, the customer
+portal and the storefront at once, with test and live held separately. The API
+can do the same per session (`customization.theme_config`), and doing it from
+here would style one of those three surfaces and disagree with the other two the
+first time somebody used the page.
+
+**The payment method tiles.** The row of Card / PayPal / Google Pay buttons at
+the top of a checkout is not markup this plugin can produce — it is Dodo's own
+UI, and it shows the methods enabled on the account. Enabling them is the single
+biggest thing that shortens this form, and it is a dashboard switch, not a code
+change.
+
+**PayPal is not available at Dodo.** Confirmed by their support. In markets where
+PayPal is the default habit, that is a gap no configuration closes.
+
 ### Payment methods are never restricted
 
 `allowed_payment_method_types` is deliberately not sent. Dodo's own note: adding
