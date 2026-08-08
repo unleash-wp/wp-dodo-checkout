@@ -256,7 +256,26 @@ check(
 	// that decision in a comment. Third time today a substring check matched
 	// prose instead of behaviour. The key set cannot.
 	'BELL: exactly these keys are sent, and no price among them',
-	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags', 'cancel_url' ) === array_keys( $sent )
+	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags', 'return_url', 'cancel_url' ) === array_keys( $sent )
+);
+check(
+	// The field used to be sent only when a constant was defined, and on an
+	// install where nobody defined it it never went at all. Their frame ends a
+	// finished order by posting `checkout.redirect` with a destination; with no
+	// destination there is nothing to navigate to, and the customer is left in
+	// the frame. Unconditional, so "nobody set the constant" cannot be the
+	// difference between finishing and not.
+	// WPDC_RETURN_URL is deliberately NOT defined in this harness, so this is
+	// the exact install the field used to be omitted on -- the assertion is that
+	// the omission is gone, not that a constant works.
+	'BELL: Dodo is always told where done leads',
+	isset( $sent['return_url'] ) && str_contains( $sent['return_url'], 'shop.example' )
+);
+check(
+	// Their status page is a page on their domain that this shop never wrote.
+	// The last screen of a purchase belongs to the seller.
+	'BELL: the last screen is ours, not checkout.dodopayments.com',
+	true === $sent['feature_flags']['redirect_immediately']
 );
 check(
 	// The only field reduction that improves the more somebody buys.
@@ -1325,8 +1344,11 @@ check(
 	// displayed." Without it a customer on the payment step could not return to
 	// check the address they had typed -- only close the window and start again.
 	'BELL: a back control exists, and its target is ours not the caller\'s',
+	// Cancelling and finishing land on the same page, and both are resolved
+	// server-side -- a target a visitor could name would be an open redirect on
+	// the shop's own domain.
 	str_contains( $sent['cancel_url'] ?? '', 'shop.example' )
-		&& str_contains( $client, "\$body['cancel_url'] = '' !== \$return ? \$return : home_url();" )
+		&& $sent['cancel_url'] === $sent['return_url']
 );
 check(
 	// Step one to step two swaps the frame's whole contents, and on a phone the

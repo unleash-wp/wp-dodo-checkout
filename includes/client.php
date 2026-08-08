@@ -293,6 +293,17 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 			// printed on a newsletter has nowhere to go and the customer writes
 			// to support instead of buying.
 			'allow_discount_code'           => true,
+
+			/**
+			 * Leave through the front door, not through their status page.
+			 *
+			 * Their frame ends a finished order by posting `checkout.redirect`,
+			 * and their SDK does `window.location.href = redirect_to` on it. So
+			 * the last screen of a purchase is decided HERE, not in our
+			 * JavaScript -- and without this flag it is a page on
+			 * checkout.dodopayments.com that this shop never wrote.
+			 */
+			'redirect_immediately'          => true,
 		),
 	);
 
@@ -376,10 +387,30 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		$body['discount_codes'] = array( $discount );
 	}
 
+	/**
+	 * Dodo is always told where "done" leads. Nowhere is not a neutral default.
+	 *
+	 * This used to be sent only when WPDC_RETURN_URL was defined, and on an
+	 * install where nobody defined it the field simply never went. That reads
+	 * like a missing nicety and is not one: their frame leaves itself by posting
+	 * `checkout.redirect` with a destination, and with no destination the event
+	 * carries nothing to navigate to.
+	 *
+	 * Measured on a cart discounted to zero, which is where it stops being
+	 * cosmetic. There is no payment to collect, so their payment step has no
+	 * method to render and their own frontend 404s fetching `.../payment-link`.
+	 * The frame then sits in its skeleton for good -- while the order is
+	 * ALREADY `succeeded` on their side (total 0, `payment_method: null`).
+	 * The customer pays nothing, receives everything, and is told neither.
+	 *
+	 * home_url() is a floor, not the goal: WPDC_RETURN_URL should name a real
+	 * thank-you page. But a floor that exists beats a constant nobody set.
+	 */
 	$return = wpdc_return_url();
-	if ( '' !== $return ) {
-		$body['return_url'] = $return;
+	if ( '' === $return ) {
+		$return = home_url();
 	}
+	$body['return_url'] = $return;
 
 	/**
 	 * Without this Dodo shows no back control at all.
@@ -394,7 +425,7 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	 * cancel target a visitor can choose turns this into an open redirect on the
 	 * shop's own domain.
 	 */
-	$body['cancel_url'] = '' !== $return ? $return : home_url();
+	$body['cancel_url'] = $return;
 
 	$result = wpdc_dodo_request( 'POST', '/checkouts', $body );
 	if ( isset( $result['ok'] ) && false === $result['ok'] ) {
