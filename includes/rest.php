@@ -164,8 +164,13 @@ function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
 	return new WP_REST_Response(
 		array(
 			'finished' => (bool) $result['finished'],
-			// Where "done" leads is decided here, never by the caller.
-			'redirect' => '' !== wpdc_return_url() ? wpdc_return_url() : home_url(),
+			// Where "done" leads is decided here, never by the caller. Empty
+			// when no WPDC_RETURN_URL is configured -- the front page was tried
+			// as a floor and reads as the popup breaking, because the purchase
+			// ends on a page that says nothing about it. With no destination
+			// worth showing, the browser shows the completion where the
+			// customer already is.
+			'redirect' => wpdc_return_url(),
 		),
 		200
 	);

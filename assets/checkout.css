@@ -302,6 +302,43 @@
   color: #ff8080;
 }
 
+/* The completion, in place of the frame. Same grid cell, so nothing moves. */
+.wpdc__done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 20rem;
+  text-align: center;
+  padding: 24px;
+}
+.wpdc__done-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #4ade80;
+  color: #0c2716;
+  font-size: 28px;
+}
+.wpdc__done-title {
+  margin: 0;
+  font-size: 20px;
+  color: #1a1e3c;
+}
+.wpdc__done-text {
+  margin: 0;
+  font-size: 14px;
+  color: #3d4a6e;
+}
+/* Flex above owes the platform its hidden case back -- fifth time. */
+.wpdc__done[hidden],
+.wpdc__frame[hidden] {
+  display: none;
+}
+
 /* Under the note, quiet: removing a code is a correction, not an action the
    panel is inviting. Underlined rather than boxed so it does not read as a
    second Apply. */

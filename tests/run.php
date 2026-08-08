@@ -21,7 +21,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.1.0' );
+define( 'WPDC_VERSION', '0.2.1' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1412,7 +1412,8 @@ check(
 	'BELL: every corner uses the one radius, and only the ring and the button are round',
 	1 === substr_count( $css, '--wpdc-radius: 5px' )
 		&& 6 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
-		&& 2 === substr_count( $css, 'border-radius: 50%' )
+		// Three circles: the spinner ring, the close button, the done mark.
+		&& 3 === substr_count( $css, 'border-radius: 50%' )
 );
 
 // ─── A discount code, in the summary Dodo asked us to build ─────────────────
@@ -1636,6 +1637,17 @@ check(
 	str_contains( $config, 'function wpdc_is_session_id' )
 		&& str_contains( $config, "'/^cks_[A-Za-z0-9]{1,64}\$/'" )
 		&& str_contains( $rest, "'validate_callback' => 'wpdc_is_session_id'" )
+);
+check(
+	// Navigating to the front page on completion was shipped and read as the
+	// popup breaking: the purchase ended on a page that says nothing about it.
+	// Only a page somebody configured is worth leaving the dialog for.
+	'BELL: without a configured thank-you page the completion is shown in place',
+	str_contains( $rest, "'redirect' => wpdc_return_url()," )
+		&& ! str_contains( $rest, "wpdc_return_url() : home_url()" )
+		&& str_contains( $shortcode, 'class="wpdc__done" hidden' )
+		&& str_contains( $js, "done.hidden = false" )
+		&& 1 === preg_match( '/\.wpdc__done\[hidden\],\s*\.wpdc__frame\[hidden\] \{[^}]*display: none/', $css )
 );
 check(
 	// A deadline that outlives the window it belonged to would redirect somebody

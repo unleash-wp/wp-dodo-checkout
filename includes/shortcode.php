@@ -236,6 +236,17 @@ function wpdc_render( $atts ): string {
 			</aside>
 
 			<div class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"></div>
+			<?php
+			// Shown in place of Dodo's frame when a zero-total order completes
+			// and no WPDC_RETURN_URL names a thank-you page. Navigating to the
+			// front page instead was tried, and it reads as the popup breaking:
+			// the purchase ends on a page that says nothing about it.
+			?>
+			<div class="wpdc__done" hidden>
+				<span class="wpdc__done-mark" aria-hidden="true">&#10003;</span>
+				<h2 class="wpdc__done-title"><?php echo esc_html__( 'Order complete', 'wp-dodo-checkout' ); ?></h2>
+				<p class="wpdc__done-text"><?php echo esc_html__( 'Your confirmation is on its way to your inbox.', 'wp-dodo-checkout' ); ?></p>
+			</div>
 			</div>
 		</dialog>
 

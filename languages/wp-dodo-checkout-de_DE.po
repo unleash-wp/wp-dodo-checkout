@@ -146,3 +146,9 @@ msgstr "Bestellung wird abgeschlossen …"
 
 msgid "That checkout could not be found."
 msgstr "Dieser Checkout wurde nicht gefunden."
+
+msgid "Order complete"
+msgstr "Bestellung abgeschlossen"
+
+msgid "Your confirmation is on its way to your inbox."
+msgstr "Deine Bestätigung ist auf dem Weg in dein Postfach."

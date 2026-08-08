@@ -523,8 +523,21 @@
     var session = root.dataset.session || '';
     var tries = 0;
 
+    // A configured thank-you page wins. Without one the completion is shown
+    // right here, because leaving for the front page reads as the popup
+    // breaking: the purchase ends on a page that says nothing about it.
     function leave(where) {
-      if (where) window.location.assign(where);
+      if (where) {
+        window.location.assign(where);
+        return;
+      }
+      var dodo = sdk();
+      try { if (dodo) dodo.Checkout.close(); } catch (e) { /* already gone */ }
+      var frame = root.querySelector('.wpdc__frame');
+      var done = root.querySelector('.wpdc__done');
+      if (frame) frame.hidden = true;
+      if (done) done.hidden = false;
+      say(root, '');
     }
 
     function ask() {
