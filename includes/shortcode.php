@@ -86,7 +86,12 @@ function wpdc_render( $atts ): string {
 	$bump     = wpdc_is_product_id( $atts['bump'] ) ? $atts['bump'] : '';
 	// Normalised here too, so the labels and the frame cannot end up in different
 	// languages even when the shortcode names a third one.
-	$lang     = '' !== trim( (string) $atts['lang'] ) ? wpdc_two_languages( trim( (string) $atts['lang'] ) ) : '';
+	// Shortcode first, then the browser's own header. Never the site locale: it
+	// describes the shop, and on this one it says en_US while the customer reads
+	// German.
+	$lang     = '' !== trim( (string) $atts['lang'] )
+		? wpdc_two_languages( trim( (string) $atts['lang'] ) )
+		: wpdc_request_language();
 	$quantity = max( 1, min( 50, (int) $atts['quantity'] ) );
 	$id       = wp_unique_id( 'wpdc-' );
 

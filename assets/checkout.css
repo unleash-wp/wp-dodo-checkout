@@ -265,7 +265,7 @@
      doubling on the contact step reads as spacing rather than as a gap. The
      sides get air too: their frame's own inset is a few pixels on a narrow
      screen, and content against the glass looks like a rendering fault. */
-  padding: .75rem 1.25rem 1rem;
+  padding: 1.5rem 1.25rem 1rem;
 }
 .wpdc__dialog .wpdc__frame iframe {
   display: block;
@@ -404,7 +404,7 @@
   /* Room down both sides. Dodo's own inset is a few pixels on a narrow screen,
      so their fields ran to the glass and the window read as unfinished. */
   .wpdc__dialog .wpdc__frame {
-    padding: .75rem 1.25rem 1.25rem;
+    padding: 1.25rem 1.25rem 1.25rem;
   }
 
   .wpdc__close {

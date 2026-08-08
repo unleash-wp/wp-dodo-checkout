@@ -881,7 +881,7 @@ check(
 	// button. The sides get air because their inset is a few pixels on a narrow
 	// screen and content against the glass reads as a rendering fault.
 	'BELL: the frame breathes without stacking a gap on Dodo own spacing',
-	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: \.75rem 1\.25rem 1rem/', $css )
+	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: 1\.5rem 1\.25rem 1rem/', $css )
 		&& ! str_contains( $css, 'padding: 2.5rem 0 1rem' )
 );
 check(
@@ -1107,8 +1107,8 @@ check(
 	// Dodo's own inset is a few pixels on a narrow screen, so their fields ran to
 	// the glass and the window read as unfinished.
 	'BELL: their frame gets room down both sides, on both sizes',
-	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: \.75rem 1\.25rem 1rem/', $css )
-		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,5000}padding: \.75rem 1\.25rem 1\.25rem/', $css )
+	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: 1\.5rem 1\.25rem 1rem/', $css )
+		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,5000}padding: 1\.25rem 1\.25rem 1\.25rem/', $css )
 );
 check(
 	// Subtotal, VAT and Total are rendered by us, in WordPress's locale, while
@@ -1318,6 +1318,37 @@ check(
 	'BELL: on a phone the close button sits in the strip, not mid-window',
 	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,4000}\.wpdc__close \{[^}]*top: \.55rem/', $css )
 		&& ! preg_match( '/@media \(max-width: 900px\)[\s\S]{0,4000}translateY\(-50%\)/', $css )
+);
+
+// ─── The labels are rendered before any JavaScript runs ─────────────────────
+//
+// Subtotal, VAT and Total come from PHP, and PHP cannot ask navigator.language.
+// Falling back to the site locale put English labels beside a German checkout
+// on a shop whose WordPress says en_US. Accept-Language is the same information
+// one step earlier.
+
+foreach ( array(
+	'de-DE,de;q=0.9,en;q=0.8' => 'de',
+	'de'                      => 'de',
+	'fr-FR,fr;q=0.9'          => 'en',
+	'en-GB,en;q=0.9'          => 'en',
+	''                        => '',
+) as $header => $want ) {
+	$_SERVER['HTTP_ACCEPT_LANGUAGE'] = $header;
+	check(
+		"BELL: Accept-Language '{$header}' renders in " . ( '' === $want ? 'nothing' : $want ),
+		$want === wpdc_request_language()
+	);
+}
+unset( $_SERVER['HTTP_ACCEPT_LANGUAGE'] );
+
+check(
+	// The function existing proves nothing: the first version of this block
+	// tested only the resolution table, so deleting the fallback from the
+	// shortcode killed no test and the labels would have gone back to English.
+	'BELL: and the shortcode actually falls back to it',
+	str_contains( $shortcode, ': wpdc_request_language();' )
+		&& ! preg_match( '/\$lang\s*=[^;]*get_locale/', $shortcode )
 );
 
 check(

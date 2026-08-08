@@ -120,6 +120,32 @@ function wpdc_two_languages( string $tag ): string {
 	return 0 === stripos( $tag, 'de' ) ? 'de' : 'en';
 }
 
+/**
+ * The language for a render that happens before any JavaScript runs.
+ *
+ * The labels beside Dodo's frame -- Subtotal, VAT, Total -- are produced by PHP,
+ * and PHP cannot ask `navigator.language`. Falling back to the site locale put
+ * English labels beside a German checkout on a shop whose WordPress says en_US.
+ *
+ * `Accept-Language` is the same information one step earlier: the browser sends
+ * it with the request that renders the page. Only the first tag is read and
+ * only the first two letters of it, because everything collapses to two
+ * languages anyway.
+ *
+ * KNOWN LIMIT, worth stating rather than discovering: a full-page cache serves
+ * one render to everybody, so a cached page keeps whichever language the first
+ * visitor had. A shop that adds page caching wants `Vary: Accept-Language` or a
+ * cache key that includes it.
+ */
+function wpdc_request_language(): string {
+	$header = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
+	if ( ! is_string( $header ) || '' === $header ) {
+		return '';
+	}
+	$first = strtok( $header, ',;' );
+	return is_string( $first ) ? wpdc_two_languages( trim( $first ) ) : '';
+}
+
 function wpdc_api_key_is_constant(): bool {
 	return defined( 'WPDC_API_KEY' ) && is_string( WPDC_API_KEY ) && '' !== trim( WPDC_API_KEY );
 }
