@@ -164,9 +164,59 @@
     // layout, and an iframe measured inside a zero-height box comes back zero.
     dialog.showModal();
     dodo.Checkout.open({ checkoutUrl: url, elementId: frame.id });
+    watchForLateGrowth(frame);
     openRoot = root;
     say(root, '');
     return true;
+  }
+
+  /**
+   * Keep the top of the checkout at the top when it grows under the customer.
+   *
+   * The SDK injects TWO elements: an express wallet element, then the checkout
+   * itself. The wallet one arrives late and starts at nearly zero height, so
+   * when it fills in it pushes everything down while the scroll position stays
+   * where it was -- and the customer, who was looking at the payment step, is
+   * suddenly looking at the middle of a region that did not exist a moment ago.
+   * It reads as a jump into empty space, and that is exactly what it is.
+   *
+   * The wallet element lives in OUR document, not inside Dodo's frame, so its
+   * size is observable from here. On the growth that matters -- from collapsed
+   * to real -- the scroll goes back to the top, once. Later resizes are left
+   * alone: a customer who has scrolled down deliberately must not be yanked
+   * back every time something reflows.
+   */
+  function watchForLateGrowth(frame) {
+    if (!window.ResizeObserver) return;
+
+    var settled = false;
+    var observer = new ResizeObserver(function (entries) {
+      if (settled) return;
+      for (var i = 0; i < entries.length; i++) {
+        // 24px, not 0: the collapsed element is a few pixels tall rather than
+        // absent, so "did it appear" is a threshold and not a truthiness test.
+        if (entries[i].contentRect.height > 24) {
+          settled = true;
+          frame.scrollTop = 0;
+          observer.disconnect();
+          return;
+        }
+      }
+    });
+
+    // The element does not exist yet at open time; it is injected with the rest.
+    // Watching the container for the child to turn up is one observer rather
+    // than a poll, and it stops itself.
+    var finder = new MutationObserver(function () {
+      var wallet = frame.querySelector('[id^="dodo-wallet"]');
+      if (!wallet) return;
+      finder.disconnect();
+      observer.observe(wallet);
+    });
+    finder.observe(frame, { childList: true, subtree: true });
+
+    var existing = frame.querySelector('[id^="dodo-wallet"]');
+    if (existing) { finder.disconnect(); observer.observe(existing); }
   }
 
   /**

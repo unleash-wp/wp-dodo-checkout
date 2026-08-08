@@ -71,10 +71,18 @@
   background: rgb(0 0 0 / .55);
 }
 /* Scrolls inside the dialog, never the page behind it. A page that scrolls
-   under an open checkout loses the customer's place in it. */
+   under an open checkout loses the customer's place in it.
+
+   The padding is not decoration. Dodo's payment step has no top spacing of its
+   own, so its first element sat flush against the modal edge and under the close
+   button -- which is absolutely positioned in that corner. Their contact step
+   does have spacing, so it looked fine and the payment step did not, which is
+   the kind of difference nobody notices until a customer is on the second
+   screen with a card in hand. */
 .wpdc__dialog .wpdc__frame {
   overflow-y: auto;
   max-height: calc(100vh - 2rem);
+  padding: 2.5rem 0 1rem;
 }
 .wpdc__dialog .wpdc__frame iframe {
   display: block;

@@ -761,6 +761,36 @@ check(
 	str_contains( $js, 'dialog.showModal()' ) && ! str_contains( $js, 'button.hidden = true' )
 );
 check(
+	// Dodo's payment step brings no top spacing of its own, so its first element
+	// sat flush against the modal edge and under the close button, which is
+	// absolutely positioned in that corner. Their contact step does bring
+	// spacing, so one screen looked right and the next did not.
+	'BELL: the frame keeps the checkout clear of the edge and the close button',
+	str_contains( $css, 'padding: 2.5rem 0 1rem' )
+);
+check(
+	// The SDK injects the express wallet element late and nearly collapsed. When
+	// it fills in it pushes everything down while the scroll position stays put,
+	// so a customer looking at the payment step is suddenly looking at the middle
+	// of a region that did not exist a second ago. It reads as a jump into empty
+	// space. The element is in OUR document, so its growth is observable.
+	//
+	// Counted, not merely present. The first version of this check tested that
+	// the name appeared in the file -- which the DEFINITION satisfies on its
+	// own, so deleting the call killed nothing. Fourth time today a check
+	// matched a string instead of a behaviour.
+	'BELL: a late-arriving wallet element does not leave the customer mid-scroll',
+	2 === substr_count( $js, 'watchForLateGrowth' )
+		&& str_contains( $js, 'frame.scrollTop = 0' )
+		&& str_contains( $js, 'ResizeObserver' )
+);
+check(
+	// Once. A customer who scrolled down on purpose must not be yanked back
+	// every time something reflows.
+	'BELL: and it corrects the scroll once, not on every reflow',
+	str_contains( $js, 'if (settled) return;' ) && str_contains( $js, 'observer.disconnect();' )
+);
+check(
 	// Measured, not chosen. At 544 Dodo's own checkout breaks its layout and
 	// leaves a tall band of white above the content, which reads as a broken
 	// embed and is a narrow viewport. The SDK reported the same content height
