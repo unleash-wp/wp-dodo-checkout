@@ -1,7 +1,7 @@
 # WP Dodo Checkout
 
-A WordPress shortcode that opens a Dodo Payments checkout inside the page, with
-the wallet buttons on top and an optional order bump.
+A WordPress shortcode that opens a Dodo Payments checkout in a modal on your
+own page, with the wallet buttons on top and an optional order bump.
 
 ## What it is
 
@@ -88,19 +88,33 @@ test products.
 
 Archiving in Dodo is also the off switch: nothing on the site needs changing.
 
-## The checkout is embedded, and why that is the conversion answer
+## The checkout is a modal on your page
 
-Clicking the button does not navigate anywhere. Dodo renders its checkout in a
-frame inside the page, and the wallet buttons sit above the form: a customer
-with Apple Pay or Google Pay types nothing at all, because name, email and
-address come from the wallet. The form is the path beside that one, not in front
-of it.
+Clicking the button does not navigate anywhere. The page stays exactly as it
+was, dimmed behind a `<dialog>` this plugin renders, and Dodo's checkout lives
+in a frame inside it. Escape, a click on the backdrop and the X all close it.
+
+The wallet buttons sit above the form: a customer with Apple Pay or Google Pay
+types nothing at all, because name, email and address come from the wallet. The
+form is the path beside that one, not in front of it.
+
+### Why the window is ours and the frame is Dodo's
+
+Dodo's *overlay* and *inline* modes do not differ in how they look. They differ
+in who owns the window — and Dodo's Overlay Checkout page says Apple Pay is not
+supported in theirs. So the SDK runs in `inline` mode, injecting its iframe into
+an element inside our own dialog. A popup, on the surface that carries Apple Pay.
+
+A native `<dialog>` rather than a div with a z-index: `showModal()` brings the
+focus trap, Escape, the backdrop and the top layer. Those are individually easy
+and collectively where hand-rolled modals fail, on the one page a customer must
+not get stuck.
 
 Card fields still never touch this origin. The frame is an iframe from Dodo's
 origin, so the PCI surface is the same as a redirect: this page cannot read what
 is typed into it, and neither can anything else running here.
 
-### Inline rather than the overlay, and Apple Pay is the reason
+### Apple Pay, and what was actually measured
 
 Dodo's documentation contradicts itself:
 
@@ -110,13 +124,40 @@ Dodo's documentation contradicts itself:
 | Inline Checkout | "Apple Pay is not available for overlay checkout." |
 | Digital Wallets | "All digital wallets are fully supported in: Overlay Checkout, …" |
 
-Two specific pages against one general list, so the overlay is not a surface to
-bet Apple Pay on. Inline supports it, at the cost of one dashboard step:
-**register the domain under Settings > Payment Methods > Apple Pay > Manage
-domains.** Apple's association file is already served by this plugin, from
-`init`, at `/.well-known/apple-developer-merchantid-domain-association`.
+Two specific pages against one general list, so their overlay is not a surface
+to bet Apple Pay on. What settles the technical half is the frame itself, read
+out of a real browser:
 
-Google Pay needs nothing beyond being enabled on the account.
+```
+iframe allow = "payment keyboard-map *"
+```
+
+The payment permission **is** delegated to Dodo's frame, so a wallet is not
+blocked by permissions policy in an embed. Whether a wallet button *appears* is
+then a dashboard matter:
+
+- **Google Pay** — enable it on the account, nothing else.
+- **Apple Pay** — register the domain under **Settings > Payment Methods > Apple
+  Pay > Manage domains**. Apple's association file is already served by this
+  plugin, from `init`, at
+  `/.well-known/apple-developer-merchantid-domain-association`.
+
+Without those two steps the customer sees the form and no wallets, whatever this
+plugin sends.
+
+### Three things in the browser console belong to Dodo
+
+Recorded because somebody will meet them and wonder whose they are:
+
+- The `allow` attribute is malformed — `"payment keyboard-map *"` where the
+  syntax is `"payment *; keyboard-map *"` — hence a `Unrecognized origin:
+  'keyboard-map'` warning.
+- The SDK posts messages to its own origin instead of the parent window, so
+  `checkout.breakdown` events do not arrive.
+- Their fraud SDK asks for accelerometer and bluetooth, which the frame does not
+  grant.
+
+None of the three stops a purchase, and none originates here.
 
 ### The form is as short as Dodo lets it be
 
