@@ -57,11 +57,20 @@
      loading failure and it is just a narrow viewport. At 640 the form renders
      as intended. Wider buys nothing: the SDK reports the same content height
      from 640 to 900. */
-  --wpdc-dialog-width: 640px;
+  /* Two columns now: the summary Dodo's own reference layout puts beside their
+     frame, and the frame. 640 was the one-column width; the frame still wants
+     its 640 and the panel wants room to breathe beside it. */
+  --wpdc-dialog-width: 1040px;
 
   width: min(var(--wpdc-dialog-width), calc(100vw - 2rem));
   max-height: calc(100vh - 2rem);
   padding: 0;
+  /* Panel left, frame right, and the frame keeps a fixed column so Dodo's
+     layout never falls below the width where it breaks. Below that total the
+     panel stacks on top, which is also the order a customer reads on a phone:
+     what am I buying, then how do I pay. */
+  display: grid;
+  grid-template-columns: 1fr 640px;
   border: 0;
   border-radius: var(--wpdc-radius, 8px);
   background: #fff;
@@ -79,6 +88,70 @@
    does have spacing, so it looked fine and the payment step did not, which is
    the kind of difference nobody notices until a customer is on the second
    screen with a card in hand. */
+/* The summary column. Tinted, so the seam between our panel and their frame is
+   a deliberate edge rather than two whites that almost match. */
+.wpdc__panel {
+  padding: 2rem 1.75rem;
+  background: rgb(0 0 0 / .035);
+  border-inline-end: 1px solid rgb(0 0 0 / .07);
+  overflow-y: auto;
+}
+.wpdc__item-name {
+  margin: 0 0 .5rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.wpdc__item-desc {
+  margin: 0 0 1rem;
+  opacity: .7;
+  font-size: .875em;
+  line-height: 1.45;
+}
+.wpdc__item-price {
+  margin: 0;
+  font-size: 1.5em;
+  font-weight: 700;
+}
+.wpdc__totals {
+  margin: 1.5rem 0 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgb(0 0 0 / .12);
+}
+.wpdc__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .5rem;
+}
+.wpdc__row dt,
+.wpdc__row dd {
+  margin: 0;
+}
+.wpdc__row dd {
+  /* Tabular figures, so a total that changes as the customer types their
+     postcode does not shift the column it sits in. */
+  font-variant-numeric: tabular-nums;
+}
+.wpdc__row--total {
+  margin: .75rem 0 0;
+  padding-top: .75rem;
+  border-top: 1px solid rgb(0 0 0 / .12);
+  font-size: 1.125em;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .wpdc__dialog {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .wpdc__panel {
+    border-inline-end: 0;
+    border-bottom: 1px solid rgb(0 0 0 / .07);
+    padding: 1.25rem 1.5rem;
+  }
+}
+
 .wpdc__dialog .wpdc__frame {
   overflow-y: auto;
   max-height: calc(100vh - 2rem);

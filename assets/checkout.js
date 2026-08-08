@@ -124,13 +124,82 @@
       displayType: 'inline',
       onEvent: function (event) {
         if (!event) return;
+        var root = openRoot;
+        if (!root) return;
+
         if (event.event_type === 'checkout.error') {
-          var root = openRoot;
-          if (root) say(root, (event.data && event.data.message) || cfg.failed);
+          say(root, (event.data && event.data.message) || cfg.failed);
+          return;
+        }
+        // Dodo's own numbers, arriving when the frame loads and again on every
+        // address change that moves the tax. Never computed here: the tax
+        // depends on a country the customer has not typed yet.
+        if (event.event_type === 'checkout.breakdown') {
+          paintTotals(root, (event.data && event.data.message) || {});
         }
       },
     });
     ready = true;
+  }
+
+  /**
+   * Money as Dodo reports it, in the panel beside their frame.
+   *
+   * Amounts arrive as integers in the smallest unit, so they are divided by 100
+   * and formatted by the BROWSER's locale rules rather than by arithmetic here.
+   * `finalTotal` wins over `total` when present: it is what the card is actually
+   * charged, including currency conversion the basic breakdown does not carry.
+   *
+   * A row with no number stays hidden rather than showing a zero. Before the
+   * customer gives a country there IS no tax, and printing "0.00" would be a
+   * statement about their bill rather than an admission that it is not known
+   * yet.
+   */
+  function paintTotals(root, b) {
+    var totals = root.querySelector('.wpdc__totals');
+    if (!totals) return;
+
+    var currency = b.currency || b.finalTotalCurrency || '';
+    var rows = {
+      subtotal: b.subTotal,
+      discount: b.discount,
+      tax: b.tax,
+      total: b.finalTotal != null ? b.finalTotal : b.total,
+    };
+    var totalCurrency = b.finalTotal != null ? (b.finalTotalCurrency || currency) : currency;
+    var shown = false;
+
+    Object.keys(rows).forEach(function (key) {
+      var row = totals.querySelector('[data-row="' + key + '"]');
+      if (!row) return;
+      var value = rows[key];
+      // Discount is hidden at zero; the others are hidden only when absent, so
+      // a genuine zero tax still shows as 0.00 once a country is known.
+      var has = value != null && (key !== 'discount' || value !== 0);
+      row.hidden = !has;
+      if (!has) return;
+      shown = true;
+      row.querySelector('dd').textContent = money(
+        value,
+        key === 'total' ? totalCurrency : currency
+      );
+    });
+
+    totals.hidden = !shown;
+  }
+
+  function money(minor, currency) {
+    var amount = minor / 100;
+    try {
+      return new Intl.NumberFormat(document.documentElement.lang || undefined, {
+        style: currency ? 'currency' : 'decimal',
+        currency: currency || undefined,
+      }).format(amount);
+    } catch (e) {
+      // An unknown currency code throws rather than degrading, and a checkout
+      // must not lose its totals over a formatting nicety.
+      return amount.toFixed(2) + (currency ? ' ' + currency : '');
+    }
   }
 
   function openFrame(root, url) {

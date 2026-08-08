@@ -451,8 +451,25 @@ check(
 	str_contains( $shortcode, "'label'" ) && str_contains( $shortcode, "esc_html( \$atts['label'] )" )
 );
 check(
-	'BELL: no price or amount is computed in the browser',
-	! preg_match( '/\b(price|amount|total)\s*[=:]/i', $js )
+	// The property, not the vocabulary. This grepped for the words price, amount
+	// and total, and went red the moment the browser divided Dodo's own minor
+	// units by 100 to display them -- which is not deciding what is charged, it
+	// is printing what Dodo decided.
+	//
+	// What must stay true is narrower and testable: the browser SENDS no money.
+	// It names a product and a quantity, and the server and Dodo settle the
+	// rest. A price in this body would be a price a browser could argue about.
+	'BELL: the browser sends no money, only what to buy',
+	1 === preg_match( '/var body = \{(.*?)\};/s', $js, $m )
+		&& ! preg_match( '/price|amount|total|currency/i', $m[1] )
+);
+check(
+	// Displayed figures come from Dodo's event and nowhere else. Computing tax
+	// here would be a guess that disagrees with the frame the moment the
+	// customer types a country.
+	'BELL: the totals shown are the ones Dodo sent',
+	str_contains( $js, "event.event_type === 'checkout.breakdown'" )
+		&& 2 === substr_count( $js, 'paintTotals' )
 );
 check(
 	// Compared against null, not tested for truthiness: a truthy test is how a
@@ -772,6 +789,33 @@ check(
 	1 === preg_match( "/define\( 'WPDC_VERSION', '([^']+)' \);/", source( $root . '/wp-dodo-checkout.php' ), $m )
 		&& WPDC_VERSION === $m[1]
 );
+// ─── A cache from an older shape is discarded, not trusted ──────────────────
+//
+// The one that got away. The key carries the plugin version, which covers
+// releases and NOT a shape that changed while the version stood still -- every
+// moment during development, and every hotfix that adds a field. The failure is
+// not a notice: a typed function called with a missing key throws, and the
+// product page returns 500 for as long as the entry lives. It happened.
+
+configure();
+set_transient( wpdc_catalog_key(), array( 'pdt_old' => array( 'name' => 'Old', 'price' => 100 ) ), 600 );
+respond( 200, array( 'items' => array(
+	array( 'product_id' => 'pdt_new', 'name' => 'New', 'description' => 'd', 'price' => 200, 'currency' => 'EUR' ),
+) ) );
+$refetched = wpdc_catalog();
+check(
+	'BELL: a cached row missing a field this build reads is treated as a miss',
+	array( 'pdt_new' ) === array_keys( $refetched )
+);
+check(
+	// isset first: with the guard removed this array holds the OLD row, and
+	// indexing a key that is not there turns a clean red into a PHP warning
+	// plus a red. A failing check should say what is wrong, not add noise.
+	'BELL: and every row it returns carries every field',
+	isset( $refetched['pdt_new'] )
+		&& array( 'name', 'description', 'price', 'currency' ) === array_keys( $refetched['pdt_new'] )
+);
+
 check(
 	// The cached catalogue is a shape, not just data. Adding a field to it left
 	// every updated site reading rows written by the previous version -- ten
@@ -834,8 +878,28 @@ check(
 	// leaves a tall band of white above the content, which reads as a broken
 	// embed and is a narrow viewport. The SDK reported the same content height
 	// from 640 to 900, so wider buys nothing.
+	// 640 was the one-column width, measured: below it Dodo's checkout breaks its
+	// own layout. The frame keeps that column and the summary sits beside it.
 	'BELL: the modal is wide enough that the checkout inside it renders',
-	str_contains( $css, '--wpdc-dialog-width: 640px' )
+	str_contains( $css, 'grid-template-columns: 1fr 640px' )
+		&& str_contains( $css, '--wpdc-dialog-width: 1040px' )
+);
+check(
+	// Dodo's inline documentation: a compliant embed shows item descriptions and
+	// transaction totals -- subtotal, tax, grand total. Their frame carries them
+	// only after the contact step; their reference layout puts them beside it.
+	'BELL: the compliant summary is present, with all three totals',
+	str_contains( $shortcode, 'data-row="subtotal"' )
+		&& str_contains( $shortcode, 'data-row="tax"' )
+		&& str_contains( $shortcode, 'data-row="total"' )
+		&& 2 === substr_count( $shortcode, 'wpdc_render_item' )
+);
+check(
+	// "Removing or hiding legal information violates compliance requirements",
+	// says the same page. The frame is shown whole, footer included -- which is
+	// why the fold that once hid it behind the wallet is gone and stays gone.
+	'SILENCE: nothing hides part of Dodo frame',
+	! str_contains( $css, 'wpdc__frame--folded' ) && ! str_contains( $js, 'fold' )
 );
 check(
 	// A native <dialog>, so the focus trap, Escape, the backdrop and the top

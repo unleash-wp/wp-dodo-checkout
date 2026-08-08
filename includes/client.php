@@ -130,6 +130,36 @@ function wpdc_dodo_request( string $method, string $path, ?array $body = null ) 
 }
 
 /**
+ * Does a cached catalogue still have the shape this build reads?
+ *
+ * Versioning the cache key covers releases. It does NOT cover a shape that
+ * changed while the version stayed put, which is every moment during
+ * development and every hotfix that adds a field -- and the failure is not a
+ * notice. A consumer that calls a typed function with a missing key gets a
+ * TypeError, which is a WHITE PAGE where the checkout used to be, for as long
+ * as the entry lives.
+ *
+ * That happened. The key was versioned, the version did not move, a field came
+ * and went, and the product page returned 500. So the cache is checked against
+ * what is actually read from it rather than trusted because it is an array.
+ *
+ * A mismatch is a cache miss, not an error: the next line fetches fresh.
+ */
+function wpdc_catalog_shape_ok( array $catalog ): bool {
+	foreach ( $catalog as $row ) {
+		if ( ! is_array( $row ) ) {
+			return false;
+		}
+		foreach ( array( 'name', 'description', 'price', 'currency' ) as $key ) {
+			if ( ! array_key_exists( $key, $row ) ) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+/**
  * The sellable catalogue: product id => name, price, currency.
  *
  * One API call. The list endpoint carries the name and price already, so there
@@ -141,11 +171,11 @@ function wpdc_dodo_request( string $method, string $path, ?array $body = null ) 
  * allow-list wanted: archiving something in the dashboard is how it stops being
  * sellable here.
  *
- * @return array<string, array{name: string, price: int|null, currency: string}>|array{ok: false}
+ * @return array<string, array{name: string, description: string, price: int|null, currency: string}>|array{ok: false}
  */
 function wpdc_catalog( bool $fresh = false ) {
 	$cached = $fresh ? false : get_transient( wpdc_catalog_key() );
-	if ( is_array( $cached ) ) {
+	if ( is_array( $cached ) && wpdc_catalog_shape_ok( $cached ) ) {
 		return $cached;
 	}
 
@@ -167,9 +197,10 @@ function wpdc_catalog( bool $fresh = false ) {
 		}
 
 		$catalog[ $id ] = array(
-			'name'     => is_string( $item['name'] ?? null ) ? $item['name'] : $id,
-			'price'    => is_int( $item['price'] ?? null ) ? $item['price'] : null,
-			'currency' => is_string( $item['currency'] ?? null ) ? $item['currency'] : '',
+			'name'        => is_string( $item['name'] ?? null ) ? $item['name'] : $id,
+			'description' => is_string( $item['description'] ?? null ) ? $item['description'] : '',
+			'price'       => is_int( $item['price'] ?? null ) ? $item['price'] : null,
+			'currency'    => is_string( $item['currency'] ?? null ) ? $item['currency'] : '',
 		);
 	}
 

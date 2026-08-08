@@ -76,6 +76,20 @@ function wpdc_is_product_id( $value ): bool {
 	return is_string( $value ) && 1 === preg_match( '/^pdt_[A-Za-z0-9]{1,64}$/', $value );
 }
 
+/**
+ * Minor units to something readable, said plainly when there is no price.
+ *
+ * Two callers: the settings catalogue, and the item line a customer reads in
+ * the checkout window. It has moved between here and settings.php twice as that
+ * second caller came and went; it stays here while both exist.
+ */
+function wpdc_format_price( ?int $minor, string $currency ): string {
+	if ( null === $minor ) {
+		return __( 'no price set', 'wp-dodo-checkout' );
+	}
+	return number_format_i18n( $minor / 100, 2 ) . ( '' !== $currency ? ' ' . $currency : '' );
+}
+
 function wpdc_api_key_is_constant(): bool {
 	return defined( 'WPDC_API_KEY' ) && is_string( WPDC_API_KEY ) && '' !== trim( WPDC_API_KEY );
 }

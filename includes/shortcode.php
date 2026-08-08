@@ -122,6 +122,36 @@ function wpdc_render( $atts ): string {
 		<dialog class="wpdc__dialog" aria-label="<?php echo esc_attr__( 'Checkout', 'wp-dodo-checkout' ); ?>">
 			<button type="button" class="wpdc__close" aria-label="<?php echo esc_attr__( 'Close checkout', 'wp-dodo-checkout' ); ?>">&times;</button>
 
+			<?php
+			// Dodo's inline documentation lists what a compliant embed must show:
+			// item descriptions, and transaction totals including subtotal, tax
+			// and grand total. Their frame carries them, but only after the
+			// contact step, and their own reference layout puts them beside it.
+			//
+			// The numbers come from THEIR checkout.breakdown event, never from a
+			// price this plugin holds. Tax depends on a country the customer has
+			// not typed yet, so anything computed here would be a guess that
+			// disagrees with the frame the moment they type it.
+			?>
+			<aside class="wpdc__panel">
+				<?php wpdc_render_item( $atts['product'] ); ?>
+
+				<dl class="wpdc__totals" hidden>
+					<div class="wpdc__row" data-row="subtotal">
+						<dt><?php echo esc_html__( 'Subtotal', 'wp-dodo-checkout' ); ?></dt><dd></dd>
+					</div>
+					<div class="wpdc__row" data-row="discount" hidden>
+						<dt><?php echo esc_html__( 'Discount', 'wp-dodo-checkout' ); ?></dt><dd></dd>
+					</div>
+					<div class="wpdc__row" data-row="tax">
+						<dt><?php echo esc_html__( 'VAT', 'wp-dodo-checkout' ); ?></dt><dd></dd>
+					</div>
+					<div class="wpdc__row wpdc__row--total" data-row="total">
+						<dt><?php echo esc_html__( 'Total', 'wp-dodo-checkout' ); ?></dt><dd></dd>
+					</div>
+				</dl>
+			</aside>
+
 			<div class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"></div>
 		</dialog>
 
@@ -129,6 +159,48 @@ function wpdc_render( $atts ): string {
 	</div>
 	<?php
 	return (string) ob_get_clean();
+}
+
+/**
+ * Dodo's product descriptions come back as MARKDOWN, which nothing in the API
+ * says. `wp_strip_all_tags` takes the HTML and leaves `**Nur hier erhaeltlich**`
+ * sitting in a checkout window with its asterisks showing. Unwrapped rather than
+ * rendered: two lines of prose do not need a Markdown renderer.
+ */
+function wpdc_plain_text( string $markdown ): string {
+	$text = wp_strip_all_tags( $markdown );
+	// [label](url) -> label, before the emphasis pass or the brackets survive.
+	$text = (string) preg_replace( '/\[([^\]]*)\]\([^)]*\)/', '$1', $text );
+	$text = (string) preg_replace( '/[*_`~]+/', '', $text );
+	$text = (string) preg_replace( '/^\s*#+\s*/m', '', $text );
+	return trim( (string) preg_replace( '/\s+/', ' ', $text ) );
+}
+
+/**
+ * The item: what is being bought, and its list price.
+ *
+ * This price is the product's own figure and is NEVER what is charged -- that is
+ * the Total below it, which comes from Dodo. If the two disagree the frame is
+ * right and this is stale, and that is the direction the mistake should fall.
+ */
+function wpdc_render_item( string $product ): void {
+	$catalog = wpdc_catalog();
+	if ( isset( $catalog['ok'] ) && false === $catalog['ok'] ) {
+		return; // the checkout itself will say what is wrong
+	}
+	$item = $catalog[ $product ] ?? null;
+	if ( null === $item ) {
+		return;
+	}
+	?>
+	<p class="wpdc__item-name"><?php echo esc_html( $item['name'] ); ?></p>
+	<?php if ( '' !== $item['description'] ) : ?>
+		<p class="wpdc__item-desc"><?php echo esc_html( wp_trim_words( wpdc_plain_text( $item['description'] ), 26 ) ); ?></p>
+	<?php endif; ?>
+	<?php if ( null !== $item['price'] ) : ?>
+		<p class="wpdc__item-price"><?php echo esc_html( wpdc_format_price( $item['price'], $item['currency'] ) ); ?></p>
+	<?php endif; ?>
+	<?php
 }
 
 /**
