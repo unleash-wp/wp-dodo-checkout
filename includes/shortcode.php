@@ -64,11 +64,6 @@ function wpdc_render( $atts ): string {
 			// English one from the same site. The site locale is the fallback and
 			// is wrong here by construction: it describes the SHOP, not the book.
 			'lang'       => '',
-			// Written by the shop owner, never by this plugin. A refund window or
-			// a guarantee is a promise only the seller can make, and inventing a
-			// reassuring sentence on somebody's checkout is how a shop ends up
-			// committed to something it does not offer.
-			'trust'      => '',
 		),
 		is_array( $atts ) ? $atts : array(),
 		'wpdc_checkout'
@@ -92,7 +87,6 @@ function wpdc_render( $atts ): string {
 	// Normalised here too, so the labels and the frame cannot end up in different
 	// languages even when the shortcode names a third one.
 	$lang     = '' !== trim( (string) $atts['lang'] ) ? wpdc_two_languages( trim( (string) $atts['lang'] ) ) : '';
-	$trust    = array_values( array_filter( array_map( 'trim', explode( '|', (string) $atts['trust'] ) ) ) );
 	$quantity = max( 1, min( 50, (int) $atts['quantity'] ) );
 	$id       = wp_unique_id( 'wpdc-' );
 
@@ -180,13 +174,6 @@ function wpdc_render( $atts ): string {
 					</div>
 				</dl>
 
-				<?php if ( array() !== $trust ) : ?>
-					<ul class="wpdc__trust">
-						<?php foreach ( $trust as $line ) : ?>
-							<li><?php echo esc_html( $line ); ?></li>
-						<?php endforeach; ?>
-					</ul>
-				<?php endif; ?>
 			</aside>
 
 			<div class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"></div>

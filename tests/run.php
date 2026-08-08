@@ -1215,26 +1215,6 @@ check(
 	str_contains( $js, "/^de/i.test(tag) ? 'de' : 'en'" )
 );
 check(
-	// Written by the shop owner, never by this plugin. A refund window is a
-	// promise only the seller can make, and a reassuring sentence invented on
-	// somebody's checkout is a commitment they never gave.
-	//
-	// Checked against the RENDERED strings, not the file: the file explains the
-	// rule in a comment, and grepping the comment for the words it forbids was
-	// the seventh time today a check read prose as behaviour.
-	'BELL: trust lines come from the shortcode, and none are invented here',
-	str_contains( $shortcode, "'trust'      => ''" )
-		&& ( static function ( string $php ): bool {
-			preg_match_all( "/(?:esc_html__|esc_attr__|__)\(\s*'([^']+)'/", $php, $m );
-			foreach ( $m[1] as $string ) {
-				if ( preg_match( '/(money.?back|refund|guarantee|[0-9]+ days?)/i', $string ) ) {
-					return false;
-				}
-			}
-			return true;
-		} )( $shortcode )
-);
-check(
 	// The site locale is not a fallback anywhere: it describes the shop, and on
 	// the operator's install it said en_US while the customer read German.
 	'BELL: the language never comes from WordPress',

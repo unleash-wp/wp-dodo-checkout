@@ -249,47 +249,6 @@
   font-weight: 700;
 }
 
-/* The shop owner's own words, through the shortcode. Never written here: a
-   return window is a promise only a seller can make.
-
-   Restrained on purpose. A row of three bright badges with exclamation marks
-   is what an invented trust block looks like, and a customer with a card in
-   hand reads it as decoration. Small type, muted, one thin rule above it, a
-   tick that is a tick and not a shield -- it reads as a footnote from the shop,
-   which is what it is. */
-/* No rule above it, and no gap held open for one. The panel is a flex column
-   with its own gap, so a border plus a margin plus that gap left the line
-   stranded a long way under the total with a stripe in between -- three
-   separators for one sentence. */
-.wpdc__trust {
-  margin: -.5rem 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: 11px;
-  line-height: 1.5;
-  color: rgb(255 255 255 / .62);
-}
-.wpdc__trust li {
-  position: relative;
-  padding-inline-start: 1.125rem;
-  margin-bottom: .3125rem;
-}
-.wpdc__trust li:last-child {
-  margin-bottom: 0;
-}
-.wpdc__trust li::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: 1px;
-  top: .3em;
-  width: .3rem;
-  height: .55rem;
-  border: solid var(--wpdc-panel-accent);
-  border-width: 0 1.5px 1.5px 0;
-  transform: rotate(45deg);
-  opacity: .85;
-}
-
 /* ── Dodo's frame, and the wait before it ────────────────────────────────── */
 
 .wpdc__dialog .wpdc__frame {
@@ -423,7 +382,6 @@
     overflow: hidden;
   }
   .wpdc__item-desc,
-  .wpdc__trust,
   .wpdc__row:not(.wpdc__row--total) {
     display: none;
   }

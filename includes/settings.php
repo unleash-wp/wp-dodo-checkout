@@ -200,13 +200,11 @@ function wpdc_render_catalogue(): void {
 			// omitted, so the shop owner pasted what this table gave him, got
 			// "Buy now" on a German page, and concluded the button text could not
 			// be changed. A knob nobody is shown is a knob that does not exist.
-			// label and trust are IN the copyable line. The label was left out
-			// once, the shop owner pasted what this table gave him, got "Buy now"
-			// on a German page and concluded the text could not be changed. A
-			// knob nobody is shown is a knob that does not exist -- and `trust`
-			// is the one that carries a return window, which this plugin will
-			// never write on a seller's behalf.
-			'<tr><td>%s<br><code>%s</code></td><td>%s</td><td><code>[wpdc_checkout product="%s" label="%s" trust="%s"]</code></td></tr>',
+			// The label is IN the copyable line. It was left out once, the shop
+			// owner pasted what this table gave him, got "Buy now" on a German
+			// page and concluded the text could not be changed. A knob nobody is
+			// shown is a knob that does not exist.
+			'<tr><td>%s<br><code>%s</code></td><td>%s</td><td><code>[wpdc_checkout product="%s" label="%s"]</code></td></tr>',
 			esc_html( $product['name'] ),
 			esc_html( $id ),
 			// Formatted here rather than stored: the page is showing what Dodo
@@ -214,8 +212,7 @@ function wpdc_render_catalogue(): void {
 			// customer pays is settled on Dodo's checkout.
 			esc_html( wpdc_format_price( $product['price'], $product['currency'] ) ),
 			esc_attr( $id ),
-			esc_attr__( 'Buy now', 'wp-dodo-checkout' ),
-			esc_attr__( 'Your return policy|Your delivery promise', 'wp-dodo-checkout' )
+			esc_attr__( 'Buy now', 'wp-dodo-checkout' )
 		);
 	}
 
