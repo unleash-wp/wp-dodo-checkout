@@ -176,23 +176,33 @@ turn `minimal_address` off** — there is nothing to ship here.
 The "buy as a business" checkbox stays. A WordPress audience contains people who
 need a VAT invoice, and it is one collapsed line.
 
-### Dodo's checkout is two steps, and nothing here changes that
+### Two customers see two different checkouts
 
-Measured in a browser, not read out of a document:
+Measured in a browser, not read out of a document. The SDK injects **two**
+elements into the container, in this order:
 
-| Step | What the customer sees |
+```
+[ express wallet element ]   <- collapses to 0px when no wallet is available
+[ checkout iframe        ]
+```
+
+So what a customer meets depends on their device:
+
+| | What opens |
 |---|---|
-| 1 | Full name, email, country, ZIP, "purchasing as a business", **Continue to Payment** |
-| 2 | Google Pay, then Card and SEPA Direct Debit |
+| **Has Apple Pay or Google Pay** | The wallet button, at the very top, above every field. Two taps, nothing typed. |
+| **Has neither** | Contact step — name, email, country, ZIP — then **Continue to Payment**, then Card, Klarna, SEPA. |
 
-So the wallet button is behind a form, not in front of it. A customer who would
-have paid in two taps fills four fields first. That is Dodo's checkout, not a
-setting: `minimal_address` and the phone flag make step one as short as it can
-be — country and ZIP, nothing more — and the step itself remains.
+An earlier version of this file said the wallet button sits *behind* the form.
+That was wrong, and the way it was wrong is worth keeping: the wallet element was
+measured at 0px in a headless browser with no wallet configured, and that was
+read as "it is not there" rather than "this browser cannot offer one". The DOM
+order settles it — the wallet element precedes the checkout iframe.
 
-Checkouts that put the wallets first do the tax-country work from the payment
-sheet or the IP instead. If that difference matters more than everything else on
-this page, it is a provider question, not a configuration one.
+What remains true is narrower: **a customer with no wallet pays a step** that
+checkouts leading with a combined method-and-fields screen do not charge. That
+step is Dodo's, `minimal_address` and the phone flag already make it as short as
+it goes, and no setting removes it.
 
 ### What is NOT done here, and where it belongs instead
 
