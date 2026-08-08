@@ -140,3 +140,9 @@ msgstr "Ein Code besteht nur aus Buchstaben, Ziffern, Binde- und Unterstrichen."
 
 msgid "Remove code"
 msgstr "Code entfernen"
+
+msgid "Completing your order…"
+msgstr "Bestellung wird abgeschlossen …"
+
+msgid "That checkout could not be found."
+msgstr "Dieser Checkout wurde nicht gefunden."

@@ -1595,8 +1595,38 @@ check(
 	// in front of nothing until they give up, and nobody ever hears about it.
 	'BELL: the wait has a deadline that falls back to Dodo own page',
 	str_contains( $js, 'LOAD_DEADLINE_MS' )
-		&& 4 === substr_count( $js, 'settleLoading' )
+		// Five: the definition, the two events that end the wait, the close, and
+		// the zero-total branch, which ends it because nothing else will.
+		&& 5 === substr_count( $js, 'settleLoading' )
 		&& 1 === preg_match( '/loadTimer = setTimeout[\s\S]{0,400}window\.location\.assign\(url\)/', $js )
+);
+check(
+	// A cart discounted to zero completes on Dodo's side while their frame sits
+	// on a payment step it cannot draw -- no event, no error, nothing to react
+	// to. This is the one screen the shop finishes itself, and it must stay the
+	// one: a checkout with something to pay completes on the payment step and
+	// their SDK does the redirect.
+	'BELL: a zero-total checkout is finished by asking, not by waiting',
+	1 === preg_match( "/customer_details_submitted' && '0' === root\.dataset\.due/", $js )
+		&& str_contains( $js, 'function awaitCompletion' )
+		&& str_contains( $js, 'cfg.status' )
+);
+check(
+	// The route answers a boolean about somebody's own checkout. Dodo returns
+	// the customer's name and email in the same response, and this route is
+	// public -- so both stay on the server.
+	'BELL: the status route hands back no customer detail',
+	str_contains( $rest, "'finished' =>" )
+		&& ! preg_match( '/customer_email|customer_name/', $rest )
+		&& str_contains( $client, "'finished' => 'succeeded' === \$status" )
+);
+check(
+	// A guessed session id must not be pasted into an outbound URL path, and a
+	// status that is merely not-failed is not a finished order.
+	'BELL: the session id is shaped before it reaches a URL',
+	str_contains( $config, 'function wpdc_is_session_id' )
+		&& str_contains( $config, "'/^cks_[A-Za-z0-9]{1,64}\$/'" )
+		&& str_contains( $rest, "'validate_callback' => 'wpdc_is_session_id'" )
 );
 check(
 	// A deadline that outlives the window it belonged to would redirect somebody

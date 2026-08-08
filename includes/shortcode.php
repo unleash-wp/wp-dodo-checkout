@@ -383,12 +383,14 @@ function wpdc_enqueue(): void {
 		'wpdcCheckout',
 		array(
 			'endpoint' => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/session' ) ),
+			'status'   => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/status' ) ),
 			'nonce'    => wp_create_nonce( 'wp_rest' ),
 			'busy'     => __( 'Opening checkout…', 'wp-dodo-checkout' ),
 			'failed'   => __( 'The checkout could not be opened. Please try again in a moment.', 'wp-dodo-checkout' ),
 			'discountApplied' => __( 'Code applied.', 'wp-dodo-checkout' ),
 			'discountEmpty'   => __( 'Enter a code first.', 'wp-dodo-checkout' ),
 			'discountShape'   => __( 'A code has letters, digits, dashes and underscores only.', 'wp-dodo-checkout' ),
+			'finishing'       => __( 'Completing your order…', 'wp-dodo-checkout' ),
 		)
 	);
 }

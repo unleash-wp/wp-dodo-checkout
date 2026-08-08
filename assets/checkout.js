@@ -55,7 +55,12 @@
       body: JSON.stringify(body),
     }).then(function (res) {
       return res.json().then(function (data) {
-        if (res.ok && data.url) return data.url;
+        if (res.ok && data.url) {
+          // Kept so this checkout can be asked about later. Written on the
+          // root rather than closed over, because a re-mint replaces it.
+          if (data.session) root.dataset.session = data.session;
+          return data.url;
+        }
         // The server's sentence when it sent one; it is written for a
         // visitor. The generic line only when there was none.
         // Only a sentence the SERVER wrote. A parse failure or a browser
@@ -155,6 +160,27 @@
         // payment step already scrolled past the wallet button at the top of
         // it. Both scrollers go back to the start, because the new screen
         // begins at its own beginning.
+        // A cart discounted to zero finishes without ever saying so.
+        //
+        // There is no payment to collect, and Dodo's frame renders the payment
+        // step regardless: it fetches a payment link that does not exist for a
+        // zero total, takes a 404, and stops. No `checkout.redirect`, no
+        // `checkout.error` -- nothing their SDK or this file reacts to. Their
+        // side meanwhile marks the order `succeeded` within seconds.
+        //
+        // Measured, not assumed: pay_..., total 0, `payment_method: null`,
+        // against the same session id the stuck frame was showing.
+        //
+        // So this is the one screen the shop finishes itself. Narrow on
+        // purpose: a checkout with something to pay reaches the payment step,
+        // completes there, and their SDK does the redirect. Only the zero case
+        // has nobody to tell it.
+        if (event.event_type === 'checkout.customer_details_submitted' && '0' === root.dataset.due) {
+          settleLoading(root);
+          say(root, cfg.finishing);
+          awaitCompletion(root);
+          return;
+        }
         if (event.event_type === 'checkout.customer_details_submitted') {
           var scroll = root.querySelector('.wpdc__scroll');
           var frame = root.querySelector('.wpdc__frame');
@@ -178,7 +204,13 @@
         // address change that moves the tax. Never computed here: the tax
         // depends on a country the customer has not typed yet.
         if (event.event_type === 'checkout.breakdown') {
-          paintTotals(root, (event.data && event.data.message) || {});
+          var breakdown = (event.data && event.data.message) || {};
+          paintTotals(root, breakdown);
+          // Remembered for the step below, which cannot ask for it again: the
+          // breakdown arrives once per screen, and the screen it is needed on
+          // is the one that never loads.
+          var due = typeof breakdown.finalTotal === 'number' ? breakdown.finalTotal : breakdown.total;
+          root.dataset.due = typeof due === 'number' ? String(due) : '';
         }
       },
     });
@@ -468,6 +500,54 @@
     try { if (dodo) dodo.Checkout.close(); } catch (e) { /* already closed */ }
     var button = root.querySelector('.wpdc__button');
     if (button) button.disabled = false;
+  }
+
+  /**
+   * Ask the shop's own server whether Dodo finished, then leave.
+   *
+   * Polling rather than listening, because there is nothing to listen to. The
+   * server asks Dodo `GET /checkouts/{id}` and answers a boolean -- the API key
+   * never leaves it, and neither does the name and email that come back in the
+   * same response.
+   *
+   * A minute of asking, every two seconds. Long enough for an order that takes
+   * a moment, short enough that a customer is not left watching a sentence
+   * forever: when it runs out they are sent to the same place anyway, because
+   * by then the likeliest truth is that it worked and we stopped asking too
+   * early -- and their own confirmation is on the other side of that page.
+   */
+  var POLL_EVERY_MS = 2000;
+  var POLL_TRIES = 30;
+
+  function awaitCompletion(root) {
+    var session = root.dataset.session || '';
+    var tries = 0;
+
+    function leave(where) {
+      if (where) window.location.assign(where);
+    }
+
+    function ask() {
+      tries += 1;
+      fetch(cfg.status + '?session=' + encodeURIComponent(session), {
+        headers: { 'x-wp-nonce': cfg.nonce },
+        credentials: 'same-origin',
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data && data.finished) return leave(data.redirect);
+          if (tries >= POLL_TRIES) return leave(data && data.redirect);
+          setTimeout(ask, POLL_EVERY_MS);
+        })
+        .catch(function () {
+          // A failed poll is not a failed order, and there is nothing a
+          // customer could do about it. Keep asking until the tries run out.
+          if (tries < POLL_TRIES) setTimeout(ask, POLL_EVERY_MS);
+        });
+    }
+
+    if (!session) return;
+    ask();
   }
 
   function open(root, url) {

@@ -32,6 +32,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 function wpdc_register_rest(): void {
 	register_rest_route(
 		'wp-dodo-checkout/v1',
+		'/status',
+		array(
+			'methods'             => 'GET',
+			'callback'            => 'wpdc_rest_status',
+			'permission_callback' => '__return_true',
+			'args'                => array(
+				'session' => array(
+					'required'          => true,
+					'validate_callback' => 'wpdc_is_session_id',
+				),
+			),
+		)
+	);
+
+	register_rest_route(
+		'wp-dodo-checkout/v1',
 		'/session',
 		array(
 			'methods'             => 'POST',
@@ -107,5 +123,50 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 	// Dodo's name stays inside the client; the browser gets this route's own
 	// contract. Translating here is what stops a provider rename from reaching
 	// the JavaScript.
-	return new WP_REST_Response( array( 'url' => $result['checkout_url'] ), 200 );
+	return new WP_REST_Response(
+		array(
+			'url' => $result['checkout_url'],
+			// Carried so the browser can ask later whether this checkout
+			// finished. It identifies the visitor's own checkout and nothing
+			// else -- the status route answers a boolean about it, never the
+			// name or the email Dodo returns alongside.
+			'session' => $result['session_id'],
+		),
+		200
+	);
+}
+
+/**
+ * Did the checkout the caller is looking at finish?
+ *
+ * Exists for one case, and is deliberately not more general than that: a cart
+ * discounted to zero completes on Dodo's side while their frame sits on a
+ * payment step it cannot draw. Nothing tells the browser, so the browser asks.
+ *
+ * Public like the session route, and for the same reason -- buying needs no
+ * account. It answers `{ finished: bool, redirect: string }` and nothing more,
+ * so a guessed session id buys a boolean about somebody else's order and no
+ * detail of it.
+ */
+function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
+	if ( ! wpdc_is_configured() ) {
+		return new WP_REST_Response( array( 'finished' => false ), 200 );
+	}
+
+	$result = wpdc_session_finished( (string) $request->get_param( 'session' ) );
+	if ( isset( $result['ok'] ) && false === $result['ok'] ) {
+		// A checkout that cannot be asked about is not a finished one. Reported
+		// as "not yet" rather than as an error, because the caller is polling
+		// and there is nothing for a customer to do about a failed poll.
+		return new WP_REST_Response( array( 'finished' => false ), 200 );
+	}
+
+	return new WP_REST_Response(
+		array(
+			'finished' => (bool) $result['finished'],
+			// Where "done" leads is decided here, never by the caller.
+			'redirect' => '' !== wpdc_return_url() ? wpdc_return_url() : home_url(),
+		),
+		200
+	);
 }

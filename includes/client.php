@@ -454,7 +454,45 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		);
 	}
 
-	return array( 'ok' => true, 'checkout_url' => $url );
+	$session = is_string( $result['session_id'] ?? null ) ? $result['session_id'] : '';
+
+	return array( 'ok' => true, 'checkout_url' => $url, 'session_id' => $session );
+}
+
+/**
+ * Did this checkout finish?
+ *
+ * Asked because one checkout finishes without ever saying so. A cart discounted
+ * to zero has no payment to collect, and Dodo's frame renders the payment step
+ * anyway: it fetches a payment link that does not exist for a zero total, takes
+ * a 404, and stops. No `checkout.redirect`, no error, nothing their SDK reacts
+ * to -- while the order is already `succeeded` on their side. Giving them a
+ * return_url does not help, because nothing on that screen ever gets far enough
+ * to use one.
+ *
+ * So the shop asks instead of waiting to be told. One call, one question:
+ * `GET /checkouts/{id}` answers `payment_status`.
+ *
+ * What comes back to the browser is a boolean and nothing else. The same
+ * response also carries the customer's name and email, and this route is public
+ * -- so the name and the email stay here.
+ */
+function wpdc_session_finished( string $session ): array {
+	if ( ! wpdc_is_session_id( $session ) ) {
+		return wpdc_error( 'bad_session', false, __( 'That checkout could not be found.', 'wp-dodo-checkout' ) );
+	}
+
+	$result = wpdc_dodo_request( 'GET', '/checkouts/' . rawurlencode( $session ), null );
+	if ( isset( $result['ok'] ) && false === $result['ok'] ) {
+		return $result;
+	}
+
+	$status = is_string( $result['payment_status'] ?? null ) ? $result['payment_status'] : '';
+
+	// Only `succeeded` is done. Everything else -- pending, failed, absent --
+	// means keep waiting, because sending somebody to a thank-you page for a
+	// payment that has not succeeded is the one wrong answer here.
+	return array( 'ok' => true, 'finished' => 'succeeded' === $status );
 }
 
 /**

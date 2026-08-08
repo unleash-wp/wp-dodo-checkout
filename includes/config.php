@@ -157,6 +157,18 @@ function wpdc_is_discount_code( $value ): bool {
 	return is_string( $value ) && 1 === preg_match( '/^[A-Za-z0-9_-]{1,64}$/', $value );
 }
 
+/**
+ * The shape of a Dodo checkout session id.
+ *
+ * Checked because this one comes back from a BROWSER, on the status route, and
+ * is pasted straight into an outbound URL path. Dodo decides whether a session
+ * exists; this only decides whether it is worth asking, and keeps anything with
+ * a slash in it out of the path.
+ */
+function wpdc_is_session_id( $value ): bool {
+	return is_string( $value ) && 1 === preg_match( '/^cks_[A-Za-z0-9]{1,64}$/', $value );
+}
+
 function wpdc_api_key_is_constant(): bool {
 	return defined( 'WPDC_API_KEY' ) && is_string( WPDC_API_KEY ) && '' !== trim( WPDC_API_KEY );
 }
