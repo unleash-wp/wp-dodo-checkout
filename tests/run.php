@@ -848,8 +848,31 @@ check(
 	// sat flush against the modal edge and under the close button, which is
 	// absolutely positioned in that corner. Their contact step does bring
 	// spacing, so one screen looked right and the next did not.
+	// The number moved when the summary took over the top spacing, so the check
+	// asserts the property -- the frame has SOME top padding -- rather than a
+	// literal that has to be edited every time the layout breathes.
 	'BELL: the frame keeps the checkout clear of the edge and the close button',
-	str_contains( $css, 'padding: 2.5rem 0 1rem' )
+	1 === preg_match( '/\.wpdc__frame \{[^}]*padding: [0-9.]+rem 0 [0-9.]+rem/', $css )
+);
+check(
+	// Dodo's product descriptions come back as MARKDOWN. wp_strip_all_tags takes
+	// the HTML and leaves the asterisks, so "**Nur hier erhaeltlich**" sat in a
+	// checkout window with its source showing.
+	'BELL: a markdown description is flattened, not printed raw',
+	2 === substr_count( $shortcode, 'wpdc_plain_text' )
+		&& ! str_contains( $shortcode, 'wp_trim_words( wp_strip_all_tags(' )
+);
+check(
+	// Two left edges a few pixels apart is what makes a composite look broken
+	// rather than merely plain. The summary matches the inset Dodo uses inside
+	// the frame below it.
+	//
+	// Counted over DECLARATIONS, not over the file. Counting the file matched the
+	// comment that explains the number -- the sixth time today a check read prose
+	// as if it were behaviour, and the third that a comment I had just written
+	// was the thing that broke it.
+	'BELL: our band and Dodo frame share one left edge',
+	2 === preg_match_all( '/^\s+[a-z-]+: [^;]*4\.375rem[^;]*;/m', $css )
 );
 check(
 	// The SDK injects the express wallet element late and nearly collapsed. When

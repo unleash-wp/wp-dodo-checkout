@@ -145,6 +145,28 @@ function wpdc_render( $atts ): string {
 }
 
 /**
+ * Dodo's product descriptions are MARKDOWN, and this is where that was found.
+ *
+ * `wp_strip_all_tags` removes HTML and leaves `**Nur hier erhaeltlich**` sitting
+ * in a checkout window with its asterisks showing. Nothing in the API says the
+ * field is Markdown; the shop owner typed it into a dashboard editor and it
+ * comes back as source.
+ *
+ * Emphasis, headings, links and code are unwrapped rather than escaped, because
+ * a summary is two lines of prose and formatting it would be inventing a
+ * renderer for a field that needs none.
+ */
+function wpdc_plain_text( string $markdown ): string {
+	$text = wp_strip_all_tags( $markdown );
+	// [label](url) -> label. Before the emphasis pass, or the brackets survive
+	// and the label ends up next to a bare URL.
+	$text = (string) preg_replace( '/\[([^\]]*)\]\([^)]*\)/', '$1', $text );
+	$text = (string) preg_replace( '/[*_`~]+/', '', $text );
+	$text = (string) preg_replace( '/^\s*#+\s*/m', '', $text );
+	return trim( (string) preg_replace( '/\s+/', ' ', $text ) );
+}
+
+/**
  * What the customer is buying, in our own window.
  *
  * Dodo shows the line items inside its frame, but only after the contact step,
@@ -170,7 +192,7 @@ function wpdc_render_summary( string $product ): void {
 	<div class="wpdc__summary">
 		<p class="wpdc__summary-name"><?php echo esc_html( $item['name'] ); ?></p>
 		<?php if ( '' !== $item['description'] ) : ?>
-			<p class="wpdc__summary-desc"><?php echo esc_html( wp_trim_words( wp_strip_all_tags( $item['description'] ), 28 ) ); ?></p>
+			<p class="wpdc__summary-desc"><?php echo esc_html( wp_trim_words( wpdc_plain_text( $item['description'] ), 24 ) ); ?></p>
 		<?php endif; ?>
 		<?php if ( null !== $item['price'] ) : ?>
 			<p class="wpdc__summary-price">
