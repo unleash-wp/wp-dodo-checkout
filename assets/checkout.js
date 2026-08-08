@@ -545,15 +545,17 @@
 
     function ask() {
       tries += 1;
-      // `?` only when there is not one already. With plain permalinks
-      // rest_url() returns `.../index.php?rest_route=/...`, and a second `?`
-      // makes the session part of the ROUTE value -- WordPress then looks for a
-      // route named `.../status?session=cks_...`, does not find it, and answers
-      // 404. Which is what happened: five polls, five 404s, nobody told.
-      var join = cfg.status.indexOf('?') === -1 ? '?' : '&';
-      fetch(cfg.status + join + 'session=' + encodeURIComponent(session), {
-        headers: { 'x-wp-nonce': cfg.nonce },
+      // POST, so the session id travels in a body rather than in a URL. It is
+      // the capability that unlocks this order's downloads and licence key, and
+      // a URL is written down by every server it passes. This also sidesteps
+      // the permalink shapes: rest_url() returns `.../wp-json/...` on pretty
+      // permalinks and `.../index.php?rest_route=/...` on plain ones, and
+      // appending a query to the second one puts the session inside the ROUTE.
+      fetch(cfg.status, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-wp-nonce': cfg.nonce },
         credentials: 'same-origin',
+        body: JSON.stringify({ session: session }),
       })
         .then(function (res) { return res.json(); })
         .then(function (data) {

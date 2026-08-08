@@ -34,7 +34,11 @@ function wpdc_register_rest(): void {
 		'wp-dodo-checkout/v1',
 		'/status',
 		array(
-			'methods'             => 'GET',
+			// POST, not GET. The session id is a CAPABILITY -- whoever holds it
+			// is handed this order's download links and licence key -- and a
+			// capability in a query string is a capability in every access log,
+			// proxy log and Referer header between here and the server.
+			'methods'             => 'POST',
 			'callback'            => 'wpdc_rest_status',
 			'permission_callback' => '__return_true',
 			'args'                => array(
@@ -152,6 +156,28 @@ function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
 	if ( ! wpdc_is_configured() ) {
 		return new WP_REST_Response( array( 'finished' => false ), 200 );
 	}
+
+	/**
+	 * A ceiling, because this route spends the shop's API key on request.
+	 *
+	 * It is public -- buying needs no account, so polling cannot need one
+	 * either -- and every call it serves becomes one to three outbound calls to
+	 * Dodo carrying our key. Left open, somebody looping well-shaped but
+	 * invented session ids turns this site into a way to burn the shop's own
+	 * rate limit, and the first symptom would be real customers unable to check
+	 * out.
+	 *
+	 * Sixty a minute per address. A real poll asks thirty over that minute and
+	 * then stops; a browser behind a shared address has room for two checkouts
+	 * at once. Over the ceiling the answer is "not yet", not an error: it is a
+	 * poll, and there is nothing a customer could do with an error anyway.
+	 */
+	$bucket = 'wpdc_poll_' . md5( (string) ( $_SERVER['REMOTE_ADDR'] ?? '' ) );
+	$spent  = (int) get_transient( $bucket );
+	if ( $spent >= 60 ) {
+		return new WP_REST_Response( array( 'finished' => false ), 200 );
+	}
+	set_transient( $bucket, $spent + 1, MINUTE_IN_SECONDS );
 
 	$result = wpdc_session_finished( (string) $request->get_param( 'session' ) );
 	if ( isset( $result['ok'] ) && false === $result['ok'] ) {

@@ -21,7 +21,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.3.1' );
+define( 'WPDC_VERSION', '0.3.2' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1608,13 +1608,28 @@ check(
 	// to. This is the one screen the shop finishes itself, and it must stay the
 	// one: a checkout with something to pay completes on the payment step and
 	// their SDK does the redirect.
-	// Both permalink shapes. rest_url() returns `.../wp-json/...` on pretty
-	// permalinks and `.../index.php?rest_route=/...` on plain ones, and a
-	// hard-coded `?` turns the second into a route named `status?session=...`
-	// that does not exist. Measured as five 404s in a row on a live checkout.
-	'BELL: the status call survives plain permalinks',
-	str_contains( $js, "cfg.status.indexOf('?') === -1 ? '?' : '&'" )
+	// The session id is the capability that unlocks this order's downloads and
+	// licence key, so it travels in a body, never in a URL that every server on
+	// the way writes down. It also settles the permalink shapes for good:
+	// rest_url() returns `.../wp-json/...` on pretty permalinks and
+	// `.../index.php?rest_route=/...` on plain ones, and appending a query to
+	// the second put the session inside the ROUTE -- five 404s on a live
+	// checkout, measured.
+	'BELL: the session id is posted, not put in a URL',
+	str_contains( $js, "body: JSON.stringify({ session: session })" )
+		&& ! str_contains( $js, "cfg.status + join" )
 		&& ! str_contains( $js, "cfg.status + '?'" )
+		&& str_contains( $rest, "'methods'             => 'POST'," )
+);
+check(
+	// The route is public, and every call it serves becomes one to three
+	// outbound calls carrying the shop's own API key. Left open, a loop of
+	// well-shaped invented session ids burns the shop's rate limit at Dodo, and
+	// the first symptom is real customers unable to check out.
+	'BELL: the poll route has a ceiling per address',
+	str_contains( $rest, "\$spent >= 60" )
+		&& str_contains( $rest, "set_transient( \$bucket, \$spent + 1, MINUTE_IN_SECONDS )" )
+		&& str_contains( $rest, "REMOTE_ADDR" )
 );
 check(
 	'BELL: a zero-total checkout is finished by asking, not by waiting',
