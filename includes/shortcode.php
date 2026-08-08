@@ -243,11 +243,23 @@ function wpdc_render( $atts ): string {
 			// the purchase ends on a page that says nothing about it.
 			?>
 			<div class="wpdc__done" hidden>
-				<span class="wpdc__done-mark" aria-hidden="true">&#10003;</span>
-				<h2 class="wpdc__done-title"><?php echo esc_html__( 'Order complete', 'wp-dodo-checkout' ); ?></h2>
-				<?php // Filled by the browser when the purchase delivered files or a key. ?>
-				<div class="wpdc__done-goods"></div>
-				<p class="wpdc__done-text"><?php echo esc_html__( 'Your confirmation is on its way to your inbox.', 'wp-dodo-checkout' ); ?></p>
+				<?php
+				// Two states, one cell. The wait replaces Dodo's payment step the
+				// moment we know there is nothing to pay -- that step renders a
+				// skeleton it can never fill, and leaving it up means somebody
+				// watches a dead screen until the confirmation lands.
+				?>
+				<div class="wpdc__done-wait">
+					<span class="wpdc__done-spinner" aria-hidden="true"></span>
+					<p class="wpdc__done-text"><?php echo esc_html__( 'Completing your order…', 'wp-dodo-checkout' ); ?></p>
+				</div>
+				<div class="wpdc__done-ok" hidden>
+					<span class="wpdc__done-mark" aria-hidden="true">&#10003;</span>
+					<h2 class="wpdc__done-title"><?php echo esc_html__( 'Order complete', 'wp-dodo-checkout' ); ?></h2>
+					<?php // Filled by the browser when the purchase delivered files or a key. ?>
+					<div class="wpdc__done-goods"></div>
+					<p class="wpdc__done-text"><?php echo esc_html__( 'Your confirmation is on its way to your inbox.', 'wp-dodo-checkout' ); ?></p>
+				</div>
 			</div>
 			</div>
 		</dialog>

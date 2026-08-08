@@ -21,7 +21,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.3.3' );
+define( 'WPDC_VERSION', '0.4.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1413,8 +1413,9 @@ check(
 	1 === substr_count( $css, '--wpdc-radius: 5px' )
 		// Eight: plus the download button and the key, both in the completion.
 		&& 8 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
-		// Three circles: the spinner ring, the close button, the done mark.
-		&& 3 === substr_count( $css, 'border-radius: 50%' )
+		// Four circles: the frame's spinner ring, the close button, the done
+		// mark, and the spinner that waits inside the done panel.
+		&& 4 === substr_count( $css, 'border-radius: 50%' )
 );
 
 // ─── A discount code, in the summary Dodo asked us to build ─────────────────
@@ -1651,6 +1652,22 @@ check(
 		&& ! preg_match( '/customer_email|customer_name/', $rest )
 		&& str_contains( $rest, "'files'    => \$result['files'] ?? array()" )
 		&& str_contains( $client, "'finished' => false" )
+);
+check(
+	// The operator watched Dodo's payment step -- a skeleton it can never fill,
+	// because there is nothing to pay -- for the seconds between submitting
+	// contact details and the confirmation landing. The wait belongs where the
+	// answer will appear, so the frame goes at the moment polling starts and
+	// the panel carries both states in one cell.
+	'BELL: the dead payment step goes the moment the wait begins',
+	str_contains( $js, 'function showDone' )
+		// Three: the definition and its two call sites, the wait and the finish.
+		&& 3 === substr_count( $js, 'showDone(root,' )
+		&& str_contains( $js, 'showDone(root, false)' )
+		&& str_contains( $js, 'showDone(root, true)' )
+		&& str_contains( $shortcode, 'class="wpdc__done-wait"' )
+		&& str_contains( $shortcode, 'class="wpdc__done-ok" hidden' )
+		&& 1 === preg_match( '/\.wpdc__done-wait\[hidden\],\s*\.wpdc__done-ok\[hidden\] \{[^}]*display: none/', $css )
 );
 check(
 	// The poll used to show the completion panel when it ran out of tries, or

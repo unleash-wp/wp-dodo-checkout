@@ -333,6 +333,33 @@
   font-size: 14px;
   color: #3d4a6e;
 }
+/* The wait and the completion share the panel's cell, so the swap does not
+   move anything a customer was looking at. */
+.wpdc__done-wait,
+.wpdc__done-ok {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.wpdc__done-wait[hidden],
+.wpdc__done-ok[hidden] {
+  display: none;
+}
+.wpdc__done-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgb(26 30 60 / .12);
+  border-top-color: var(--wpdc-panel-accent, #fcbe00);
+  border-radius: 50%;
+  animation: wpdc-spin .8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wpdc__done-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
 .wpdc__done-goods {
   display: flex;
   flex-direction: column;

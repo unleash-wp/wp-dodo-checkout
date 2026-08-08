@@ -177,7 +177,11 @@
         // has nobody to tell it.
         if (event.event_type === 'checkout.customer_details_submitted' && '0' === root.dataset.due) {
           settleLoading(root);
-          say(root, cfg.finishing);
+          // Their payment step is a skeleton it can never fill -- there is
+          // nothing to pay. Leaving it up meant watching a dead screen until
+          // the confirmation landed, which is what the operator saw: the tiles
+          // first, then the tick. The wait belongs where the answer will be.
+          showDone(root, false);
           awaitCompletion(root);
           return;
         }
@@ -532,15 +536,8 @@
         window.location.assign(where);
         return;
       }
-      var dodo = sdk();
-      try { if (dodo) dodo.Checkout.close(); } catch (e) { /* already gone */ }
-      var frame = root.querySelector('.wpdc__frame');
-      var done = root.querySelector('.wpdc__done');
-      if (frame) frame.hidden = true;
-      if (done) {
-        paintGoods(done, goods);
-        done.hidden = false;
-      }
+      var done = showDone(root, true);
+      if (done) paintGoods(done, goods);
       say(root, '');
     }
 
@@ -560,6 +557,15 @@
      */
     function giveUp() {
       settleLoading(root);
+      // Into the panel the customer is already looking at, not under the
+      // dialog where it would need scrolling to.
+      var wait = root.querySelector('.wpdc__done-wait');
+      if (wait) {
+        var spinner = wait.querySelector('.wpdc__done-spinner');
+        if (spinner) spinner.remove();
+        var text = wait.querySelector('.wpdc__done-text');
+        if (text) text.textContent = cfg.unconfirmed;
+      }
       say(root, cfg.unconfirmed);
     }
 
@@ -609,6 +615,29 @@
    * textContent throughout: filenames and keys come from an API response,
    * and this file does not paste API responses into markup.
    */
+  /**
+   * The panel in place of Dodo's frame, in one of its two states.
+   *
+   * `settled` false is the wait, true is the completion. The frame goes away
+   * either way: once there is nothing to pay, their step has nothing to draw,
+   * and a customer should not be looking at it.
+   */
+  function showDone(root, settled) {
+    var dodo = sdk();
+    if (settled) {
+      try { if (dodo) dodo.Checkout.close(); } catch (e) { /* already gone */ }
+    }
+    var frame = root.querySelector('.wpdc__frame');
+    var done = root.querySelector('.wpdc__done');
+    var wait = root.querySelector('.wpdc__done-wait');
+    var ok = root.querySelector('.wpdc__done-ok');
+    if (frame) frame.hidden = true;
+    if (wait) wait.hidden = settled;
+    if (ok) ok.hidden = !settled;
+    if (done) done.hidden = false;
+    return done;
+  }
+
   function paintGoods(done, goods) {
     var box = done.querySelector('.wpdc__done-goods');
     if (!box || !goods) return;
