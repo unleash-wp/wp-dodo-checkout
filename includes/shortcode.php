@@ -89,7 +89,9 @@ function wpdc_render( $atts ): string {
 	}
 
 	$bump     = wpdc_is_product_id( $atts['bump'] ) ? $atts['bump'] : '';
-	$lang     = 1 === preg_match( '/^[a-z]{2}$/i', (string) $atts['lang'] ) ? strtolower( $atts['lang'] ) : '';
+	// Normalised here too, so the labels and the frame cannot end up in different
+	// languages even when the shortcode names a third one.
+	$lang     = '' !== trim( (string) $atts['lang'] ) ? wpdc_two_languages( trim( (string) $atts['lang'] ) ) : '';
 	$trust    = array_values( array_filter( array_map( 'trim', explode( '|', (string) $atts['trust'] ) ) ) );
 	$quantity = max( 1, min( 50, (int) $atts['quantity'] ) );
 	$id       = wp_unique_id( 'wpdc-' );
@@ -210,8 +212,10 @@ function wpdc_render( $atts ): string {
  * rather than a guess like `xx_XX`, which names catalogues that do not exist.
  */
 function wpdc_locale_for( string $lang ): string {
-	$known = array( 'de' => 'de_DE', 'en' => 'en_US', 'fr' => 'fr_FR', 'es' => 'es_ES', 'it' => 'it_IT', 'nl' => 'nl_NL' );
-	return $known[ $lang ] ?? $lang;
+	// Two, because the shop speaks two. A longer list would name catalogues
+	// that do not exist and leave the labels English beside a checkout that is
+	// not.
+	return 'de' === $lang ? 'de_DE' : 'en_US';
 }
 
 /**

@@ -35,8 +35,12 @@
     // German edition and an English one has two, and on this install it said
     // en_US while the customer was reading German. The browser is the only
     // party that knows what the person in front of the checkout reads.
-    var lang = root.dataset.lang || (navigator.language || '').slice(0, 2).toLowerCase();
-    if (/^[a-z]{2}$/.test(lang)) body.lang = lang;
+    // German for German speakers, English for everyone else. The shop sells
+    // internationally and speaks two languages; handing a visitor's own through
+    // meant a French browser got a French checkout beside English labels, which
+    // reads as a fault rather than as a shop that speaks two languages.
+    var tag = root.dataset.lang || navigator.language || '';
+    body.lang = /^de/i.test(tag) ? 'de' : 'en';
     // The checkbox decides which cart is asked for, and nothing else. No
     // price arithmetic anywhere in this file, on purpose: the amount is
     // settled on Dodo's page, where a browser cannot reach it.

@@ -318,8 +318,11 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	// reading German. The caller sends the shortcode's language or the browser's;
 	// with neither, the field is omitted and Dodo decides, which is a better
 	// guess than ours.
-	$language = ( null !== $lang && 1 === preg_match( '/^[a-z]{2}$/i', $lang ) )
-		? strtolower( $lang )
+	// Always one of two, never the visitor's own if it is neither. A French
+	// browser used to get a French checkout beside English labels, which reads
+	// as a fault rather than as a shop that speaks two languages.
+	$language = ( null !== $lang && '' !== trim( $lang ) )
+		? wpdc_two_languages( trim( $lang ) )
 		: '';
 	if ( '' !== $language ) {
 		$body['customization'] = array( 'force_language' => $language );

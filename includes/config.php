@@ -103,6 +103,23 @@ function wpdc_language(): string {
 	return 1 === preg_match( '/^([a-z]{2})(?:[_-]|$)/i', (string) $locale, $m ) ? strtolower( $m[1] ) : '';
 }
 
+/**
+ * Two languages, and everyone lands in one of them.
+ *
+ * The shop sells to an international audience and speaks German and English.
+ * Passing a visitor's own language straight through meant a French browser got
+ * a French checkout beside English labels -- worse than either language alone,
+ * because it looks like something broke rather than like a shop that speaks two
+ * languages.
+ *
+ * German-speaking locales (de, de-AT, de-CH) get German. Everyone else gets
+ * English, which is the language a shop reaches furthest with when it cannot
+ * offer a visitor's own.
+ */
+function wpdc_two_languages( string $tag ): string {
+	return 0 === stripos( $tag, 'de' ) ? 'de' : 'en';
+}
+
 function wpdc_api_key_is_constant(): bool {
 	return defined( 'WPDC_API_KEY' ) && is_string( WPDC_API_KEY ) && '' !== trim( WPDC_API_KEY );
 }

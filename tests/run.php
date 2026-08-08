@@ -1178,9 +1178,41 @@ check(
 	// and the locale is only the fallback.
 	'BELL: the shortcode can name the language, and the browser is the fallback',
 	str_contains( $shortcode, "'lang'       => ''" )
-		&& str_contains( $js, "root.dataset.lang || (navigator.language" )
+		&& str_contains( $js, "root.dataset.lang || navigator.language" )
 		&& str_contains( $rest, "'lang'     => array(" )
-		&& str_contains( $client, 'preg_match( \'/^[a-z]{2}$/i\', $lang )' )
+		&& str_contains( $client, 'wpdc_two_languages( trim( $lang ) )' )
+);
+
+// ─── Everyone lands in one of two languages ─────────────────────────────────
+//
+// The shop sells internationally and speaks German and English. Passing a
+// visitor's own language through meant a French browser got a French checkout
+// beside English labels -- worse than either alone, because it reads as a fault
+// rather than as a shop that speaks two languages.
+
+foreach ( array( 'de' => 'de', 'de-AT' => 'de', 'de_CH' => 'de', 'DE' => 'de',
+	'fr' => 'en', 'fr-CA' => 'en', 'en-GB' => 'en', 'ja' => 'en', 'nl' => 'en' ) as $tag => $want ) {
+	check(
+		"BELL: {$tag} resolves to {$want}",
+		$want === wpdc_two_languages( $tag )
+	);
+}
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_f' ) );
+wpdc_create_session( 'pdt_pro', 1, null, 'fr' );
+$french = json_decode( last_request()['args']['body'], true );
+check(
+	// The one that matters: a language we do not speak must not reach Dodo, or
+	// their half of the window speaks it and ours does not.
+	'BELL: a language the shop does not speak never reaches Dodo',
+	'en' === ( $french['customization']['force_language'] ?? '' )
+);
+check(
+	// And the browser is normalised on the way out, not only on the way in.
+	'BELL: the browser tag is collapsed in the script too',
+	str_contains( $js, "/^de/i.test(tag) ? 'de' : 'en'" )
 );
 check(
 	// Written by the shop owner, never by this plugin. A refund window is a
