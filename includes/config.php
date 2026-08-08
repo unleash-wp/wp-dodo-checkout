@@ -48,12 +48,12 @@ const WPDC_CATALOG_TTL = 600;
 /**
  * The cache key carries the plugin version, and that is not cosmetic.
  *
- * The cached catalogue is a SHAPE, not just data. Adding a field to it -- as
- * happened when the summary needed `description` -- leaves every site that
- * updates reading rows written by the previous version, which is ten minutes of
- * "Undefined array key" on a customer-facing page. Caught in a browser rather
- * than by a test, because a test builds its own cache and never sees a stale
- * one.
+ * The cached catalogue is a SHAPE, not just data. Adding or removing a field
+ * leaves every site that updates reading rows written by the previous version,
+ * which is ten minutes of "Undefined array key" on a customer-facing page. It
+ * happened, on a field added and then taken away again, and it was caught in a
+ * browser rather than by a test -- a test builds its own cache and never meets a
+ * stale one.
  *
  * Versioning the key means an update invalidates it by construction. The old
  * entry is not deleted; it expires on its own within the TTL.
@@ -74,22 +74,6 @@ function wpdc_catalog_key(): string {
  */
 function wpdc_is_product_id( $value ): bool {
 	return is_string( $value ) && 1 === preg_match( '/^pdt_[A-Za-z0-9]{1,64}$/', $value );
-}
-
-/**
- * Minor units to something readable, said plainly when there is no price.
- *
- * Here rather than in settings.php because two callers need it: the settings
- * catalogue and the summary the customer reads in the modal. It lived in the
- * admin file first and the frontend reached into it, which worked only because
- * that file happens to load everywhere -- the same accident that once had a
- * shortcode helper living in the REST file.
- */
-function wpdc_format_price( ?int $minor, string $currency ): string {
-	if ( null === $minor ) {
-		return __( 'no price set', 'wp-dodo-checkout' );
-	}
-	return number_format_i18n( $minor / 100, 2 ) . ( '' !== $currency ? ' ' . $currency : '' );
 }
 
 function wpdc_api_key_is_constant(): bool {

@@ -216,3 +216,16 @@ function wpdc_render_catalogue(): void {
 	echo '<p class="description">' . esc_html__( 'Archiving a product in Dodo stops it selling here within ten minutes. Nothing on this site needs changing.', 'wp-dodo-checkout' ) . '</p>';
 }
 
+/**
+ * Minor units to something readable, said plainly when there is no price.
+ *
+ * Here because the settings catalogue is the only caller. It sat in config.php
+ * for a while, when a customer-facing summary needed it too; that summary is
+ * gone, and a shared helper with one caller is just a longer path to it.
+ */
+function wpdc_format_price( ?int $minor, string $currency ): string {
+	if ( null === $minor ) {
+		return __( 'no price set', 'wp-dodo-checkout' );
+	}
+	return number_format_i18n( $minor / 100, 2 ) . ( '' !== $currency ? ' ' . $currency : '' );
+}

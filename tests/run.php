@@ -766,50 +766,6 @@ check(
 	str_contains( $js, 'dialog.showModal()' ) && ! str_contains( $js, 'button.hidden = true' )
 );
 check(
-	// The operator's requirement, stated five times: the payment choice comes
-	// first. Dodo will not reorder its own checkout, so the checkout is folded
-	// away while the express wallet stands alone, and a link brings it back.
-	'BELL: the form is folded behind the wallet, and a link brings it back',
-	str_contains( $js, 'wpdc__frame--folded' )
-		&& str_contains( $css, '.wpdc__frame--folded' )
-		&& str_contains( $shortcode, 'wpdc__reveal' )
-		&& str_contains( $js, "root.querySelector('.wpdc__reveal')" )
-);
-check(
-	// THE condition. With no wallet available the fold would be a step we
-	// invented on top of the one Dodo already charges, and the modal would open
-	// on a link to nothing. It happens only inside the branch that fired because
-	// a wallet element actually grew.
-	'BELL: nothing is folded away when no wallet turned up',
-	str_contains( $js, 'if (openRoot) foldFormBehind(openRoot, frame, entries[i].target);' )
-		&& 2 === substr_count( $js, 'foldFormBehind' )
-);
-check(
-	// display:none on a live payment frame is how an SDK re-measures to zero and
-	// never recovers. Clipped, not removed.
-	'BELL: the folded frame is clipped, never display:none',
-	preg_match( '/\.wpdc__frame--folded \{[^}]*max-height: 0/', $css )
-		&& ! preg_match( '/\.wpdc__frame--folded \{[^}]*display: none/', $css )
-);
-check(
-	// A modal that opens on a bare form makes somebody check whether they hit
-	// the right button. Name, description and price, from the same cached
-	// catalogue the settings screen reads.
-	//
-	// Counted. Fifth time today a check matched a name that the DEFINITION
-	// satisfies on its own, so deleting the call killed nothing.
-	'BELL: the customer reads what they are buying inside the window',
-	2 === substr_count( $shortcode, 'wpdc_render_summary' )
-		&& str_contains( $shortcode, 'wpdc__summary-price' )
-		&& str_contains( $client, "'description'" )
-);
-check(
-	// Never used to charge. What is owed is settled inside the frame, where a
-	// browser cannot reach it.
-	'SILENCE: the summary price is display only, and the body still carries none',
-	str_contains( $shortcode, 'NEVER used to charge' )
-);
-check(
 	// The harness defines WPDC_VERSION on the main file's behalf. If the two drift
 	// the cache key under test is not the cache key that ships.
 	'BELL: the version the tests stand in for is the version the plugin declares',
@@ -848,31 +804,8 @@ check(
 	// sat flush against the modal edge and under the close button, which is
 	// absolutely positioned in that corner. Their contact step does bring
 	// spacing, so one screen looked right and the next did not.
-	// The number moved when the summary took over the top spacing, so the check
-	// asserts the property -- the frame has SOME top padding -- rather than a
-	// literal that has to be edited every time the layout breathes.
 	'BELL: the frame keeps the checkout clear of the edge and the close button',
-	1 === preg_match( '/\.wpdc__frame \{[^}]*padding: [0-9.]+rem 0 [0-9.]+rem/', $css )
-);
-check(
-	// Dodo's product descriptions come back as MARKDOWN. wp_strip_all_tags takes
-	// the HTML and leaves the asterisks, so "**Nur hier erhaeltlich**" sat in a
-	// checkout window with its source showing.
-	'BELL: a markdown description is flattened, not printed raw',
-	2 === substr_count( $shortcode, 'wpdc_plain_text' )
-		&& ! str_contains( $shortcode, 'wp_trim_words( wp_strip_all_tags(' )
-);
-check(
-	// Two left edges a few pixels apart is what makes a composite look broken
-	// rather than merely plain. The summary matches the inset Dodo uses inside
-	// the frame below it.
-	//
-	// Counted over DECLARATIONS, not over the file. Counting the file matched the
-	// comment that explains the number -- the sixth time today a check read prose
-	// as if it were behaviour, and the third that a comment I had just written
-	// was the thing that broke it.
-	'BELL: our band and Dodo frame share one left edge',
-	2 === preg_match_all( '/^\s+[a-z-]+: [^;]*4\.375rem[^;]*;/m', $css )
+	str_contains( $css, 'padding: 2.5rem 0 1rem' )
 );
 check(
 	// The SDK injects the express wallet element late and nearly collapsed. When

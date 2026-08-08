@@ -204,24 +204,31 @@ checkouts leading with a combined method-and-fields screen do not charge. That
 step is Dodo's, `minimal_address` and the phone flag already make it as short as
 it goes, and no setting removes it.
 
+### Dodo's checkout is left exactly as Dodo ships it
+
+Operator decision, and it reversed a day of work: **nothing is built beside
+their surface.** An order summary above the frame, a fold that hid the form
+behind the express wallet, a description pulled from the product -- all removed.
+
+The reason is not that it looked bad, though it did until it was fixed. It is
+that every one of those pieces was a seam against somebody else's UI: matched to
+their left inset, their spacing, their loading order, none of which is a
+contract. Their next release moves one of them and the seam opens on a page
+where money changes hands, silently, on a site nobody is watching that day.
+
+What stays is the window and the plumbing:
+
+| Kept | Why it is not "building beside" |
+|---|---|
+| The `<dialog>` | A container. It holds their frame, it does not imitate it. |
+| Width, padding, scroll correction | Fixes for our own bugs, not additions to theirs. |
+| `minimal_address`, no phone, discount code, saved cards | API flags. Dodo renders the result. |
+
+Branding belongs on Dodo's **Design page**, which styles the checkout, the
+customer portal and the storefront together, test and live apart. That is one
+place instead of three, and it survives their updates because it is theirs.
+
 ### What is NOT done here, and where it belongs instead
-
-**Branding.** Dodo's dashboard has a **Design page** that sets colours, fonts,
-radius and the pay button's text, and applies them to the checkout, the customer
-portal and the storefront at once, with test and live held separately. The API
-can do the same per session (`customization.theme_config`), and doing it from
-here would style one of those three surfaces and disagree with the other two the
-first time somebody used the page.
-
-**The payment method tiles.** The row of Card / PayPal / Google Pay buttons at
-the top of a checkout is not markup this plugin can produce — it is Dodo's own
-UI, and it shows the methods enabled on the account. Enabling them is the single
-biggest thing that shortens this form, and it is a dashboard switch, not a code
-change.
-
-**PayPal is not available at Dodo.** Confirmed by their support. In markets where
-PayPal is the default habit, that is a gap no configuration closes.
-
 ### Payment methods are never restricted
 
 `allowed_payment_method_types` is deliberately not sent. Dodo's own note: adding

@@ -122,88 +122,13 @@ function wpdc_render( $atts ): string {
 		<dialog class="wpdc__dialog" aria-label="<?php echo esc_attr__( 'Checkout', 'wp-dodo-checkout' ); ?>">
 			<button type="button" class="wpdc__close" aria-label="<?php echo esc_attr__( 'Close checkout', 'wp-dodo-checkout' ); ?>">&times;</button>
 
-			<?php wpdc_render_summary( $atts['product'] ); ?>
-
 			<div class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"></div>
-
-			<?php
-			// Shown only when an express wallet actually turns up, and only then
-			// is the checkout collapsed behind it. A customer with no wallet must
-			// never meet an empty window and a link: for them the form IS the
-			// checkout, and hiding it would be a step invented by us on top of
-			// the one Dodo already charges.
-			?>
-			<button type="button" class="wpdc__reveal" hidden>
-				<?php echo esc_html__( 'Or pay by card, SEPA or Klarna', 'wp-dodo-checkout' ); ?>
-			</button>
 		</dialog>
 
 		<p class="wpdc__message" role="status" aria-live="polite"></p>
 	</div>
 	<?php
 	return (string) ob_get_clean();
-}
-
-/**
- * Dodo's product descriptions are MARKDOWN, and this is where that was found.
- *
- * `wp_strip_all_tags` removes HTML and leaves `**Nur hier erhaeltlich**` sitting
- * in a checkout window with its asterisks showing. Nothing in the API says the
- * field is Markdown; the shop owner typed it into a dashboard editor and it
- * comes back as source.
- *
- * Emphasis, headings, links and code are unwrapped rather than escaped, because
- * a summary is two lines of prose and formatting it would be inventing a
- * renderer for a field that needs none.
- */
-function wpdc_plain_text( string $markdown ): string {
-	$text = wp_strip_all_tags( $markdown );
-	// [label](url) -> label. Before the emphasis pass, or the brackets survive
-	// and the label ends up next to a bare URL.
-	$text = (string) preg_replace( '/\[([^\]]*)\]\([^)]*\)/', '$1', $text );
-	$text = (string) preg_replace( '/[*_`~]+/', '', $text );
-	$text = (string) preg_replace( '/^\s*#+\s*/m', '', $text );
-	return trim( (string) preg_replace( '/\s+/', ' ', $text ) );
-}
-
-/**
- * What the customer is buying, in our own window.
- *
- * Dodo shows the line items inside its frame, but only after the contact step,
- * and a modal that opens on a bare form makes somebody check whether they
- * clicked the right button. Name, description and price come from the cached
- * catalogue, which is the same source the settings screen reads.
- *
- * The price is Dodo's own figure for the product and is NEVER used to charge
- * anything -- what is owed is settled inside the frame, where a browser cannot
- * reach it. If the two ever disagree, the frame is right and this is stale, and
- * that is the direction the mistake should fall.
- */
-function wpdc_render_summary( string $product ): void {
-	$catalog = wpdc_catalog();
-	if ( isset( $catalog['ok'] ) && false === $catalog['ok'] ) {
-		return; // the checkout itself will say what is wrong
-	}
-	$item = $catalog[ $product ] ?? null;
-	if ( null === $item ) {
-		return;
-	}
-	?>
-	<div class="wpdc__summary">
-		<p class="wpdc__summary-name"><?php echo esc_html( $item['name'] ); ?></p>
-		<?php if ( '' !== $item['description'] ) : ?>
-			<p class="wpdc__summary-desc"><?php echo esc_html( wp_trim_words( wpdc_plain_text( $item['description'] ), 24 ) ); ?></p>
-		<?php endif; ?>
-		<?php if ( null !== $item['price'] ) : ?>
-			<p class="wpdc__summary-price">
-				<?php echo esc_html( wpdc_format_price( $item['price'], $item['currency'] ) ); ?>
-				<?php if ( $item['tax_inclusive'] ) : ?>
-					<span class="wpdc__summary-tax"><?php echo esc_html__( 'VAT included', 'wp-dodo-checkout' ); ?></span>
-				<?php endif; ?>
-			</p>
-		<?php endif; ?>
-	</div>
-	<?php
 }
 
 /**
