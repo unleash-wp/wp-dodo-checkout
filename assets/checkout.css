@@ -87,6 +87,22 @@
   background: #fff;
   overflow: hidden;
 }
+/* THE THIRD TIME TODAY.
+   `display: grid` below is an AUTHOR rule, and author rules beat the user
+   agent's regardless of specificity -- so the browser's own
+   `dialog:not([open]) { display: none }` lost, and a closed dialog was laid out
+   on the page. It appeared on load with no backdrop and no click, which is
+   exactly what it looks like when a modal is merely "displayed" rather than
+   opened.
+
+   Same collision as `.wpdc__button[hidden]` and `.wpdc__row[hidden]`: this
+   stylesheet gives an element a display, and the platform's way of hiding it
+   quietly stops working. Any rule here that sets display owes the platform its
+   hidden case back. */
+.wpdc__dialog:not([open]) {
+  display: none;
+}
+
 .wpdc__dialog::backdrop {
   background: rgb(0 0 0 / .55);
 }

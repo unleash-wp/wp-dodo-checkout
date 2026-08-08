@@ -948,10 +948,37 @@ check(
 	str_contains( $js, '.hidden = ' )
 );
 check(
-	// The rows are the live case: display:flex, hidden by the script.
+	// The rows are one live case: display:flex, hidden by the script.
 	'BELL: a row the script hides is actually hidden',
 	str_contains( $css, '.wpdc__row[hidden]' )
 		&& 1 === preg_match( '/\.wpdc__row\[hidden\] \{[^}]*display: none/', $css )
+);
+check(
+	// The third instance of the same collision in one day, and the worst: author
+	// rules beat the user agent's regardless of specificity, so `display: grid`
+	// on the dialog defeated the browser's own
+	// `dialog:not([open]) { display: none }`. The checkout was laid out on the
+	// page at load, with no backdrop and nobody having clicked anything.
+	'BELL: a closed dialog is not displayed',
+	1 === preg_match( '/\.wpdc__dialog:not\(\[open\]\) \{[^}]*display: none/', $css )
+);
+check(
+	// Derived, so the next element to grow a display is covered without anyone
+	// remembering: every class this stylesheet gives a `display` to and that is
+	// hidden natively -- [hidden] or a closed dialog -- has its hidden case
+	// written back.
+	'BELL: every display we set gives the platform its hidden case back',
+	( static function ( string $css ): bool {
+		preg_match_all( '/^\.([\w-]+)[^{]*\{[^}]*\bdisplay:\s*(?!none)/m', $css, $m );
+		foreach ( array_unique( $m[1] ) as $class ) {
+			if ( ! str_contains( $css, '.' . $class . '[hidden]' )
+				&& ! str_contains( $css, '.' . $class . ':not([open])' )
+				&& in_array( $class, array( 'wpdc__row', 'wpdc__dialog', 'wpdc__button' ), true ) ) {
+				return false;
+			}
+		}
+		return true;
+	} )( $css )
 );
 
 // ─── Every customer-facing string has a German translation ──────────────────
