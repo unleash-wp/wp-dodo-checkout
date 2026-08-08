@@ -761,6 +761,17 @@ check(
 	str_contains( $js, 'dialog.showModal()' ) && ! str_contains( $js, 'button.hidden = true' )
 );
 check(
+	// The white block in every screenshot. A min-height on the `iframe` selector
+	// hits BOTH iframes the SDK injects, and the express wallet one is sized to
+	// a few pixels when no wallet can be offered -- so a rule meant to stop the
+	// modal opening as a sliver turned an invisible element into half a screen
+	// of nothing above the payment methods. Reserve on the container, never on
+	// the elements the SDK is sizing itself.
+	'BELL: no min-height is forced onto the iframes the SDK sizes',
+	str_contains( $css, "\n  min-height: 32rem;\n}" )
+		&& ! preg_match( '/\.wpdc__frame iframe \{[^}]*min-height/', $css )
+);
+check(
 	// Dodo's payment step brings no top spacing of its own, so its first element
 	// sat flush against the modal edge and under the close button, which is
 	// absolutely positioned in that corner. Their contact step does bring

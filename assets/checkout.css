@@ -83,11 +83,23 @@
   overflow-y: auto;
   max-height: calc(100vh - 2rem);
   padding: 2.5rem 0 1rem;
+
+  /* Reserved ONCE, on the container, so the modal does not open as a sliver and
+     snap to full height a moment later.
+
+     It used to sit on `iframe` instead, and that was the white block the
+     operator kept photographing. The SDK injects TWO iframes -- an express
+     wallet element it sizes to a few pixels when no wallet is offerable, and
+     the checkout it sizes to its content -- and a min-height on the selector
+     `iframe` forced 512px onto BOTH. So the wallet element, which should be
+     invisible, became half a screen of nothing above the payment methods.
+     I measured that 512 earlier and reported it as Dodo's content. It was my
+     own rule. */
+  min-height: 32rem;
 }
 .wpdc__dialog .wpdc__frame iframe {
   display: block;
   width: 100%;
-  min-height: 32rem;
   border: 0;
 }
 /* Over the frame, not above it: Dodo's own page starts at the top edge, and a
