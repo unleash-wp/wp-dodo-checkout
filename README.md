@@ -52,7 +52,7 @@ shortcode ready to copy.
 | Attribute | Default | Notes |
 |---|---|---|
 | `product` | — | Required. A Dodo product id (`pdt_…`). |
-| `label` | Buy now | Button text. |
+| `label` | Buy now | Button text. Set it — the default is English. |
 | `bump` | — | A second product id. Always one copy, never one per seat. |
 | `bump_label` | generic | What the checkbox says. Write the price here if you want one shown. |
 | `quantity` | `1` | 1 to 50. |
@@ -117,6 +117,23 @@ domains.** Apple's association file is already served by this plugin, from
 `init`, at `/.well-known/apple-developer-merchantid-domain-association`.
 
 Google Pay needs nothing beyond being enabled on the account.
+
+### The form is as short as Dodo lets it be
+
+Every field before the pay button is a place to give up, so two are removed at
+the source:
+
+| | |
+|---|---|
+| `minimal_address: true` | Country, plus a postcode only where a tax authority needs one. Street, city and state are skipped. |
+| `allow_phone_number_collection: false` | The phone field is gone. Dodo shows it by default and nothing here reads it. |
+
+What is left is name, email and country. The address cannot go entirely: it is
+there for VAT, not for a courier. **A shop selling physical goods would have to
+turn `minimal_address` off** — there is nothing to ship here.
+
+The "buy as a business" checkbox stays. A WordPress audience contains people who
+need a VAT invoice, and it is one collapsed line.
 
 ### Payment methods are never restricted
 

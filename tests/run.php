@@ -222,8 +222,22 @@ check(
 	1 === $sent['product_cart'][1]['quantity']
 );
 check(
-	'BELL: nothing else is sent -- no price, no return url from a caller',
-	array( 'product_cart' ) === array_keys( $sent )
+	// The exact key set, so adding one is a deliberate act rather than a drift.
+	// A price here would mean a browser could argue about what it owes.
+	'BELL: exactly these keys are sent, and no price among them',
+	array( 'product_cart', 'minimal_address', 'feature_flags' ) === array_keys( $sent )
+);
+check(
+	// Street, city and state skipped. This plugin sells digital goods: the
+	// address is there for VAT, not for a courier, and every field before the
+	// pay button is a place to give up.
+	'BELL: the shortest address Dodo will accept is requested',
+	true === $sent['minimal_address']
+);
+check(
+	// Dodo shows it by default and nothing here reads it.
+	'BELL: the phone field is turned off',
+	false === $sent['feature_flags']['allow_phone_number_collection']
 );
 check(
 	'BELL: the api key travels in a header, never in the url or the body',
@@ -360,6 +374,7 @@ $js        = source( $root . '/assets/checkout.js' );
 $rest      = source( $root . '/includes/rest.php' );
 $applepay  = source( $root . '/includes/apple-pay.php' );
 $client    = source( $root . '/includes/client.php' );
+$css       = source( $root . '/assets/checkout.css' );
 
 check(
 	'BELL: the overlay SDK is version-pinned, never @latest',
@@ -724,6 +739,14 @@ check(
 	'BELL: and it renders the stored option, never the resolved key',
 	str_contains( $settings, '$from_constant ? \'\' : esc_attr( $stored )' )
 		&& ! str_contains( $settings, 'esc_attr( wpdc_api_key() )' )
+);
+check(
+	// The JS hides the button once the frame is open, and `display: inline-block`
+	// on the same element outranks the browser's rule for [hidden] -- so it did
+	// not hide, and sat under an open checkout inviting a second session. Found
+	// in a screenshot. A rule that is only correct in one file is not a rule.
+	'BELL: hiding the button actually hides it',
+	str_contains( $css, '.wpdc__button[hidden]' ) && str_contains( $js, 'button.hidden = true' )
 );
 check(
 	'BELL: the mode falls to test when saved with anything unrecognised',

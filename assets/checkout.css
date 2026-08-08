@@ -41,6 +41,13 @@
   opacity: .6;
   cursor: default;
 }
+/* `display: inline-block` above outranks the browser's own rule for [hidden],
+   so the JS that hides the button once the checkout is open did nothing and it
+   sat there under an open frame, inviting a second click and a second session.
+   Found in a screenshot, not by a test -- so there is a test now. */
+.wpdc__button[hidden] {
+  display: none;
+}
 
 .wpdc__bump {
   display: flex;

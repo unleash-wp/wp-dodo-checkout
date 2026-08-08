@@ -196,14 +196,19 @@ function wpdc_render_catalogue(): void {
 
 	foreach ( $catalog as $id => $product ) {
 		printf(
-			'<tr><td>%s<br><code>%s</code></td><td>%s</td><td><code>[wpdc_checkout product="%s"]</code></td></tr>',
+			// The label is IN the copyable line, not documented elsewhere. It was
+			// omitted, so the shop owner pasted what this table gave him, got
+			// "Buy now" on a German page, and concluded the button text could not
+			// be changed. A knob nobody is shown is a knob that does not exist.
+			'<tr><td>%s<br><code>%s</code></td><td>%s</td><td><code>[wpdc_checkout product="%s" label="%s"]</code></td></tr>',
 			esc_html( $product['name'] ),
 			esc_html( $id ),
 			// Formatted here rather than stored: the page is showing what Dodo
 			// says today, and it is never used to charge anybody. The amount a
 			// customer pays is settled on Dodo's checkout.
 			esc_html( wpdc_format_price( $product['price'], $product['currency'] ) ),
-			esc_attr( $id )
+			esc_attr( $id ),
+			esc_attr__( 'Buy now', 'wp-dodo-checkout' )
 		);
 	}
 

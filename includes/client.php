@@ -230,7 +230,26 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		$cart[] = array( 'product_id' => $bump, 'quantity' => 1 );
 	}
 
-	$body = array( 'product_cart' => $cart );
+	$body = array(
+		'product_cart' => $cart,
+
+		// Country, and a postcode only where a tax authority needs one. Street,
+		// city and state are skipped. Dodo's own words: "For maximum conversion,
+		// enable minimal address collection... for digital products and SaaS
+		// flows where complete billing details aren't required."
+		//
+		// This plugin sells digital goods -- there is nothing to ship, and the
+		// address exists to satisfy VAT, not a courier. A shop with physical
+		// products would have to turn this off.
+		'minimal_address' => true,
+
+		'feature_flags' => array(
+			// Dodo shows it by default and nobody here reads it. An optional
+			// field on a payment form is not free: it is one more thing between
+			// a decision to buy and the money.
+			'allow_phone_number_collection' => false,
+		),
+	);
 
 	$return = wpdc_return_url();
 	if ( '' !== $return ) {
