@@ -226,6 +226,11 @@
 .wpdc__row dd {
   margin: 0;
 }
+/* The rate beside the label, quieter than it: it explains the number, it is not
+   a second number. */
+.wpdc__rate {
+  opacity: .7;
+}
 .wpdc__row dd {
   /* Tabular figures: the total changes as a customer types their postcode, and
      a number that shifts sideways while it updates reads as instability on the
@@ -359,17 +364,29 @@
      below say "a layer over the shop". Edge to edge reads as a new page, and
      somebody who thinks they navigated away behaves differently about closing
      it. */
+  /* The strip stays, the frame scrolls.
+
+     The dialog used to be the single scroller, so the header -- and the close
+     button positioned against it -- scrolled away with the content. `position:
+     fixed` was then used to pin the button, which pinned it to the VIEWPORT
+     instead: floating mid-screen, half outside the rounded edge, attached to
+     nothing.
+
+     A header row that does not move fixes both. The strip is one line and never
+     needed to scroll; the frame is the only thing that does. */
   .wpdc__dialog {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
-    overflow-y: auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
     width: min(30rem, calc(100vw - 2.5rem));
     max-height: calc(100dvh - 5rem);
     border-radius: 14px;
   }
-  .wpdc__panel,
-  .wpdc__dialog .wpdc__frame {
+  .wpdc__panel {
     overflow: visible;
+  }
+  .wpdc__dialog .wpdc__frame {
+    overflow-y: auto;
     max-height: none;
   }
 

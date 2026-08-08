@@ -1082,9 +1082,14 @@ check(
 	// Stacked on a phone, the panel and the frame each kept their own overflow,
 	// so the panel was clipped mid-sentence with nothing to scroll it. One
 	// column, one scroller.
-	'BELL: on a narrow screen the dialog scrolls, and its parts do not clip',
-	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,900}overflow-y: auto/', $css )
-		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,900}overflow: visible/', $css )
+	// The strip stays, the frame scrolls. The dialog used to be the single
+	// scroller, so the header -- and the close button positioned against it --
+	// scrolled away with the content, which is what `position: fixed` was then
+	// used to paper over, pinning the button to the VIEWPORT instead: floating
+	// mid-screen, attached to nothing.
+	'BELL: on a phone the header stays and only the frame scrolls',
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1200}grid-template-rows: auto minmax\(0, 1fr\)/', $css )
+		&& ! preg_match( '/\.wpdc__close \{[^}]*position: fixed/', $css )
 );
 
 check(
@@ -1227,7 +1232,25 @@ check(
 	// sat ON the total, "24,99" cut in half behind a white disc, on the one line
 	// of that strip that has to be readable.
 	'BELL: on a phone the strip reserves room for the close button',
-	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1800}padding: \.875rem 3\.75rem/', $css )
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,2400}padding: \.875rem 3\.75rem/', $css )
+);
+check(
+	// Dodo's breakdown carries an amount and no rate, and a customer reading
+	// "VAT 1,63" cannot tell 7% from 19% -- the difference between a book and
+	// everything else, and the number they will look for on the invoice. Derived
+	// from their own two figures, and only when it lands somewhere sane.
+	'BELL: the VAT line says which rate it is',
+	str_contains( $js, 'function paintRate' )
+		&& 2 === substr_count( $js, 'paintRate' )
+		&& str_contains( $js, "(b.subTotal || 0) - (b.discount || 0)" )
+		&& str_contains( $shortcode, 'wpdc__rate' )
+);
+check(
+	// The country is not in the event, not anywhere else we can see, and a
+	// country printed on a tax line is the kind of guess that ends up on a
+	// receipt.
+	'SILENCE: no country is invented for the tax line',
+	! preg_match( '/(country|Land)\s*[:=]/i', $js )
 );
 
 check(

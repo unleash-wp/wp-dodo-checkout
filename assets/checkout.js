@@ -258,6 +258,41 @@
     });
 
     totals.hidden = !shown;
+    paintRate(totals, b);
+  }
+
+  /**
+   * The VAT rate, derived from Dodo's own two numbers.
+   *
+   * Their breakdown carries an amount and no rate, and a customer reading
+   * "VAT 1,63" cannot tell 7% from 19% -- which is the difference between a
+   * book and everything else, and the number they will look for on the invoice.
+   *
+   * tax / (subTotal - discount), because the discount comes off before tax is
+   * charged. Shown only when it lands on a sane figure: a rate computed from a
+   * partial breakdown, or from a zero base, would be a statement about somebody
+   * tax affairs that we invented.
+   *
+   * The COUNTRY is deliberately absent. It is not in the event, it is not
+   * anywhere else we can see, and a country printed on a tax line is the kind
+   * of guess that ends up on a receipt.
+   */
+  function paintRate(totals, b) {
+    var el = totals.querySelector('.wpdc__rate');
+    if (!el) return;
+    el.textContent = '';
+
+    var base = (b.subTotal || 0) - (b.discount || 0);
+    if (!base || b.tax == null || b.tax <= 0) return;
+
+    var rate = (b.tax / base) * 100;
+    if (!isFinite(rate) || rate <= 0 || rate > 40) return;
+
+    // One decimal at most, and none when it is whole: "7 %" reads as a rate,
+    // "7,0 %" reads as a calculation.
+    var rounded = Math.round(rate * 10) / 10;
+    var shown = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace('.', ',');
+    el.textContent = ' (' + shown + ' %)';
   }
 
   function money(minor, currency) {

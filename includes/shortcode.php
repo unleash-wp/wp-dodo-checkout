@@ -156,7 +156,7 @@ function wpdc_render( $atts ): string {
 						<dt><?php echo esc_html__( 'Discount', 'wp-dodo-checkout' ); ?></dt><dd></dd>
 					</div>
 					<div class="wpdc__row" data-row="tax">
-						<dt><?php echo esc_html__( 'VAT', 'wp-dodo-checkout' ); ?></dt><dd></dd>
+						<dt><?php echo esc_html__( 'VAT', 'wp-dodo-checkout' ); ?><span class="wpdc__rate"></span></dt><dd></dd>
 					</div>
 					<div class="wpdc__row wpdc__row--total" data-row="total">
 						<dt><?php echo esc_html__( 'Total', 'wp-dodo-checkout' ); ?></dt><dd></dd>
