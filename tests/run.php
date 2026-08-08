@@ -1464,6 +1464,32 @@ check(
 );
 
 check(
+	// wpdc_enqueue translates the strings it hands to JavaScript, and it ran
+	// BEFORE the catalogue was loaded -- so "Code applied." reached a German
+	// customer in English while everything rendered below it was translated.
+	'BELL: the catalogue is loaded before the strings JavaScript gets',
+	strpos( $shortcode, 'wpdc_load_catalogue( $lang )' ) < strpos( $shortcode, "\twpdc_enqueue();" )
+);
+check(
+	// A discount is money coming OFF. Printed like the subtotal, a 24,99
+	// discount on a 24,99 item reads as a second charge -- which is what the
+	// operator saw.
+	'BELL: a discount is shown as a deduction, with how much came off',
+	str_contains( $js, "(key === 'discount' ? '\u2212' : '')" )
+		&& str_contains( $js, 'function paintOff' )
+		&& 2 === substr_count( $js, 'paintOff' )
+		&& str_contains( $shortcode, 'wpdc__off' )
+);
+check(
+	// Colour alone is not enough for anyone who cannot separate red from green,
+	// and this is the one line telling a customer whether the code they typed
+	// did anything. The two states differ in SHAPE as well: a tick, a cross.
+	'BELL: applied and refused differ by more than colour',
+	1 === preg_match( '/\.wpdc__discount-note::before \{[^}]*border-width: 0 1\.5px 1\.5px 0/', $css )
+		&& 1 === preg_match( '/\.wpdc__discount-note\.is-error::before \{[^}]*linear-gradient/', $css )
+);
+
+check(
 	// Dodo's own guidance: show a loading indicator until the frame reports
 	// itself open. Without it there are seconds of empty white beside a panel
 	// that is already full, which is what a broken embed looks like.

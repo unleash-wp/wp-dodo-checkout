@@ -95,7 +95,6 @@ function wpdc_render( $atts ): string {
 	$quantity = max( 1, min( 50, (int) $atts['quantity'] ) );
 	$id       = wp_unique_id( 'wpdc-' );
 
-	wpdc_enqueue();
 
 	/**
 	 * Our labels speak the language the checkout speaks.
@@ -116,6 +115,12 @@ function wpdc_render( $atts ): string {
 	 * rest of the page speaking something else.
 	 */
 	$switched = '' !== $lang && wpdc_load_catalogue( $lang );
+
+	// AFTER the catalogue, and that order is the whole point: wpdc_enqueue
+	// translates the strings it hands to JavaScript, and it used to run first --
+	// so "Code applied." reached a German customer in English while everything
+	// rendered below it was translated.
+	wpdc_enqueue();
 
 	ob_start();
 	?>
@@ -210,8 +215,8 @@ function wpdc_render( $atts ): string {
 					<div class="wpdc__row" data-row="subtotal">
 						<dt><?php echo esc_html__( 'Subtotal', 'wp-dodo-checkout' ); ?></dt><dd></dd>
 					</div>
-					<div class="wpdc__row" data-row="discount" hidden>
-						<dt><?php echo esc_html__( 'Discount', 'wp-dodo-checkout' ); ?></dt><dd></dd>
+					<div class="wpdc__row wpdc__row--discount" data-row="discount" hidden>
+						<dt><?php echo esc_html__( 'Discount', 'wp-dodo-checkout' ); ?><span class="wpdc__off"></span></dt><dd></dd>
 					</div>
 					<div class="wpdc__row" data-row="tax">
 						<dt><?php echo esc_html__( 'VAT', 'wp-dodo-checkout' ); ?><span class="wpdc__rate"></span></dt><dd></dd>

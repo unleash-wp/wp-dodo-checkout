@@ -264,18 +264,48 @@
   opacity: .5;
   cursor: default;
 }
-/* Spans both columns, and only exists when it has something to say. */
+/* Spans both columns, and only exists when it has something to say.
+
+   Green and red, with a mark drawn in CSS rather than fetched: a customer who
+   has just typed a code is looking for one bit of information, and colour alone
+   is not enough for anyone who cannot separate those two -- so the shape
+   differs too, a tick against a cross. */
 .wpdc__discount-note {
   grid-column: 1 / -1;
-  margin: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin: .125rem 0 0;
   font-size: 11px;
-  color: rgb(255 255 255 / .7);
+  color: #7ee2a8;
 }
 .wpdc__discount-note:empty {
   display: none;
 }
+.wpdc__discount-note::before {
+  content: "";
+  flex: 0 0 auto;
+  width: .375rem;
+  height: .625rem;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
 .wpdc__discount-note.is-error {
-  color: #ffcf5c;
+  color: #ff9b9b;
+}
+/* A cross, from the same two borders: rotated the other way and squared off, so
+   the two states differ in shape and not only in colour. */
+.wpdc__discount-note.is-error::before {
+  width: .625rem;
+  height: .625rem;
+  border-width: 0;
+  transform: none;
+  background:
+    linear-gradient(currentColor, currentColor) center / 100% 1.5px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 1.5px 100% no-repeat;
+  rotate: 45deg;
 }
 
 .wpdc__totals {
@@ -300,10 +330,15 @@
 .wpdc__row dd {
   margin: 0;
 }
-/* The rate beside the label, quieter than it: it explains the number, it is not
-   a second number. */
-.wpdc__rate {
+/* The rate and the percentage off, beside their labels and quieter than them:
+   they explain a number, they are not a second number. */
+.wpdc__rate,
+.wpdc__off {
   opacity: .7;
+}
+/* Money coming off reads as money coming off. */
+.wpdc__row--discount dd {
+  color: #7ee2a8;
 }
 .wpdc__row dd {
   /* Tabular figures: the total changes as a customer types their postcode, and

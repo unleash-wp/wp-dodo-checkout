@@ -265,14 +265,17 @@
       row.hidden = !has;
       if (!has) return;
       shown = true;
-      row.querySelector('dd').textContent = money(
-        value,
-        key === 'total' ? totalCurrency : currency
-      );
+      // A discount is money coming OFF, and printing it the same way as the
+      // subtotal makes a 24,99 discount on a 24,99 item read as a second charge
+      // -- which is exactly what the operator saw.
+      row.querySelector('dd').textContent =
+        (key === 'discount' ? '\u2212' : '') +
+        money(value, key === 'total' ? totalCurrency : currency);
     });
 
     totals.hidden = !shown;
     paintRate(totals, b);
+    paintOff(totals, b);
   }
 
   /**
@@ -305,6 +308,27 @@
     // One decimal at most, and none when it is whole: "7 %" reads as a rate,
     // "7,0 %" reads as a calculation.
     var rounded = Math.round(rate * 10) / 10;
+    var shown = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace('.', ',');
+    el.textContent = ' (' + shown + ' %)';
+  }
+
+  /**
+   * How much came off, as a percentage of what it came off.
+   *
+   * Same reasoning as the VAT rate beside it: "Rabatt 24,99" does not say
+   * whether that was ten percent or everything, and the customer is about to
+   * decide whether the code they typed did what they expected.
+   */
+  function paintOff(totals, b) {
+    var el = totals.querySelector('.wpdc__off');
+    if (!el) return;
+    el.textContent = '';
+
+    if (!b.subTotal || !b.discount || b.discount <= 0) return;
+    var off = (b.discount / b.subTotal) * 100;
+    if (!isFinite(off) || off <= 0 || off > 100) return;
+
+    var rounded = Math.round(off * 10) / 10;
     var shown = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace('.', ',');
     el.textContent = ' (' + shown + ' %)';
   }
