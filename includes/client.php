@@ -360,6 +360,21 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		$body['return_url'] = $return;
 	}
 
+	/**
+	 * Without this Dodo shows no back control at all.
+	 *
+	 * Their own note on the field: "The URL to redirect the customer if they
+	 * cancel or go back from the checkout. If not provided, the back button will
+	 * not be displayed." So a customer on the payment step could not return to
+	 * check the address they had typed -- they could only close the window and
+	 * start again.
+	 *
+	 * Same-origin like the return url, and never taken from the request: a
+	 * cancel target a visitor can choose turns this into an open redirect on the
+	 * shop's own domain.
+	 */
+	$body['cancel_url'] = '' !== $return ? $return : home_url();
+
 	$result = wpdc_dodo_request( 'POST', '/checkouts', $body );
 	if ( isset( $result['ok'] ) && false === $result['ok'] ) {
 		return $result;

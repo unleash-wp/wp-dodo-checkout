@@ -429,18 +429,16 @@
   }
 
   .wpdc__close {
-    /* Smaller than the desktop disc and centred in the strip rather than in a
-       corner of it: at 2.75rem it was taller than the strip and hung over both
-       edges. */
-    top: 50%;
-    transform: translateY(-50%);
+    /* Offset from the top, NOT centred. `top: 50%` centres against the
+       positioning context, and that is the dialog -- not the strip -- so the
+       button floated halfway down the whole window, over the form and half
+       outside the rounded edge. The strip is 3.4rem tall and the button 2.25,
+       so .55rem from the top sits it in the middle of the strip. */
+    top: .55rem;
     inset-inline-end: .625rem;
     width: 2.25rem;
     height: 2.25rem;
     font-size: 1.25rem;
-  }
-  .wpdc__close:hover {
-    transform: translateY(-50%) scale(1.06);
   }
 }
 

@@ -143,6 +143,19 @@
           settleLoading(root);
           return;
         }
+        // Step one to step two. The frame swaps its whole contents, and on a
+        // phone the DIALOG is the scroller -- so a customer who had scrolled to
+        // reach "Weiter zur Zahlung" stayed at that offset and arrived on the
+        // payment step already scrolled past the wallet button at the top of
+        // it. Both scrollers go back to the start, because the new screen
+        // begins at its own beginning.
+        if (event.event_type === 'checkout.customer_details_submitted') {
+          var dialog = root.querySelector('.wpdc__dialog');
+          var frame = root.querySelector('.wpdc__frame');
+          if (dialog) dialog.scrollTop = 0;
+          if (frame) frame.scrollTop = 0;
+          return;
+        }
         if (event.event_type === 'checkout.error') {
           settleLoading(root);
           say(root, (event.data && event.data.message) || cfg.failed);

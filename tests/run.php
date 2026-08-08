@@ -248,7 +248,7 @@ check(
 	// that decision in a comment. Third time today a substring check matched
 	// prose instead of behaviour. The key set cannot.
 	'BELL: exactly these keys are sent, and no price among them',
-	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags' ) === array_keys( $sent )
+	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags', 'cancel_url' ) === array_keys( $sent )
 );
 check(
 	// The only field reduction that improves the more somebody buys.
@@ -1228,6 +1228,33 @@ check(
 	// of that strip that has to be readable.
 	'BELL: on a phone the strip reserves room for the close button',
 	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1800}padding: \.875rem 3\.75rem/', $css )
+);
+
+check(
+	// Dodo's own note on the field: "If not provided, the back button will not be
+	// displayed." Without it a customer on the payment step could not return to
+	// check the address they had typed -- only close the window and start again.
+	'BELL: a back control exists, and its target is ours not the caller\'s',
+	str_contains( $sent['cancel_url'] ?? '', 'shop.example' )
+		&& str_contains( $client, "\$body['cancel_url'] = '' !== \$return ? \$return : home_url();" )
+);
+check(
+	// Step one to step two swaps the frame's whole contents, and on a phone the
+	// DIALOG is the scroller -- so somebody who scrolled to reach "Weiter zur
+	// Zahlung" arrived on the payment step already scrolled past the wallet
+	// button at the top of it.
+	'BELL: a new step starts at its own beginning, in both scrollers',
+	str_contains( $js, "checkout.customer_details_submitted" )
+		&& str_contains( $js, 'dialog.scrollTop = 0' )
+		&& 2 === substr_count( $js, 'frame.scrollTop = 0' )
+);
+check(
+	// `top: 50%` centres against the positioning context, and that is the dialog
+	// -- not the strip -- so on a phone the button floated halfway down the whole
+	// window, over the form and half outside the rounded edge.
+	'BELL: on a phone the close button sits in the strip, not mid-window',
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,4000}\.wpdc__close \{[^}]*top: \.55rem/', $css )
+		&& ! preg_match( '/@media \(max-width: 900px\)[\s\S]{0,4000}translateY\(-50%\)/', $css )
 );
 
 check(
