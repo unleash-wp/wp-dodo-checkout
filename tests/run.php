@@ -881,7 +881,7 @@ check(
 	// button. The sides get air because their inset is a few pixels on a narrow
 	// screen and content against the glass reads as a rendering fault.
 	'BELL: the frame breathes without stacking a gap on Dodo own spacing',
-	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: 1\.5rem 1\.25rem 1rem/', $css )
+	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: 1\.5rem 1\.75rem 1\.25rem/', $css )
 		&& ! str_contains( $css, 'padding: 2.5rem 0 1rem' )
 );
 check(
@@ -1107,8 +1107,8 @@ check(
 	// Dodo's own inset is a few pixels on a narrow screen, so their fields ran to
 	// the glass and the window read as unfinished.
 	'BELL: their frame gets room down both sides, on both sizes',
-	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: 1\.5rem 1\.25rem 1rem/', $css )
-		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,5000}padding: 1\.25rem 1\.25rem 1\.25rem/', $css )
+	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: 1\.5rem 1\.75rem 1\.25rem/', $css )
+		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,5000}padding: 1\.25rem 1\.5rem 1\.5rem/', $css )
 );
 check(
 	// Subtotal, VAT and Total are rendered by us, in WordPress's locale, while
