@@ -39,6 +39,8 @@
     // internationally and speaks two languages; handing a visitor's own through
     // meant a French browser got a French checkout beside English labels, which
     // reads as a fault rather than as a shop that speaks two languages.
+    if (root.dataset.discount) body.discount = root.dataset.discount;
+
     var tag = root.dataset.lang || navigator.language || '';
     body.lang = /^de/i.test(tag) ? 'de' : 'en';
     // The checkbox decides which cart is asked for, and nothing else. No
@@ -476,6 +478,70 @@
       closeFrame(sdk());
     }
   }, true);
+
+  /**
+   * A discount code, applied by minting the session again.
+   *
+   * Dodo's checkout cannot be told about a code after the fact -- the code is
+   * part of the session -- so applying one means a NEW session and a new frame,
+   * and the old one has to be closed first. Two live sessions for one customer
+   * is two carts.
+   *
+   * On failure the checkout that was already open is left alone, and the code
+   * is forgotten so the next attempt is not poisoned by it. Somebody who
+   * mistypes must not lose the checkout they had.
+   */
+  document.addEventListener('submit', function (event) {
+    var form = event.target.closest('.wpdc__discount');
+    if (!form) return;
+    event.preventDefault();
+
+    var root = form.closest('.wp-dodo-checkout');
+    var input = form.querySelector('.wpdc__discount-input');
+    var apply = form.querySelector('.wpdc__discount-apply');
+    var note = form.querySelector('.wpdc__discount-note');
+    if (!root || !input || !note) return;
+
+    var code = input.value.trim();
+    if (!code) return;
+
+    var previous = root.dataset.discount || '';
+    root.dataset.discount = code;
+    if (apply) apply.disabled = true;
+    input.disabled = true;
+    note.classList.remove('is-error');
+    note.textContent = cfg.busy;
+
+    requestUrl(root)
+      .then(function (url) {
+        var dodo = sdk();
+        var frame = root.querySelector('.wpdc__frame');
+        if (dodo) {
+          try { dodo.Checkout.close(); } catch (e) { /* nothing open */ }
+        }
+        if (frame) {
+          frame.classList.remove('is-ready');
+          frame.classList.remove('is-payment');
+          startLoading(root, frame, url);
+        }
+        if (dodo && frame) {
+          dodo.Checkout.open({ checkoutUrl: url, elementId: frame.id });
+        } else {
+          window.location.assign(url);
+        }
+        note.textContent = cfg.discountApplied;
+        input.readOnly = true;
+      })
+      .catch(function (err) {
+        root.dataset.discount = previous;
+        note.textContent = err && err.uwpFromServer ? err.message : cfg.failed;
+        note.classList.add('is-error');
+      })
+      .finally(function () {
+        if (apply) apply.disabled = false;
+        input.disabled = false;
+      });
+  });
 
   document.addEventListener('click', function (event) {
     var button = event.target.closest('.wpdc__button');

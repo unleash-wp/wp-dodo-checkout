@@ -1389,8 +1389,78 @@ check(
 	// header instead of a button sitting on it.
 	'BELL: every corner uses the one radius, and only the ring and the button are round',
 	1 === substr_count( $css, '--wpdc-radius: 5px' )
-		&& 4 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
+		&& 6 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
 		&& 2 === substr_count( $css, 'border-radius: 50%' )
+);
+
+// ─── A discount code, in the summary Dodo asked us to build ─────────────────
+//
+// Their own discount field lives in their order summary, and inline mode does
+// not render one -- integrators are asked to build it, which is what the panel
+// is. The control went with the summary and was not moved into the form, so an
+// inline checkout had nowhere to type a code. MEASURED both ways: the same
+// session opened on their hosted page shows "Haben Sie einen Rabattcode?";
+// embedded it shows nothing.
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_disc' ) );
+wpdc_create_session( 'pdt_pro', 1, null, null, 'BENNY' );
+$withCode = json_decode( last_request()['args']['body'], true );
+check(
+	'BELL: a code the customer typed rides on the session',
+	array( 'BENNY' ) === ( $withCode['discount_codes'] ?? null )
+);
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_nodisc' ) );
+wpdc_create_session( 'pdt_pro' );
+$noCode = json_decode( last_request()['args']['body'], true );
+check(
+	'BELL: and no code means no discount_codes at all',
+	! isset( $noCode['discount_codes'] )
+);
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 422, array( 'error' => 'invalid discount' ) );
+$refused = wpdc_create_session( 'pdt_pro', 1, null, null, 'NOPE' );
+check(
+	// A refused code is a typo, not an outage. "Please try again in a moment"
+	// would have somebody trying the same wrong code all day.
+	'BELL: a refused code is reported as the code, not as our outage',
+	'discount_rejected' === $refused['reason'] && false === $refused['retriable']
+);
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://x/session/cks_x' ) );
+wpdc_create_session( 'pdt_pro', 1, null, null, 'not a code!!' );
+$bad = json_decode( last_request()['args']['body'], true );
+check(
+	// The only value in this plugin that comes from a CUSTOMER, and it reaches
+	// an outbound API call. Dodo decides whether a code is valid; the shape
+	// check decides whether it is worth asking.
+	'BELL: a malformed code never reaches Dodo',
+	! isset( $bad['discount_codes'] )
+);
+
+check(
+	// Dodo's checkout cannot be told about a code after the fact -- the code is
+	// part of the session -- so applying one means a new session and a new
+	// frame, and the old one has to be closed first. Two live sessions for one
+	// customer is two carts.
+	'BELL: applying a code re-mints the session and replaces the frame',
+	str_contains( $js, "event.target.closest('.wpdc__discount')" )
+		&& str_contains( $js, 'dodo.Checkout.close()' )
+		&& str_contains( $js, "root.dataset.discount = code;" )
+);
+check(
+	// Somebody who mistypes a code must not lose the checkout they already had
+	// open, and the next attempt must not carry the bad code.
+	'BELL: a failed code leaves the open checkout alone and is not remembered',
+	str_contains( $js, 'root.dataset.discount = previous' )
 );
 
 check(
@@ -1439,8 +1509,18 @@ check(
 	// The panel is ours end to end: it renders no payment control and shares no
 	// edge with Dodo's internals, so it cannot break when they ship. That is the
 	// line between styling our own column and building against their surface.
-	'BELL: the panel carries no payment control of its own',
-	! preg_match( '/wpdc__panel[\s\S]{0,2000}?<(input|button|form)/', $shortcode )
+	//
+	// Sharpened when the discount field arrived: the panel now holds an input,
+	// and that is fine -- a discount code is neither payment data nor personal
+	// data. What must never appear here is a field that collects either, because
+	// those belong in Dodo's frame and nowhere else, and a card number typed
+	// into our DOM would take this shop from SAQ-A to SAQ-D.
+	'BELL: the panel collects no payment or personal data',
+	! preg_match(
+		'/(name|id|class|placeholder|autocomplete)="[^"]*(card|cvv|cvc|iban|expiry|passw|phone|street|address|zip|postcode)/i',
+		$shortcode
+	)
+		&& ! preg_match( '/<input[^>]*type="(password|tel)"/i', $shortcode )
 );
 check(
 	// A cover turns a window of text into the thing the customer just chose. The

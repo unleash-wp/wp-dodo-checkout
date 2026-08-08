@@ -217,6 +217,67 @@
   color: rgb(255 255 255 / .72);
 }
 
+/* Dodo's own discount field lives in their order summary, which inline mode
+   does not render -- so it is here, in the summary we were asked to build. */
+.wpdc__discount {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: .5rem;
+  margin-top: 1.25rem;
+}
+.wpdc__discount-input {
+  min-width: 0;
+  padding: .5rem .625rem;
+  border: 1px solid rgb(255 255 255 / .25);
+  border-radius: var(--wpdc-radius, 5px);
+  background: rgb(255 255 255 / .08);
+  color: var(--wpdc-panel-fg);
+  font: inherit;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.wpdc__discount-input::placeholder {
+  color: rgb(255 255 255 / .45);
+  text-transform: none;
+}
+.wpdc__discount-input:focus-visible {
+  outline: 2px solid var(--wpdc-panel-accent);
+  outline-offset: 1px;
+}
+.wpdc__discount-input[readonly] {
+  opacity: .7;
+}
+.wpdc__discount-apply {
+  padding: .5rem .875rem;
+  border: 1px solid rgb(255 255 255 / .25);
+  border-radius: var(--wpdc-radius, 5px);
+  background: transparent;
+  color: var(--wpdc-panel-fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.wpdc__discount-apply:hover:not([disabled]) {
+  background: rgb(255 255 255 / .1);
+}
+.wpdc__discount-apply[disabled] {
+  opacity: .5;
+  cursor: default;
+}
+/* Spans both columns, and only exists when it has something to say. */
+.wpdc__discount-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 11px;
+  color: rgb(255 255 255 / .7);
+}
+.wpdc__discount-note:empty {
+  display: none;
+}
+.wpdc__discount-note.is-error {
+  color: #ffcf5c;
+}
+
 .wpdc__totals {
   margin: 0;
   padding-top: 1.25rem;

@@ -146,6 +146,17 @@ function wpdc_request_language(): string {
 	return is_string( $first ) ? wpdc_two_languages( trim( $first ) ) : '';
 }
 
+/**
+ * The shape a discount code may have.
+ *
+ * Checked because this one comes from a CUSTOMER -- it is the only value in the
+ * whole plugin that does -- and it reaches an outbound API call. Dodo decides
+ * whether a code is valid; this only decides whether it is worth asking.
+ */
+function wpdc_is_discount_code( $value ): bool {
+	return is_string( $value ) && 1 === preg_match( '/^[A-Za-z0-9_-]{1,64}$/', $value );
+}
+
 function wpdc_api_key_is_constant(): bool {
 	return defined( 'WPDC_API_KEY' ) && is_string( WPDC_API_KEY ) && '' !== trim( WPDC_API_KEY );
 }

@@ -218,7 +218,7 @@ function wpdc_catalog( bool $fresh = false ) {
  * @param int         $quantity How many.
  * @param string|null $bump     Optional second product id, one copy.
  */
-function wpdc_create_session( string $product, int $quantity = 1, ?string $bump = null, ?string $lang = null ): array {
+function wpdc_create_session( string $product, int $quantity = 1, ?string $bump = null, ?string $lang = null, ?string $discount = null ): array {
 	if ( ! wpdc_is_configured() ) {
 		return wpdc_error(
 			'not_configured',
@@ -358,6 +358,24 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		}
 	}
 
+	/**
+	 * A discount code, when the customer typed one.
+	 *
+	 * Dodo's own discount FIELD lives in their order summary, and inline mode
+	 * does not render a summary -- integrators are asked to build one, which is
+	 * what our panel is. The control went with the summary and was not moved
+	 * into the form, so an inline checkout has nowhere to type a code. Measured:
+	 * the same session opened on their hosted page shows "Haben Sie einen
+	 * Rabattcode?"; embedded it does not.
+	 *
+	 * So the field is ours and the code rides on the session. Dodo validates it
+	 * -- an unknown or expired code makes this request fail, which is how the
+	 * customer finds out.
+	 */
+	if ( null !== $discount && wpdc_is_discount_code( $discount ) ) {
+		$body['discount_codes'] = array( $discount );
+	}
+
 	$return = wpdc_return_url();
 	if ( '' !== $return ) {
 		$body['return_url'] = $return;
@@ -380,6 +398,17 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 
 	$result = wpdc_dodo_request( 'POST', '/checkouts', $body );
 	if ( isset( $result['ok'] ) && false === $result['ok'] ) {
+		// A refused code is the customer's typo, not our outage, and it must not
+		// be reported as one. Anything that failed WITH a code and would have
+		// worked without is theirs to correct -- the generic "try again in a
+		// moment" would have them trying the same wrong code all day.
+		if ( null !== $discount && ! $result['retriable'] ) {
+			return wpdc_error(
+				'discount_rejected',
+				false,
+				__( 'That code was not accepted.', 'wp-dodo-checkout' )
+			);
+		}
 		return $result;
 	}
 

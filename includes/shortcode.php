@@ -184,6 +184,28 @@ function wpdc_render( $atts ): string {
 			<aside class="wpdc__panel">
 				<?php wpdc_render_item( $atts['product'] ); ?>
 
+				<?php
+				// Dodo's own discount field lives in their order summary, and
+				// inline mode does not render one -- so it is here, in the
+				// summary we were asked to build. Measured: the same session on
+				// their hosted page shows "Haben Sie einen Rabattcode?"; embedded
+				// it shows nothing.
+				//
+				// A form rather than a div with a button: Enter submits it, which
+				// is what somebody who has just typed a code will press.
+				?>
+				<form class="wpdc__discount" novalidate>
+					<input type="text" class="wpdc__discount-input"
+						name="wpdc_discount"
+						autocomplete="off" autocapitalize="characters" spellcheck="false"
+						aria-label="<?php echo esc_attr__( 'Discount code', 'wp-dodo-checkout' ); ?>"
+						placeholder="<?php echo esc_attr__( 'Discount code', 'wp-dodo-checkout' ); ?>">
+					<button type="submit" class="wpdc__discount-apply">
+						<?php echo esc_html__( 'Apply', 'wp-dodo-checkout' ); ?>
+					</button>
+					<p class="wpdc__discount-note" role="status" aria-live="polite"></p>
+				</form>
+
 				<dl class="wpdc__totals" hidden>
 					<div class="wpdc__row" data-row="subtotal">
 						<dt><?php echo esc_html__( 'Subtotal', 'wp-dodo-checkout' ); ?></dt><dd></dd>
@@ -352,6 +374,7 @@ function wpdc_enqueue(): void {
 			'nonce'    => wp_create_nonce( 'wp_rest' ),
 			'busy'     => __( 'Opening checkout…', 'wp-dodo-checkout' ),
 			'failed'   => __( 'The checkout could not be opened. Please try again in a moment.', 'wp-dodo-checkout' ),
+			'discountApplied' => __( 'Code applied.', 'wp-dodo-checkout' ),
 		)
 	);
 }

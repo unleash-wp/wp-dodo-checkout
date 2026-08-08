@@ -120,3 +120,15 @@ msgstr "wpdc_checkout: Es wird ein Attribut product mit einer Dodo-Produkt-ID (p
 msgid "wpdc_checkout: set WPDC_API_KEY in wp-config.php."
 msgstr "wpdc_checkout: WPDC_API_KEY in der wp-config.php setzen."
 
+msgid "Discount code"
+msgstr "Rabattcode"
+
+msgid "Apply"
+msgstr "Einlösen"
+
+msgid "Code applied."
+msgstr "Code eingelöst."
+
+msgid "That code was not accepted."
+msgstr "Dieser Code wurde nicht akzeptiert."
+
