@@ -325,6 +325,36 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		$body['customization'] = array( 'force_language' => $language );
 	}
 
+	/**
+	 * Who is buying, when the site already knows.
+	 *
+	 * Empty by default and by design: a WordPress shop has no idea who an
+	 * anonymous visitor is, and guessing is how somebody's checkout gets filled
+	 * with somebody else's name.
+	 *
+	 * It exists because the answer is coming. UnleashWP's account service --
+	 * magic link, no password, edit your details once -- issues a session on
+	 * `.unleash-wp.com`, and a site that can read it knows the email and name
+	 * before the customer types anything. Handed to Dodo here, the contact step
+	 * arrives filled in, which is the step this checkout has been fighting all
+	 * day.
+	 *
+	 * A filter rather than a setting, so the identity source stays outside this
+	 * plugin. It sells things; it should not also be an account system.
+	 *
+	 *   add_filter( 'wpdc_customer', fn() => array(
+	 *       'email' => $session->email,
+	 *       'name'  => $session->name,
+	 *   ) );
+	 */
+	$customer = apply_filters( 'wpdc_customer', null );
+	if ( is_array( $customer ) && is_string( $customer['email'] ?? null ) && is_email( $customer['email'] ) ) {
+		$body['customer'] = array( 'email' => $customer['email'] );
+		if ( is_string( $customer['name'] ?? null ) && '' !== trim( $customer['name'] ) ) {
+			$body['customer']['name'] = trim( $customer['name'] );
+		}
+	}
+
 	$return = wpdc_return_url();
 	if ( '' !== $return ) {
 		$body['return_url'] = $return;

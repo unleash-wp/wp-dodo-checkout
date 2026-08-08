@@ -277,10 +277,12 @@
 .wpdc__dialog .wpdc__frame {
   min-height: 0;
   overflow-y: auto;
-  /* Dodo's payment step brings no top spacing of its own, so its first element
-     sat against the modal edge and under the close button. Their contact step
-     does, which is why one screen looked right and the next did not. */
-  padding: 2.5rem 0 1rem;
+  /* No top padding. It was added because Dodo's PAYMENT step brings none of its
+     own -- but their contact step does, so on the first screen the two stacked
+     and left a band of empty white above the first field. The close button is a
+     solid disc with a border for exactly this reason: it stays legible over
+     whatever their frame puts under it. */
+  padding: 0 0 1rem;
 }
 .wpdc__dialog .wpdc__frame iframe {
   display: block;

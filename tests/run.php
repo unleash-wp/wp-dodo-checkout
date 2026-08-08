@@ -63,6 +63,12 @@ function get_locale(): string {
 function determine_locale(): string {
 	return get_locale();
 }
+function apply_filters( string $hook, $value ) {
+	return $GLOBALS['wpdc_test_filters'][ $hook ] ?? $value;
+}
+function is_email( $value ): bool {
+	return is_string( $value ) && false !== filter_var( $value, FILTER_VALIDATE_EMAIL );
+}
 function home_url(): string {
 	return 'https://shop.example';
 }
@@ -112,6 +118,7 @@ function source( string $path ): string {
 function configure(): void {
 	$GLOBALS['wpdc_test_options']    = array( 'wpdc_api_key' => 'sk_test_key' );
 	$GLOBALS['wpdc_test_transients'] = array();
+	$GLOBALS['wpdc_test_filters']    = array();
 	$GLOBALS['wpdc_test_requests']   = array();
 	$GLOBALS['wpdc_test_queue']      = array();
 	$GLOBALS['wpdc_test_log']        = array();
@@ -855,12 +862,14 @@ check(
 		&& ! preg_match( '/\.wpdc__frame iframe \{[^}]*min-height/', $css )
 );
 check(
-	// Dodo's payment step brings no top spacing of its own, so its first element
-	// sat flush against the modal edge and under the close button, which is
-	// absolutely positioned in that corner. Their contact step does bring
-	// spacing, so one screen looked right and the next did not.
-	'BELL: the frame keeps the checkout clear of the edge and the close button',
-	str_contains( $css, 'padding: 2.5rem 0 1rem' )
+	// No TOP padding. It was added because Dodo's payment step brings none of
+	// its own -- but their contact step does, so on the first screen the two
+	// stacked into a band of empty white above the first field. The close button
+	// is a solid disc with a border precisely so it stays legible over whatever
+	// their frame puts beneath it.
+	'BELL: the frame adds no space above Dodo own first screen',
+	1 === preg_match( '/\.wpdc__frame \{[^}]*padding: 0 0 [0-9.]+rem/', $css )
+		&& ! str_contains( $css, 'padding: 2.5rem 0 1rem' )
 );
 check(
 	// The SDK injects the express wallet element late and nearly collapsed. When
@@ -1175,6 +1184,36 @@ check(
 	'BELL: on a phone the page still shows around the checkout',
 	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1200}width: min\(30rem, calc\(100vw - 2\.5rem\)\)/', $css )
 		&& ! preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1200}width: 100vw/', $css )
+);
+
+// ─── A known customer arrives filled in ─────────────────────────────────────
+//
+// Empty by default, because a WordPress shop has no idea who an anonymous
+// visitor is and guessing fills somebody's checkout with somebody else's name.
+// A filter, so the identity source stays outside a plugin whose job is selling.
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+$GLOBALS['wpdc_test_filters']['wpdc_customer'] = array( 'email' => 'k@example.com', 'name' => ' Kim ' );
+respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_c' ) );
+wpdc_create_session( 'pdt_pro' );
+$known = json_decode( last_request()['args']['body'], true );
+check(
+	'BELL: a customer the site knows is passed to Dodo',
+	'k@example.com' === ( $known['customer']['email'] ?? null ) && 'Kim' === ( $known['customer']['name'] ?? null )
+);
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+$GLOBALS['wpdc_test_filters']['wpdc_customer'] = array( 'email' => 'not-an-address', 'name' => 'X' );
+respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_d' ) );
+wpdc_create_session( 'pdt_pro' );
+$bad = json_decode( last_request()['args']['body'], true );
+check(
+	// A malformed address is worse than none: Dodo would take it, and the
+	// receipt would go nowhere.
+	'BELL: an address that is not one is dropped, not forwarded',
+	! isset( $bad['customer'] )
 );
 
 check(
