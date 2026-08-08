@@ -1,68 +1,94 @@
 # WP Dodo Checkout
 
-A WordPress shortcode that opens a Dodo Payments checkout. The payment API key
-never reaches the site.
+A WordPress shortcode that opens a Dodo Payments checkout, inline or as an
+overlay, with an optional order bump.
 
-## What it does and does not hold
+## What it is
 
-It renders a button and asks one endpoint for a checkout URL. It holds no
-payment credential, knows no prices, and has no list of products: a page names
-a **plan key** (`pro`, `ebook`) and the server decides what that maps to and
-what it costs.
+It renders a button and asks Dodo for a checkout URL. A page names a Dodo
+product id; Dodo owns the price, the tax, the receipt and the delivery. Nothing
+here computes an amount and nothing here stores a customer.
 
-That split is the point. `DODO_API_KEY` is account-wide, and a WordPress
-install runs whatever plugins its owner added — any one of which can read
-`wp-config.php` and the options table. So the key stays on the licence server,
-this plugin holds a shared secret that can do exactly one thing, and prices
-live where a browser cannot reach them.
-
-Nothing here is specific to UnleashWP. No product ids, no prices, no product
-copy. Two constants point it at a different site.
+Nothing is specific to any shop. No product ids, no prices, no product copy live
+in this plugin, and a test asserts it: the products come from whichever Dodo
+account the key belongs to.
 
 ## Setup
 
+One key.
+
 ```php
-// wp-config.php — keeps both out of the database, which travels in backups,
+// wp-config.php — keeps it out of the database, which travels in backups,
 // staging copies and support exports.
-define( 'WPDC_ENDPOINT', 'https://mcp.unleash-wp.com' );
-define( 'WPDC_SECRET', '…' );
+define( 'WPDC_API_KEY', 'sk_live_…' );
+define( 'WPDC_MODE', 'live_mode' ); // optional; test_mode is the default
 ```
 
-Both fall back to options (`wpdc_endpoint`, `wpdc_secret`) if
-the constants are absent. The constant wins.
+Or paste it under **Settings > Dodo Checkout**. The constant wins, and when one
+is set the field is disabled rather than pre-filled: a filled field would be
+submitted on the next Save and copy the key into the database, which is the one
+thing the constant exists to prevent.
 
-The server needs the matching `LUMO_CHECKOUT_SECRET`.
+**Dodo has no scoped API keys.** Owner, Editor and Viewer are dashboard *user*
+roles, not key permissions, so this key can create payments, issue refunds and
+read every customer on the account. That is the same trade any payment plugin
+makes, and it is the reason for the wp-config route.
 
-A `plan` is not a Dodo product id and never travels as one: the server holds
-that mapping, or anybody who obtained the secret could mint a checkout for any
-product in the account at any price. The plan key comes from the product's own
-`lumo_plan` metadata in Dodo, so making something buyable from a page is one
-field on the product, with no server configuration and no deploy.
+The mode defaults to `test_mode`. Defaulting to live would mean a half-finished
+setup charges a real card.
 
 ## Usage
 
+The settings screen lists every product the account can sell, each with its
+shortcode ready to copy.
+
 ```
-[wpdc_checkout plan="pro"]
-[wpdc_checkout plan="team" quantity="20" label="Get Team 20"]
-[wpdc_checkout plan="pro" bump="ebook" bump_label="Add the eBook for 9 EUR"]
-[wpdc_checkout plan="pro" display="overlay"]
+[wpdc_checkout product="pdt_…"]
+[wpdc_checkout product="pdt_…" quantity="20" label="Get Team 20"]
+[wpdc_checkout product="pdt_…" bump="pdt_…" bump_label="Add the eBook for 9 EUR"]
+[wpdc_checkout product="pdt_…" display="overlay"]
 ```
 
 | Attribute | Default | Notes |
 |---|---|---|
-| `plan` | — | Required. Lowercase, digits, underscores. |
+| `product` | — | Required. A Dodo product id (`pdt_…`). |
 | `display` | `inline` | `inline` navigates to Dodo; `overlay` opens their SDK. |
-| `bump` | — | A second plan key. Always one copy, never one per seat. |
+| `bump` | — | A second product id. Always one copy, never one per seat. |
 | `bump_label` | generic | What the checkbox says. Write the price here if you want one shown. |
 | `label` | Buy now | Button text. |
-| `quantity` | `1` | Seats, 1–50. |
+| `quantity` | `1` | 1 to 50. |
+
+### Why the id and not a nickname
+
+An earlier version required each product to carry a `uwp_plan` metadata key and
+the shortcode named that key. It bought a shortcode that survives a product
+being recreated under a new id, and a friendlier name in the editor. It cost a
+step in the dashboard per product and a layer of indirection that read as a
+mistake every time somebody looked at it. The id is not a secret either way:
+Dodo's own static payment link is `checkout.dodopayments.com/buy/<product id>`.
+
+### What stops a crafted request selling anything
+
+The REST route is public, because buying does not require an account. So the id
+in a request is not trusted on its own: **Dodo's live product list is the
+allow-list**, cached ten minutes. An archived, deleted or never-listed id is
+refused before any checkout session exists.
+
+It does not stop a request naming a different *live* product than the page
+shows. They still pay that product's listed price for that product, so the
+exposure is "a live product can be bought". The case where that matters is a
+cheap test product left live, which anybody who finds its id can buy. Archive
+test products.
+
+Archiving in Dodo is also the off switch: nothing on the site needs changing.
 
 ### Why inline is the default
 
-Dodo's documentation states Apple Pay is **not available for overlay
-checkout**. On mobile that is the difference between a two-tap purchase and a
-form. Inline also navigates to Dodo's own page, which keeps card fields off
-this origin.
+Overlay needs a third-party SDK on the page. Inline navigates to Dodo's own
+page, which is what keeps card fields off this origin and out of PCI scope.
+
+Digital wallets, Apple Pay included, work in both. Dodo's documentation is
+explicit about that, and an earlier version of this file claimed the opposite.
 
 ### Why no price is written in the shortcode
 
@@ -85,7 +111,9 @@ a 404.
 
 ## What is deliberately not here
 
-- **No prices, product ids or amounts.** All server-side.
+- **No prices or amounts.** Dodo settles what is charged.
+- **No product catalogue in the code.** It comes from the account, so a new
+  product sells within ten minutes of being created, with no deploy.
 - **No `@latest` from a CDN.** The overlay SDK is pinned to a major version.
   `@latest` lets a third party change what executes on a checkout page with no
   deploy here, and makes a subresource integrity hash impossible because the
@@ -101,5 +129,5 @@ php tests/run.php
 No PHPUnit, no Composer, no WordPress bootstrap — the same convention as
 `lumo-wp/tests/run.php`, for the same reason: a guard nobody can run is a guard
 nobody runs. The handful of WordPress functions the client touches are stubbed,
-which is enough to exercise the two things worth exercising: the failure
-vocabulary, and what does and does not reach the outbound request.
+which is enough to exercise the things worth exercising: the failure vocabulary,
+the allow-list, and what does and does not reach the outbound request.

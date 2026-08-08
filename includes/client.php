@@ -5,33 +5,40 @@
  * One place owns the credential, the transport, and the vocabulary for "this
  * did not happen". That vocabulary is the load-bearing part: a caller must be
  * able to tell a transient outage (retry) from a misconfiguration (stop asking)
- * from a plan that does not exist (fix the shortcode) WITHOUT parsing English
- * prose. Every failure carries a machine-readable `reason` and a `retriable`
- * flag alongside the sentence a human reads.
+ * from a product that is not sellable (fix the shortcode) WITHOUT parsing
+ * English prose. Every failure carries a machine-readable `reason` and a
+ * `retriable` flag alongside the sentence a human reads.
  *
- * ── The rule that survived losing the middle server ─────────────────────────
+ * ── The rule the public route is shaped around ──────────────────────────────
  *
- * This plugin used to post a plan key to a server that owned the allow-list.
- * Now it owns the allow-list itself, and the rule it existed for is unchanged:
+ * The REST route is public, because buying does not require an account. So a
+ * request must not be able to mint a checkout for anything the shop owner did
+ * not put on sale:
  *
- *   **A request never names a product id. It names a plan key.**
+ *   **A product id is honoured only if Dodo currently lists it.**
  *
- * The route is public, because buying does not require an account. If a body
- * could name a product id, any visitor could mint a checkout for any product on
- * the account -- including a one cent test product, and including one that is
- * archived, unpriced or not meant for this site. A plan key can only resolve to
- * a product the shop owner deliberately marked with `uwp_plan` in Dodo.
+ * That list is the allow-list. It costs nothing to maintain because it is not
+ * maintained: create a product in Dodo, put its id in a shortcode, sell it.
+ * Archive it and it stops being sellable within the cache window, on both
+ * sides, with nothing to remember.
  *
- * ── Why there is no product map to maintain ─────────────────────────────────
+ * An earlier version required each product to carry a `uwp_plan` metadata key
+ * and the shortcode named that key instead of the id. It bought two small
+ * things -- a shortcode that survives a product being recreated under a new id,
+ * and a friendlier name in the editor -- and cost a step in the dashboard per
+ * product plus a layer of indirection that read as an error every time somebody
+ * looked at it. The id is not a secret either way: Dodo's own static payment
+ * link is `checkout.dodopayments.com/buy/<product id>`.
  *
- * The map is Dodo's own product list, filtered to those carrying the metadata
- * key. Create a product, set `uwp_plan`, sell it: no settings screen, no
- * constant to edit, no deploy. The alternative -- a key:product_id list in
- * wp-config -- drifts the first time a product is archived in Dodo and nowhere
- * else, and nothing on either side would report it.
+ * ── What the allow-list does and does not stop ──────────────────────────────
  *
- * Two products sharing a plan key make BOTH unsellable rather than picking one.
- * Guessing which of two the owner meant is how somebody sells the wrong thing.
+ * It stops a crafted request from selling an archived, deleted or never-listed
+ * product. It does NOT stop one from naming a different LIVE product than the
+ * page shows -- somebody who reads the ids off two of your pages can mint a
+ * checkout for either. They still pay the listed price for the listed thing, so
+ * the exposure is "a live product can be bought", which is what a live product
+ * is for. The case where that matters is a cheap test product left live: it can
+ * be bought by anyone who finds its id. Archive test products.
  */
 
 declare(strict_types=1);
@@ -123,17 +130,21 @@ function wpdc_dodo_request( string $method, string $path, ?array $body = null ) 
 }
 
 /**
- * plan key => product id, from Dodo, cached.
+ * The sellable catalogue: product id => name, price, currency.
  *
- * Only products carrying `uwp_plan` appear, which IS the allow-list. A key
- * claimed by two products is dropped from the map entirely, so both stop being
- * sellable and the owner finds out by trying rather than by a customer
- * receiving the wrong file.
+ * One API call. The list endpoint carries the name and price already, so there
+ * is nothing to fetch per product -- an earlier version read each product
+ * individually to get at its metadata, which cost one request per product on
+ * every cache miss for information that was in the list all along.
  *
- * @return array<string, string>|array{ok: false}
+ * Dodo's list excludes archived products by default, which is exactly the
+ * allow-list wanted: archiving something in the dashboard is how it stops being
+ * sellable here.
+ *
+ * @return array<string, array{name: string, price: int|null, currency: string}>|array{ok: false}
  */
-function wpdc_plan_map( bool $fresh = false ) {
-	$cached = $fresh ? false : get_transient( 'wpdc_plan_map' );
+function wpdc_catalog( bool $fresh = false ) {
+	$cached = $fresh ? false : get_transient( 'wpdc_catalog' );
 	if ( is_array( $cached ) ) {
 		return $cached;
 	}
@@ -143,53 +154,37 @@ function wpdc_plan_map( bool $fresh = false ) {
 		return $result;
 	}
 
-	$items = is_array( $result['items'] ?? null ) ? $result['items'] : array();
-	$map   = array();
-	$clash = array();
+	$items   = is_array( $result['items'] ?? null ) ? $result['items'] : array();
+	$catalog = array();
 
 	foreach ( $items as $item ) {
 		$id = is_string( $item['product_id'] ?? null ) ? $item['product_id'] : '';
-		if ( '' === $id ) {
-			continue;
-		}
-		// The list endpoint does not carry metadata, so each product is read
-		// once. Cached for ten minutes, so this cost lands on the shop owner's
-		// editing rhythm rather than on visitors.
-		$full = wpdc_dodo_request( 'GET', '/products/' . rawurlencode( $id ) );
-		if ( isset( $full['ok'] ) && false === $full['ok'] ) {
-			return $full;
-		}
-
-		$plan = is_array( $full['metadata'] ?? null ) ? ( $full['metadata'][ WPDC_PLAN_KEY ] ?? '' ) : '';
-		$plan = is_string( $plan ) ? trim( $plan ) : '';
-		if ( '' === $plan || ! wpdc_is_plan_key( $plan ) ) {
+		// Checked rather than trusted, even coming from Dodo. A value that
+		// reaches wpdc_is_product_id() from two directions is a value no
+		// caller has to reason about.
+		if ( '' === $id || ! wpdc_is_product_id( $id ) ) {
 			continue;
 		}
 
-		if ( isset( $map[ $plan ] ) ) {
-			$clash[ $plan ] = true;
-			continue;
-		}
-		$map[ $plan ] = $id;
+		$catalog[ $id ] = array(
+			'name'     => is_string( $item['name'] ?? null ) ? $item['name'] : $id,
+			'price'    => is_int( $item['price'] ?? null ) ? $item['price'] : null,
+			'currency' => is_string( $item['currency'] ?? null ) ? $item['currency'] : '',
+		);
 	}
 
-	foreach ( array_keys( $clash ) as $key ) {
-		error_log( 'wp-dodo-checkout: two products claim ' . WPDC_PLAN_KEY . '="' . $key . '"; neither is sellable' );
-		unset( $map[ $key ] );
-	}
-
-	set_transient( 'wpdc_plan_map', $map, WPDC_CATALOG_TTL );
-	return $map;
+	set_transient( 'wpdc_catalog', $catalog, WPDC_CATALOG_TTL );
+	return $catalog;
 }
 
 /**
- * A checkout URL for one plan, ready for the overlay.
+ * A checkout URL for one product, ready for the overlay.
  *
- * @param string      $plan     Plan key, never a product id.
+ * @param string      $product  Dodo product id.
  * @param int         $quantity How many.
- * @param string|null $bump     Optional second plan key, one copy.
+ * @param string|null $bump     Optional second product id, one copy.
  */
-function wpdc_create_session( string $plan, int $quantity = 1, ?string $bump = null ): array {
+function wpdc_create_session( string $product, int $quantity = 1, ?string $bump = null ): array {
 	if ( ! wpdc_is_configured() ) {
 		return wpdc_error(
 			'not_configured',
@@ -198,41 +193,41 @@ function wpdc_create_session( string $plan, int $quantity = 1, ?string $bump = n
 		);
 	}
 
-	$map = wpdc_plan_map();
-	if ( isset( $map['ok'] ) && false === $map['ok'] ) {
-		return $map;
+	$catalog = wpdc_catalog();
+	if ( isset( $catalog['ok'] ) && false === $catalog['ok'] ) {
+		return $catalog;
 	}
 
-	// A plan the map does not know is refused BEFORE any session is created,
-	// and refreshed once first: the owner may have added the product a minute
+	// A product the catalogue does not know is refused BEFORE any session is
+	// created, and refreshed once first: the owner may have created it a minute
 	// ago, and making them wait out a cache reads as the plugin being broken.
-	if ( ! isset( $map[ $plan ] ) ) {
-		$map = wpdc_plan_map( true );
-		if ( isset( $map['ok'] ) && false === $map['ok'] ) {
-			return $map;
+	if ( ! isset( $catalog[ $product ] ) ) {
+		$catalog = wpdc_catalog( true );
+		if ( isset( $catalog['ok'] ) && false === $catalog['ok'] ) {
+			return $catalog;
 		}
 	}
-	if ( ! isset( $map[ $plan ] ) ) {
+	if ( ! isset( $catalog[ $product ] ) ) {
 		return wpdc_error(
-			'unknown_plan',
+			'unknown_product',
 			false,
 			__( 'That product is not available.', 'wp-dodo-checkout' )
 		);
 	}
 
-	$cart = array( array( 'product_id' => $map[ $plan ], 'quantity' => $quantity ) );
+	$cart = array( array( 'product_id' => $product, 'quantity' => $quantity ) );
 
 	if ( null !== $bump && '' !== $bump ) {
-		if ( ! isset( $map[ $bump ] ) ) {
+		if ( ! isset( $catalog[ $bump ] ) ) {
 			return wpdc_error(
-				'unknown_plan',
+				'unknown_product',
 				false,
 				__( 'That extra is not available.', 'wp-dodo-checkout' )
 			);
 		}
 		// One copy of an add-on, always. A quantity on a bump is a way to sell
 		// somebody fifty of something they ticked a box for.
-		$cart[] = array( 'product_id' => $map[ $bump ], 'quantity' => 1 );
+		$cart[] = array( 'product_id' => $bump, 'quantity' => 1 );
 	}
 
 	$body = array( 'product_cart' => $cart );

@@ -1,16 +1,53 @@
-/* Deliberately minimal. A checkout button belongs to the theme it sits in;
-   anything opinionated here would fight Impreza rather than fit it. Only
-   layout and states the theme cannot know about. */
+/* The buy button, and everything around it.
+
+   Styled through custom properties rather than fixed values, so a site can
+   restyle it without editing this file or fighting it with !important:
+
+     .wpdc__button { --wpdc-bg: #0b5; --wpdc-fg: #fff; --wpdc-radius: 4px; }
+
+   The defaults are UnleashWP's, because this plugin has exactly one site today
+   and a button nobody can see is worse than one somebody has to override. */
+.wpdc__button {
+  --wpdc-bg: #fcbe00;
+  --wpdc-bg-hover: #e6ab00;
+  --wpdc-fg: #203159;
+  --wpdc-radius: 8px;
+  --wpdc-padding: 1rem 2.5rem;
+
+  display: inline-block;
+  border: 0;
+  cursor: pointer;
+  background: var(--wpdc-bg);
+  color: var(--wpdc-fg);
+  border-radius: var(--wpdc-radius);
+  padding: var(--wpdc-padding);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  transition: background-color .15s ease;
+}
+.wpdc__button:hover:not([disabled]) {
+  background: var(--wpdc-bg-hover);
+}
+/* Not `outline: none`. A keyboard user who cannot see where they are cannot
+   buy, and the button that takes money is the worst place to learn that. */
+.wpdc__button:focus-visible {
+  outline: 2px solid var(--wpdc-fg);
+  outline-offset: 2px;
+}
+.wpdc__button[disabled] {
+  opacity: .6;
+  cursor: default;
+}
+
 .wpdc__bump {
   display: flex;
   gap: .5rem;
   align-items: flex-start;
   margin-bottom: .75rem;
   cursor: pointer;
-}
-.wpdc__button[disabled] {
-  opacity: .6;
-  cursor: default;
 }
 .wpdc__message:empty {
   display: none;

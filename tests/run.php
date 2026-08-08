@@ -115,19 +115,21 @@ function respond( int $status, array $body ): void {
 }
 
 /**
- * Script a catalogue: the list call, then one read per product.
+ * Script a catalogue: ONE list call, which carries names and prices already.
  *
- * @param array<string, string> $plans plan key => product id.
+ * @param array<int, string> $ids Dodo product ids this account lists.
  */
-function catalogue( array $plans ): void {
+function catalogue( array $ids ): void {
 	$items = array();
-	foreach ( $plans as $id ) {
-		$items[] = array( 'product_id' => $id );
+	foreach ( $ids as $id ) {
+		$items[] = array(
+			'product_id' => $id,
+			'name'       => 'Product ' . $id,
+			'price'      => 2499,
+			'currency'   => 'EUR',
+		);
 	}
 	respond( 200, array( 'items' => $items ) );
-	foreach ( $plans as $plan => $id ) {
-		respond( 200, array( 'product_id' => $id, 'metadata' => array( 'uwp_plan' => $plan ) ) );
-	}
 }
 
 function last_request(): ?array {
@@ -178,14 +180,14 @@ $junk = wpdc_dodo_request( 'GET', '/products' );
 check( 'BELL: a 200 that is not an answer is a failure', 'bad_response' === $junk['reason'] );
 
 configure();
-catalogue( array( 'pro' => 'pdt_pro' ) );
+catalogue( array( 'pdt_pro' ) );
 respond( 200, array() ); // a session with no url
-$empty = wpdc_create_session( 'pro' );
+$empty = wpdc_create_session( 'pdt_pro' );
 check( 'BELL: a session with no url is a failure, not an empty overlay', false === $empty['ok'] && 'no_url' === $empty['reason'] );
 
 $GLOBALS['wpdc_test_options']  = array();
 $GLOBALS['wpdc_test_requests'] = array();
-$unconfigured = wpdc_create_session( 'pro' );
+$unconfigured = wpdc_create_session( 'pdt_pro' );
 check( 'BELL: unconfigured is not retriable', 'not_configured' === $unconfigured['reason'] && false === $unconfigured['retriable'] );
 // Asserted against the recorded requests, not against a constant. An earlier
 // version of this line was `check( ..., true )`: a check that cannot fail,
@@ -193,27 +195,26 @@ check( 'BELL: unconfigured is not retriable', 'not_configured' === $unconfigured
 // catch.
 check( 'BELL: unconfigured makes no request at all', array() === $GLOBALS['wpdc_test_requests'] );
 
-// ─── A request names a plan key, never a product id ──────────────────────────
+// ─── A product id is honoured only if Dodo currently lists it ────────────────
 //
-// The route is public, because buying does not require an account. If a body
-// could name a product id, any visitor could mint a checkout for any product on
-// the account -- a one cent test product, an archived one, one meant for a
-// different site. The plan key is the allow-list, and it resolves only through
-// products the owner marked in Dodo.
+// The route is public, because buying does not require an account. So the id in
+// a request cannot be trusted on its own: what makes it safe is that Dodo's own
+// product list is the allow-list. An archived, deleted or never-listed id is
+// refused before any session exists.
 
 configure();
-catalogue( array( 'pro' => 'pdt_pro', 'ebook' => 'pdt_book' ) );
+catalogue( array( 'pdt_pro', 'pdt_book' ) );
 respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_1' ) );
 
-$result = wpdc_create_session( 'pro', 20, 'ebook' );
-check( 'SILENCE: a known plan produces a checkout url', true === $result['ok'] && str_contains( $result['checkout_url'], 'cks_1' ) );
+$result = wpdc_create_session( 'pdt_pro', 20, 'pdt_book' );
+check( 'SILENCE: a listed product produces a checkout url', true === $result['ok'] && str_contains( $result['checkout_url'], 'cks_1' ) );
 
 $session = last_request();
 $sent    = json_decode( $session['args']['body'], true );
 
-check( 'SILENCE: the plan resolved to its product', 'pdt_pro' === $sent['product_cart'][0]['product_id'] );
+check( 'SILENCE: the cart names the product that was asked for', 'pdt_pro' === $sent['product_cart'][0]['product_id'] );
 check( 'SILENCE: the quantity travels', 20 === $sent['product_cart'][0]['quantity'] );
-check( 'SILENCE: the bump resolved to its own product', 'pdt_book' === $sent['product_cart'][1]['product_id'] );
+check( 'SILENCE: the bump is its own cart line', 'pdt_book' === $sent['product_cart'][1]['product_id'] );
 check(
 	// A quantity on an add-on is a way to sell somebody fifty of something they
 	// ticked a box for.
@@ -236,41 +237,88 @@ check(
 	str_starts_with( $session['url'], 'https://test.dodopayments.com' )
 );
 
-// ─── A plan nobody marked is refused, and no session is created ──────────────
+// ─── An id Dodo does not list is refused, and no session is created ──────────
+//
+// THE security property of the whole plugin, stated as a test: a well-formed id
+// the account does not currently list buys nothing. Without it the public route
+// would sell any product whose id somebody guessed or found, including an
+// archived one and a cheap test one.
 
 configure();
-catalogue( array( 'pro' => 'pdt_pro' ) );
-catalogue( array( 'pro' => 'pdt_pro' ) ); // the deliberate second look
-$unknown = wpdc_create_session( 'ghost' );
-check( 'BELL: an unknown plan is refused', 'unknown_plan' === $unknown['reason'] );
+catalogue( array( 'pdt_pro' ) );
+catalogue( array( 'pdt_pro' ) ); // the deliberate second look
+$unknown = wpdc_create_session( 'pdt_ghost' );
+check( 'BELL: an unlisted product is refused', 'unknown_product' === $unknown['reason'] );
 check( 'BELL: and it is not retriable -- trying again cannot help', false === $unknown['retriable'] );
 check(
 	'BELL: no checkout was created for it',
 	! str_contains( json_encode( $GLOBALS['wpdc_test_requests'] ), '/checkouts' )
 );
 
-// ─── Two products claiming one key make BOTH unsellable ──────────────────────
+// A bump is the second way an id reaches the cart, and the one that would be
+// forgotten: the main product IS listed, so the happy path is entered, and only
+// the add-on is unlisted.
+configure();
+catalogue( array( 'pdt_pro' ) );
+catalogue( array( 'pdt_pro' ) );
+$ghostBump = wpdc_create_session( 'pdt_pro', 1, 'pdt_ghost' );
+check( 'BELL: an unlisted BUMP is refused too, and sells nothing', 'unknown_product' === $ghostBump['reason'] );
+check(
+	'BELL: and no checkout was created around it either',
+	! str_contains( json_encode( $GLOBALS['wpdc_test_requests'] ), '/checkouts' )
+);
+
+// ─── Archiving in Dodo is how something stops selling ────────────────────────
 //
-// Guessing which of two the owner meant is how somebody sells the wrong thing.
+// Dodo's list excludes archived products, so this is not a feature to build --
+// it is a consequence to prove, because it is the shop owner's only off switch.
 
 configure();
-respond( 200, array( 'items' => array( array( 'product_id' => 'pdt_a' ), array( 'product_id' => 'pdt_b' ) ) ) );
-respond( 200, array( 'product_id' => 'pdt_a', 'metadata' => array( 'uwp_plan' => 'clash' ) ) );
-respond( 200, array( 'product_id' => 'pdt_b', 'metadata' => array( 'uwp_plan' => 'clash' ) ) );
-respond( 200, array( 'items' => array() ) ); // the second look finds nothing new
-$clash = wpdc_create_session( 'clash' );
-check( 'BELL: a contested plan key sells nothing', 'unknown_plan' === $clash['reason'] );
+respond( 200, array( 'items' => array() ) );
+respond( 200, array( 'items' => array() ) ); // the second look agrees
+$archived = wpdc_create_session( 'pdt_pro' );
+check( 'BELL: a product missing from the list is not sellable', 'unknown_product' === $archived['reason'] );
+
+// ─── The catalogue costs ONE request, not one per product ────────────────────
+//
+// The list carries name and price already. An earlier version read every
+// product individually to reach a metadata key, so a cold cache on a busy page
+// cost one request per product in the account.
+
+configure();
+respond( 200, array( 'items' => array(
+	array( 'product_id' => 'pdt_a', 'name' => 'A', 'price' => 100, 'currency' => 'EUR' ),
+	array( 'product_id' => 'pdt_b', 'name' => 'B', 'price' => 200, 'currency' => 'EUR' ),
+	array( 'product_id' => 'pdt_c', 'name' => 'C', 'price' => 300, 'currency' => 'EUR' ),
+) ) );
+$three = wpdc_catalog();
+check( 'SILENCE: three products came back', 3 === count( $three ) );
+check( 'BELL: and they cost exactly one request', 1 === count( $GLOBALS['wpdc_test_requests'] ) );
+check( 'SILENCE: name and price came from the list, not a second call', 'A' === $three['pdt_a']['name'] && 100 === $three['pdt_a']['price'] );
+
+// ─── A malformed id from Dodo is dropped rather than trusted ─────────────────
+
+configure();
+respond( 200, array( 'items' => array(
+	array( 'product_id' => 'pdt_good', 'name' => 'Good', 'price' => 1, 'currency' => 'EUR' ),
+	array( 'product_id' => 'not-an-id', 'name' => 'Bad', 'price' => 1, 'currency' => 'EUR' ),
+) ) );
+$mixed = wpdc_catalog();
+check(
+	'BELL: a value not shaped like a product id never enters the catalogue',
+	array( 'pdt_good' ) === array_keys( $mixed )
+);
 
 // ─── The catalogue is cached, so a busy page is not a busy API ───────────────
 
 configure();
-catalogue( array( 'pro' => 'pdt_pro' ) );
+catalogue( array( 'pdt_pro' ) );
 respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_2' ) );
-wpdc_create_session( 'pro' );
+wpdc_create_session( 'pdt_pro' );
 $firstCount = count( $GLOBALS['wpdc_test_requests'] );
 
 respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_3' ) );
-wpdc_create_session( 'pro' );
+wpdc_create_session( 'pdt_pro' );
 check(
 	'BELL: the second sale costs one call, not another catalogue read',
 	count( $GLOBALS['wpdc_test_requests'] ) === $firstCount + 1
@@ -280,7 +328,7 @@ check(
 
 configure();
 respond( 401, array( 'error' => 'bad key' ) );
-$refused = wpdc_create_session( 'pro' );
+$refused = wpdc_create_session( 'pdt_pro' );
 check( 'BELL: a refused api key is not retriable', 'unauthorised' === $refused['reason'] && false === $refused['retriable'] );
 check(
 	'BELL: and the visitor is not told it is their problem',
@@ -311,22 +359,49 @@ $shortcode = source( $root . '/includes/shortcode.php' );
 $js        = source( $root . '/assets/checkout.js' );
 $rest      = source( $root . '/includes/rest.php' );
 $applepay  = source( $root . '/includes/apple-pay.php' );
+$client    = source( $root . '/includes/client.php' );
 
 check(
 	'BELL: the overlay SDK is version-pinned, never @latest',
 	str_contains( $shortcode, 'dodopayments-checkout@1' ) && ! str_contains( $shortcode, '@latest' )
 );
 check(
-	'BELL: the SDK is only loaded for overlay mode',
-	str_contains( $shortcode, 'if ( $overlay ) {' )
+	// Operator decision: the checkout opens over the page, never as a navigation
+	// away from it. So the SDK is unconditional and there is no display
+	// attribute left to get wrong.
+	'BELL: the overlay SDK is loaded unconditionally, and no display mode remains',
+	! str_contains( $shortcode, 'if ( $overlay )' )
+		&& ! str_contains( $shortcode, "'display'" )
+		&& ! str_contains( $js, "dataset.display" )
+);
+check(
+	// The redirect survives as the FAILURE path: a customer who has decided to
+	// buy must not be stopped because our script loader had a bad day. Deleting
+	// it in the name of "popup only" would turn a CDN hiccup into a dead button.
+	'BELL: a redirect fallback still exists for when the SDK is absent',
+	str_contains( $js, 'window.location.assign(url)' ) && str_contains( $js, 'if (openOverlay(root, url)) return;' )
+);
+check(
+	// Dodo's own words: "adding a method here does not guarantee customers will
+	// see it", and "if all payment methods are unavailable, checkout session
+	// will fail". Sending nothing is what leaves the wallet buttons on. A future
+	// well-meant allow-list is exactly how express checkout disappears.
+	'BELL: the client never restricts payment methods, so wallets stay on',
+	! str_contains( $client, 'allowed_payment_method_types' )
+);
+check(
+	// Asked for explicitly, and it was already true -- pinned so it stays true.
+	'BELL: the button text comes from the shortcode attribute',
+	str_contains( $shortcode, "'label'" ) && str_contains( $shortcode, "esc_html( \$atts['label'] )" )
 );
 check(
 	'BELL: no price or amount is computed in the browser',
 	! preg_match( '/\b(price|amount|total)\s*[=:]/i', $js )
 );
 check(
-	// A plan key of "0" is falsy in PHP; a truthiness test would drop a bump
-	// the customer ticked and charge them for something else.
+	// Compared against null, not tested for truthiness: a truthy test is how a
+	// bump the customer ticked gets dropped and they are charged for a different
+	// cart than the one they agreed to.
 	'BELL: the bump is read by comparison, not by truthiness',
 	str_contains( $rest, "null !== \$request->get_param( 'bump' )" )
 );
@@ -374,8 +449,11 @@ check(
 	} )( $shortcode )
 );
 check(
-	'BELL: the browser never names a product id',
-	! str_contains( $js, 'product_id' ) && ! str_contains( $js, 'pdt_' )
+	// The browser DOES send an id -- it reads one off the element -- but it must
+	// carry none of its own and compute no money. A hardcoded id in shipped
+	// JavaScript is a product that keeps selling after it was archived.
+	'BELL: the browser hardcodes no product of its own',
+	! str_contains( $js, 'pdt_' ) && ! str_contains( $js, 'product_id' )
 );
 check(
 	'BELL: the REST route verifies a nonce',
@@ -383,10 +461,10 @@ check(
 );
 check(
 	// Both args, counted rather than merely present: with one shared check
-	// string, dropping it from `plan` and leaving it on `bump` looked
+	// string, dropping it from `product` and leaving it on `bump` looked
 	// identical -- which a mutation showed.
-	'BELL: the REST route validates BOTH plan keys before they leave the site',
-	2 === substr_count( $rest, "'validate_callback' => 'wpdc_is_plan_key'" )
+	'BELL: the REST route validates BOTH ids before they leave the site',
+	2 === substr_count( $rest, "'validate_callback' => 'wpdc_is_product_id'" )
 );
 check(
 	'BELL: the request is same-origin, so the nonce cookie is actually sent',
@@ -627,13 +705,14 @@ check(
 	str_contains( $settings, "'live_mode' === \$value ? 'live_mode' : 'test_mode'" )
 );
 check(
-	// Not fetching the value is a stronger guarantee than not echoing it, and
-	// it is what the source should show. An earlier version of this check
-	// matched the loop variable itself and failed on correct code -- a check
-	// wrong in the safe direction, but wrong.
-	'BELL: the settings table iterates keys, so a product id is never in scope',
-	str_contains( $settings, 'foreach ( array_keys( $map ) as $plan )' )
-		&& ! str_contains( $settings, '$product_id' )
+	// The page now prints product ids on purpose -- they are what goes in a
+	// shortcode, and Dodo puts them in its own public payment links. The thing
+	// that must never reach the page is the API key, which can issue refunds and
+	// read every customer.
+	'BELL: the settings page never prints the API key',
+	! str_contains( $settings, 'echo wpdc_api_key' )
+		&& ! str_contains( $settings, 'esc_html( wpdc_api_key' )
+		&& ! str_contains( $settings, 'esc_attr( wpdc_api_key' )
 );
 check(
 	'BELL: no admin text names a constant that no longer exists',

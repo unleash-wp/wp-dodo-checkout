@@ -2,26 +2,40 @@
 /**
  * The shortcode, in both display modes.
  *
- *   [wpdc_checkout plan="pro"]
- *   [wpdc_checkout plan="pro" display="overlay" bump="ebook" bump_label="Add the eBook for 9 EUR"]
+ *   [wpdc_checkout product="<a product id from your Dodo account>"]
+ *   [wpdc_checkout product="<id>" display="overlay" bump="<id>" bump_label="Add the eBook for 9 EUR"]
+ *
+ * The id is Dodo's own. Settings > Dodo Checkout lists every product this
+ * account can sell, each with the shortcode ready to copy -- deliberately no id
+ * is written into this plugin, so it carries no shop's catalogue with it.
  *
  * Impreza is WPBakery-based, so a shortcode is placeable as an element and
  * survives a theme change. Nothing here depends on the theme.
  *
- * ── Why inline is the default ───────────────────────────────────────────────
+ ── The overlay is the only mode ────────────────────────────────────────────
  *
- * Dodo's own documentation states Apple Pay is not available for overlay
- * checkout. On mobile traffic that is the difference between a two-tap
- * purchase and a form. Overlay stays available because the difference is one
- * parameter, and because a site owner may have a reason.
+ * Operator decision: the checkout opens over the page, never as a navigation
+ * away from it. So there is no `display` attribute to get wrong and the SDK is
+ * always loaded.
+ *
+ * A redirect to Dodo's own page survives as the FAILURE path only, in
+ * checkout.js: if the SDK did not load, a customer who has decided to buy must
+ * not be stopped by our script loader. That is a fallback, not a mode.
+ *
+ * The cost, and it is Dodo's own documentation contradicting itself: the
+ * Overlay Checkout page says "Apple Pay is not yet supported in overlay
+ * checkout" and the Inline page warns the same, while the Digital Wallets page
+ * lists overlay among the surfaces where all wallets are fully supported. Two
+ * specific pages against one general list. Google Pay in overlay is not
+ * contested; Apple Pay wants a test on a real device before anyone claims it.
  *
  * ── Why no price is written here ────────────────────────────────────────────
  *
  * A price in a shortcode is a price in the page cache, in a browser, and in a
  * translation file, and it is wrong the day it changes. The customer sees the
  * price on Dodo's checkout, which is the one place it cannot be stale. An
- * order bump therefore names a plan key and a label the site owner writes, not
- * an amount this plugin computes.
+ * order bump therefore names a product id and a label the site owner writes,
+ * not an amount this plugin computes.
  */
 
 declare(strict_types=1);
@@ -37,8 +51,7 @@ function wpdc_register_shortcode(): void {
 function wpdc_render( $atts ): string {
 	$atts = shortcode_atts(
 		array(
-			'plan'       => '',
-			'display'    => 'inline',
+			'product'    => '',
 			'bump'       => '',
 			'bump_label' => '',
 			'label'      => __( 'Buy now', 'wp-dodo-checkout' ),
@@ -48,11 +61,11 @@ function wpdc_render( $atts ): string {
 		'wpdc_checkout'
 	);
 
-	if ( ! wpdc_is_plan_key( $atts['plan'] ) ) {
+	if ( ! wpdc_is_product_id( $atts['product'] ) ) {
 		// Only an editor sees this, and only where the mistake is. A visitor
 		// gets nothing rather than a broken button.
 		return current_user_can( 'edit_posts' )
-			? '<p>' . esc_html__( 'wpdc_checkout: a valid plan attribute is required.', 'wp-dodo-checkout' ) . '</p>'
+			? '<p>' . esc_html__( 'wpdc_checkout: a product attribute holding a Dodo product id (pdt_...) is required.', 'wp-dodo-checkout' ) . '</p>'
 			: '';
 	}
 
@@ -62,19 +75,17 @@ function wpdc_render( $atts ): string {
 			: '';
 	}
 
-	$bump     = wpdc_is_plan_key( $atts['bump'] ) ? $atts['bump'] : '';
-	$overlay  = 'overlay' === $atts['display'];
+	$bump     = wpdc_is_product_id( $atts['bump'] ) ? $atts['bump'] : '';
 	$quantity = max( 1, min( 50, (int) $atts['quantity'] ) );
 	$id       = wp_unique_id( 'wpdc-' );
 
-	wpdc_enqueue( $overlay );
+	wpdc_enqueue();
 
 	ob_start();
 	?>
 	<div class="wp-dodo-checkout" id="<?php echo esc_attr( $id ); ?>"
-		data-plan="<?php echo esc_attr( $atts['plan'] ); ?>"
-		data-quantity="<?php echo esc_attr( (string) $quantity ); ?>"
-		data-display="<?php echo esc_attr( $overlay ? 'overlay' : 'inline' ); ?>">
+		data-product="<?php echo esc_attr( $atts['product'] ); ?>"
+		data-quantity="<?php echo esc_attr( (string) $quantity ); ?>">
 
 		<?php if ( '' !== $bump ) : ?>
 			<label class="wpdc__bump">
@@ -103,15 +114,17 @@ function wpdc_render( $atts ): string {
 /**
  * Scripts, and the one thing the browser is told.
  *
- * The Dodo SDK is only loaded for overlay mode, and only from a PINNED
- * version. A floating tag would mean a third party can change what executes on
- * a checkout page without anyone here deploying anything -- and would make a
- * subresource integrity hash impossible, because the file behind the URL is
- * allowed to change. Inline mode does not load it at all: it navigates to
- * Dodo's own page, which is also what keeps card fields off this origin and
- * out of scope.
+ * The Dodo SDK loads from a PINNED major version. A floating tag would mean a
+ * third party can change what executes on a checkout page without anyone here
+ * deploying anything, and would make a subresource integrity hash impossible
+ * because the file behind the URL is allowed to change.
+ *
+ * It loads on every page carrying the shortcode, because the overlay is the
+ * only mode. Card fields still never touch this origin: the overlay is Dodo's
+ * own page in an iframe from Dodo's origin, so the PCI surface is the same as a
+ * redirect.
  */
-function wpdc_enqueue( bool $overlay ): void {
+function wpdc_enqueue(): void {
 	wp_enqueue_style(
 		'wp-dodo-checkout',
 		plugins_url( 'assets/checkout.css', WPDC_DIR . 'wp-dodo-checkout.php' ),
@@ -127,15 +140,13 @@ function wpdc_enqueue( bool $overlay ): void {
 		true
 	);
 
-	if ( $overlay ) {
-		wp_enqueue_script(
-			'dodo-checkout',
-			'https://cdn.jsdelivr.net/npm/dodopayments-checkout@1/dist/index.js',
-			array(),
-			null,
-			true
-		);
-	}
+	wp_enqueue_script(
+		'dodo-checkout',
+		'https://cdn.jsdelivr.net/npm/dodopayments-checkout@1/dist/index.js',
+		array(),
+		null,
+		true
+	);
 
 	wp_localize_script(
 		'wp-dodo-checkout',

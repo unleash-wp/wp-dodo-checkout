@@ -2,9 +2,9 @@
 /**
  * Where the settings come from, and why a constant beats the database.
  *
- * This plugin talks to Dodo Payments directly. There is no intermediate server
- * and nothing here knows about any other product: a shortcode names a plan key,
- * Dodo says which product carries it, and a checkout session comes back.
+ * This plugin talks to Dodo Payments directly. There is no intermediate server:
+ * a shortcode names a Dodo product id, the client checks that id against the
+ * live product list, and a checkout session comes back.
  *
  * ── The API key, and the risk that is being accepted on purpose ─────────────
  *
@@ -35,30 +35,28 @@ if ( ! defined( 'ABSPATH' ) ) {
 /** A visitor is waiting on a page. Long enough for a slow API, short enough to fail. */
 const WPDC_TIMEOUT = 15;
 
-/** Where a product's plan key lives in its Dodo metadata. */
-const WPDC_PLAN_KEY = 'uwp_plan';
-
 /**
  * How long the product list is reused.
  *
- * The list is what turns a plan key into a product id, and it changes when the
- * shop owner edits Dodo -- not when a visitor clicks. Ten minutes means a new
- * product is sellable within ten minutes of being created, with no deploy and
- * no settings screen, and a busy page costs one API call per ten minutes rather
- * than one per visitor.
+ * The list IS the allow-list, and it changes when the shop owner edits Dodo --
+ * not when a visitor clicks. Ten minutes means a new product is sellable within
+ * ten minutes of being created, with no deploy and no settings to edit, and a
+ * busy page costs one API call per ten minutes rather than one per visitor.
  */
 const WPDC_CATALOG_TTL = 600;
 
 /**
- * The shape a plan key may have, in one place because two callers need it.
+ * The shape of a Dodo product id, in one place because three callers need it.
  *
- * The REST route checks it so a shortcode typo says so immediately rather than
- * spending a round trip to find out, and the client checks it so a value read
- * from Dodo's metadata cannot reach a lookup unexamined. Neither is redundant:
- * they guard different directions.
+ * The shortcode checks it so a typo says so in the editor, the REST route
+ * checks it so a value from a browser does not reach an outbound HTTP request
+ * unexamined, and the client checks it so a lookup cannot be handed something
+ * arbitrary. None of the three is the security boundary -- that is the
+ * allow-list in client.php. These only reject what is not even shaped like an
+ * id, which is cheaper than asking Dodo about it.
  */
-function wpdc_is_plan_key( $value ): bool {
-	return is_string( $value ) && 1 === preg_match( '/^[a-z0-9_]{1,64}$/', $value );
+function wpdc_is_product_id( $value ): bool {
+	return is_string( $value ) && 1 === preg_match( '/^pdt_[A-Za-z0-9]{1,64}$/', $value );
 }
 
 function wpdc_api_key_is_constant(): bool {

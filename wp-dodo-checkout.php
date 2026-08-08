@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Dodo Checkout
  * Plugin URI: https://unleash-wp.com
- * Description: Puts a Dodo Payments checkout on a WordPress page via shortcode, inline or as an overlay, with an optional order bump. The payment API key never reaches this site.
+ * Description: Puts a Dodo Payments checkout on a WordPress page via shortcode, inline or as an overlay, with an optional order bump. Products come from your Dodo account; nothing is configured twice.
  * Version: 0.1.0
  * Requires at least: 6.5
  * Requires PHP: 8.0
@@ -11,23 +11,25 @@
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: wp-dodo-checkout
  *
- * ── What this plugin is, and what it refuses to be ──────────────────────────
+ * ── What this plugin is ────────────────────────────────────────────────────
  *
- * It renders a button and it asks one endpoint for a checkout URL. It holds no
- * payment credential, knows no prices, and has no list of products: a page
- * names a PLAN KEY ("pro", "ebook") and the server decides what that is worth
- * and which Dodo product it maps to.
+ * It renders a button and asks Dodo Payments for a checkout URL. A page names a
+ * Dodo product id; Dodo owns the price, the tax, the receipt and the delivery.
+ * Nothing here computes an amount and nothing here stores a customer.
  *
- * That split is the whole design. DODO_API_KEY is account-wide, and a
- * WordPress install runs whatever plugins its owner added -- any one of which
- * can read wp-config.php and the options table. So the key stays on the
- * licence server, this plugin holds only a shared secret that can do exactly
- * one thing, and prices live where they cannot be edited by a browser.
+ * ── Where the API key lives, and why that matters ──────────────────────────
  *
- * ── Nothing here is specific to UnleashWP ───────────────────────────────────
+ * Dodo has no scoped API keys -- Owner/Editor/Viewer are dashboard user roles,
+ * not key permissions -- so the one key this plugin holds can create payments,
+ * issue refunds and read every customer on the account. A WordPress install
+ * runs whatever plugins its owner added, any one of which can read the options
+ * table, so the key belongs in wp-config.php as WPDC_API_KEY. The settings
+ * screen accepts one either way and says which it is using.
  *
- * No product ids, no prices, no copy about any particular shop. The API key,
- * the mode and the plan keys are configuration, and the plan keys come from
+ * ── Nothing here is specific to any shop ───────────────────────────────────
+ *
+ * No hardcoded product ids, no prices, no copy about a particular business. The
+ * key, the mode and the product ids are configuration, and the ids come from
  * Dodo itself. Dropping this into another site is a matter of one key.
  */
 

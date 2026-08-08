@@ -1,10 +1,12 @@
 /**
- * The button, in both modes.
+ * The button.
  *
- * It sends a plan KEY and a checkbox state, and receives a URL. It never sees
- * a price, a product id or a payment credential, so there is nothing here for
- * a browser extension or a compromised third-party script to take, and nothing
- * to tamper with that would change what is charged.
+ * It sends a product id and a checkbox state, and receives a URL. It never sees
+ * a price and never a credential, and the id it sends is the same one Dodo puts
+ * in its own public payment links -- so there is nothing here for a browser
+ * extension or a compromised third-party script to take. Tampering with the id
+ * gets a different LIVE product at that product's own price; the server refuses
+ * anything Dodo does not currently list.
  */
 (function () {
   'use strict';
@@ -19,7 +21,7 @@
   function requestUrl(root) {
     var bump = root.querySelector('.wpdc__bump-input');
     var body = {
-      plan: root.dataset.plan,
+      product: root.dataset.product,
       quantity: Number(root.dataset.quantity || 1),
     };
     // The checkbox decides which cart is asked for, and nothing else. No
@@ -131,18 +133,19 @@
   }
 
   function open(root, url) {
-    if (root.dataset.display === 'overlay' && openOverlay(root, url)) return;
-    // Otherwise a navigation to Dodo's own page. That is what keeps card fields
-    // off this origin.
+    if (openOverlay(root, url)) return;
+
+    // FALLBACK, not a mode. Reached only when the SDK is not on the page --
+    // blocked, cached wrong, CDN down. A customer who has decided to buy must
+    // not be stopped by our script loader, so they go to Dodo's own page.
     //
-    // It is NOT the only place Apple Pay works, whatever a previous version of
-    // this comment claimed. Dodo's own documentation is explicit: "All digital
-    // wallets are fully supported in: Overlay Checkout, Inline Checkout, Direct
-    // API integration." That sentence had been read the other way round, and it
-    // was about to decide which mode this site shipped.
-    //
-    // Note also that "inline" here means a redirect, while Dodo's "Inline
-    // Checkout" means an embedded iframe. Same word, different things.
+    // On Apple Pay the two sources disagree and this is worth stating where
+    // somebody will read it: Dodo's Overlay Checkout page says "Apple Pay is not
+    // yet supported in overlay checkout", while its Digital Wallets page lists
+    // overlay among the surfaces where all wallets are fully supported. If that
+    // first sentence is the true one, this fallback is also the only path on
+    // which Apple Pay appears -- which makes it worth keeping working rather
+    // than deleting.
     window.location.assign(url);
   }
 

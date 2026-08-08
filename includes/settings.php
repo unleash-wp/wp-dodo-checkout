@@ -22,10 +22,10 @@
  * ── Why the page shows the catalogue ────────────────────────────────────────
  *
  * A settings page that only takes a key tells you nothing about whether it
- * works. This one asks Dodo and lists the plan keys it found, which is the only
- * thing that answers the question somebody actually has: "will my shortcode
- * work". A key typed correctly into a product that carries no `uwp_plan` looks
- * exactly like a key typed wrongly, until the page says so.
+ * works. This one asks Dodo and lists what it found, which answers the question
+ * somebody actually has: "what can I sell, and what do I paste into the page".
+ * A working key on an account with no products looks exactly like a key typed
+ * wrongly, until the page says so.
  */
 
 declare(strict_types=1);
@@ -68,12 +68,12 @@ function wpdc_register_settings(): void {
  * cache.
  */
 function wpdc_sanitise_api_key( $value ): string {
-	delete_transient( 'wpdc_plan_map' );
+	delete_transient( 'wpdc_catalog' );
 	return is_string( $value ) ? trim( sanitize_text_field( $value ) ) : '';
 }
 
 function wpdc_sanitise_mode( $value ): string {
-	delete_transient( 'wpdc_plan_map' );
+	delete_transient( 'wpdc_catalog' );
 	// Anything unrecognised falls to test. Falling to live would mean a typo
 	// starts taking real money from real cards.
 	return 'live_mode' === $value ? 'live_mode' : 'test_mode';
@@ -156,11 +156,11 @@ function wpdc_render_settings_page(): void {
 }
 
 /**
- * Ask Dodo what is sellable, and say it plainly.
+ * Ask Dodo what is sellable, and hand over something to paste.
  *
  * Three states, three sentences, and the middle one is why this section exists:
- * a key that works but reaches no marked product looks exactly like a key that
- * does not work, until somebody is told the difference.
+ * a key that works but reaches no product looks exactly like a key that does
+ * not work, until somebody is told the difference.
  */
 function wpdc_render_catalogue(): void {
 	if ( ! wpdc_is_configured() ) {
@@ -168,46 +168,53 @@ function wpdc_render_catalogue(): void {
 		return;
 	}
 
-	// Deliberately the cached map: this page must not become a way to spend an
-	// API call per admin page load. Saving the key clears it, so the reading
-	// after a change is always fresh.
-	$map = wpdc_plan_map();
+	// Deliberately the cached catalogue: this page must not become a way to
+	// spend an API call per admin page load. Saving the key clears it, so the
+	// reading after a change is always fresh.
+	$catalog = wpdc_catalog();
 
-	if ( isset( $map['ok'] ) && false === $map['ok'] ) {
+	if ( isset( $catalog['ok'] ) && false === $catalog['ok'] ) {
 		printf(
 			'<div class="notice notice-error inline"><p>%s</p></div>',
-			esc_html( $map['message'] )
+			esc_html( $catalog['message'] )
 		);
 		return;
 	}
 
-	if ( array() === $map ) {
+	if ( array() === $catalog ) {
 		echo '<div class="notice notice-warning inline"><p>';
-		printf(
-			/* translators: %s: the metadata key. */
-			esc_html__( 'Dodo answered, and no product carries %s in its metadata. Set it on a product in the Dodo dashboard and it becomes sellable here, with no changes to this site.', 'wp-dodo-checkout' ),
-			'<code>' . esc_html( WPDC_PLAN_KEY ) . '</code>'
-		);
+		echo esc_html__( 'Dodo answered, and this account has no live products. Create one in the Dodo dashboard and it becomes sellable here, with no changes to this site.', 'wp-dodo-checkout' );
 		echo '</p></div>';
 		return;
 	}
 
 	echo '<table class="widefat striped"><thead><tr>';
-	echo '<th>' . esc_html__( 'Plan key', 'wp-dodo-checkout' ) . '</th>';
+	echo '<th>' . esc_html__( 'Product', 'wp-dodo-checkout' ) . '</th>';
+	echo '<th>' . esc_html__( 'Price', 'wp-dodo-checkout' ) . '</th>';
 	echo '<th>' . esc_html__( 'Shortcode', 'wp-dodo-checkout' ) . '</th>';
 	echo '</tr></thead><tbody>';
 
-	// Keys only, so the product id is never even in scope here. It is not
-	// something an editor needs, and a page that prints it invites somebody to
-	// put it in a shortcode -- which is exactly what the plan key exists to
-	// stop. Not fetching it is a stronger guarantee than not echoing it.
-	foreach ( array_keys( $map ) as $plan ) {
+	foreach ( $catalog as $id => $product ) {
 		printf(
-			'<tr><td><code>%s</code></td><td><code>[wpdc_checkout plan="%s" display="overlay"]</code></td></tr>',
-			esc_html( $plan ),
-			esc_attr( $plan )
+			'<tr><td>%s<br><code>%s</code></td><td>%s</td><td><code>[wpdc_checkout product="%s"]</code></td></tr>',
+			esc_html( $product['name'] ),
+			esc_html( $id ),
+			// Formatted here rather than stored: the page is showing what Dodo
+			// says today, and it is never used to charge anybody. The amount a
+			// customer pays is settled on Dodo's checkout.
+			esc_html( wpdc_format_price( $product['price'], $product['currency'] ) ),
+			esc_attr( $id )
 		);
 	}
 
 	echo '</tbody></table>';
+	echo '<p class="description">' . esc_html__( 'Archiving a product in Dodo stops it selling here within ten minutes. Nothing on this site needs changing.', 'wp-dodo-checkout' ) . '</p>';
+}
+
+/** Minor units to something readable, said plainly when there is no price. */
+function wpdc_format_price( ?int $minor, string $currency ): string {
+	if ( null === $minor ) {
+		return __( 'no price set', 'wp-dodo-checkout' );
+	}
+	return number_format_i18n( $minor / 100, 2 ) . ( '' !== $currency ? ' ' . $currency : '' );
 }

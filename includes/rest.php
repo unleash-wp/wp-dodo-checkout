@@ -15,12 +15,12 @@
  * issues one to logged-out visitors too, tied to the session cookie, which is
  * exactly the property wanted here.
  *
- * ── Why the plan is validated twice ─────────────────────────────────────────
+ * ── Why the id is validated here as well as in the client ───────────────────
  *
- * The server has the allow-list and is the authority. This checks the SHAPE
- * anyway, because a value from a browser should not reach an outbound HTTP
- * request unexamined, and because a shortcode typo should say so here rather
- * than spend a round trip to find out.
+ * client.php holds the authority: an id is honoured only if Dodo currently
+ * lists it. This checks the SHAPE anyway, because a value from a browser should
+ * not reach an outbound HTTP request unexamined, and because rejecting
+ * "pro" or "<script>" costs nothing here and costs a round trip there.
  */
 
 declare(strict_types=1);
@@ -38,13 +38,13 @@ function wpdc_register_rest(): void {
 			'callback'            => 'wpdc_rest_session',
 			'permission_callback' => '__return_true',
 			'args'                => array(
-				'plan'     => array(
+				'product'  => array(
 					'required'          => true,
-					'validate_callback' => 'wpdc_is_plan_key',
+					'validate_callback' => 'wpdc_is_product_id',
 				),
 				'bump'     => array(
 					'required'          => false,
-					'validate_callback' => 'wpdc_is_plan_key',
+					'validate_callback' => 'wpdc_is_product_id',
 				),
 				'quantity' => array(
 					'required'          => false,
@@ -55,8 +55,6 @@ function wpdc_register_rest(): void {
 		)
 	);
 }
-
-/** Lowercase, digits, underscores. The same shape the server registers. */
 
 function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 	$nonce = $request->get_header( 'x-wp-nonce' );
@@ -71,11 +69,11 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 	}
 
 	$result = wpdc_create_session(
-		(string) $request->get_param( 'plan' ),
+		(string) $request->get_param( 'product' ),
 		(int) ( $request->get_param( 'quantity' ) ?? 1 ),
-		// A plan key of "0" is falsy in PHP. Comparing against null is what the
-		// route's own validator already guarantees, and a truthiness test here
-		// would silently drop a bump the customer ticked.
+		// Compared against null, not tested for truthiness. The route's own
+		// validator already guarantees the shape, and a truthy test is the kind
+		// of thing that silently drops a bump the customer ticked.
 		null !== $request->get_param( 'bump' ) ? (string) $request->get_param( 'bump' ) : null
 	);
 
