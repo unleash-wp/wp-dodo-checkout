@@ -880,9 +880,15 @@ check(
 	// step -- which brings none -- went flush against the edge, under the close
 	// button. The sides get air because their inset is a few pixels on a narrow
 	// screen and content against the glass reads as a rendering fault.
-	'BELL: the frame breathes without stacking a gap on Dodo own spacing',
-	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: 1\.5rem 1\.75rem 1\.25rem/', $css )
-		&& ! str_contains( $css, 'padding: 2.5rem 0 1rem' )
+	// TWO screens, two values, which is what three rounds of moving one number
+	// missed. Their contact step brings its own top spacing and the two stacked
+	// into a band of white; their payment step brings none and went flush
+	// against the edge. Small by default, more once the payment step arrives.
+	'BELL: the contact step is tight and the payment step is not',
+	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: \.5rem 1\.75rem 1\.25rem/', $css )
+		&& 1 === preg_match( '/\.wpdc__frame\.is-payment \{[^}]*padding-top/', $css )
+		&& str_contains( $js, "frame.classList.add('is-payment')" )
+		&& str_contains( $js, "frame.classList.remove('is-payment')" )
 );
 check(
 	// The SDK injects the express wallet element late and nearly collapsed. When
@@ -1122,8 +1128,8 @@ check(
 	// Dodo's own inset is a few pixels on a narrow screen, so their fields ran to
 	// the glass and the window read as unfinished.
 	'BELL: their frame gets room down both sides, on both sizes',
-	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: 1\.5rem 1\.75rem 1\.25rem/', $css )
-		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,5000}padding: 1\.25rem 1\.5rem 1\.5rem/', $css )
+	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: \.5rem 1\.75rem 1\.25rem/', $css )
+		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,5000}padding: \.5rem 1\.5rem 1\.5rem/', $css )
 );
 check(
 	// Subtotal, VAT and Total are rendered by us, in WordPress's locale, while
@@ -1329,7 +1335,7 @@ check(
 	// button at the top of it.
 	'BELL: a new step starts at its own beginning, in both scrollers',
 	str_contains( $js, "checkout.customer_details_submitted" )
-		&& str_contains( $js, 'dialog.scrollTop = 0' )
+		&& str_contains( $js, 'scroll.scrollTop = 0' )
 		&& 2 === substr_count( $js, 'frame.scrollTop = 0' )
 );
 check(
@@ -1377,10 +1383,14 @@ check(
 	// --wpdc-radius moves the whole window at once instead of four of six
 	// corners. The spinner is the exception and is not a corner: it is a ring,
 	// and a 5px ring is a square.
-	'BELL: every corner uses the one radius, and only the ring is round',
+	// Two round things, and both are round for a reason rather than by
+	// oversight: the spinner is a ring, not a corner, and the close button is a
+	// CONTROL, not a panel -- at 5px it read as a white tile pasted on the
+	// header instead of a button sitting on it.
+	'BELL: every corner uses the one radius, and only the ring and the button are round',
 	1 === substr_count( $css, '--wpdc-radius: 5px' )
-		&& 5 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
-		&& 1 === substr_count( $css, 'border-radius: 50%' )
+		&& 4 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
+		&& 2 === substr_count( $css, 'border-radius: 50%' )
 );
 
 check(

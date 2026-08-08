@@ -149,7 +149,11 @@
   width: 2.5rem;
   height: 2.5rem;
   border: 1px solid rgb(0 0 0 / .12);
-  border-radius: var(--wpdc-radius, 5px);
+  /* The one shape that is not 5px, and the reason is what it is rather than
+     taste: a control is not a panel. At 5px it read as a white tile pasted on
+     the header -- competing with it instead of sitting on it. Round says
+     "press me" at any size, which is the whole job of the only way out. */
+  border-radius: 50%;
   background: #fff;
   box-shadow: 0 2px 10px rgb(0 0 0 / .12);
   color: #111;
@@ -274,7 +278,11 @@
      doubling on the contact step reads as spacing rather than as a gap. The
      sides get air too: their frame's own inset is a few pixels on a narrow
      screen, and content against the glass looks like a rendering fault. */
-  padding: 1.5rem 1.75rem 1.25rem;
+  /* Small by default, because Dodo's CONTACT step brings its own spacing and
+     the two stack into a band of white. Their PAYMENT step brings none, and
+     that screen gets more -- see .is-payment below. Three rounds of moving one
+     number went by before it was obvious that two screens want two values. */
+  padding: .5rem 1.75rem 1.25rem;
 }
 .wpdc__dialog .wpdc__frame iframe {
   display: block;
@@ -299,6 +307,12 @@
   border-radius: 50%; /* the spinner is a ring; a 5px ring is a square */
   animation: wpdc-spin .8s linear infinite;
 }
+/* The payment step brings no top spacing of its own. Set when Dodo says the
+   contact details went in, which is the moment the screen changes. */
+.wpdc__frame.is-payment {
+  padding-top: 1.5rem;
+}
+
 /* Held back rather than shown half-built: Dodo paints its own skeleton for a
    moment, and two loading states at once look like a fault. */
 .wpdc__frame.is-loading iframe {
@@ -419,7 +433,10 @@
   /* Room down both sides. Dodo's own inset is a few pixels on a narrow screen,
      so their fields ran to the glass and the window read as unfinished. */
   .wpdc__dialog .wpdc__frame {
-    padding: 1.25rem 1.5rem 1.5rem;
+    padding: .5rem 1.5rem 1.5rem;
+  }
+  .wpdc__frame.is-payment {
+    padding-top: 1.25rem;
   }
 
   .wpdc__close {

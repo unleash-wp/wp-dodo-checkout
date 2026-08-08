@@ -154,10 +154,17 @@
         // it. Both scrollers go back to the start, because the new screen
         // begins at its own beginning.
         if (event.event_type === 'checkout.customer_details_submitted') {
-          var dialog = root.querySelector('.wpdc__dialog');
+          var scroll = root.querySelector('.wpdc__scroll');
           var frame = root.querySelector('.wpdc__frame');
-          if (dialog) dialog.scrollTop = 0;
-          if (frame) frame.scrollTop = 0;
+          if (scroll) scroll.scrollTop = 0;
+          if (frame) {
+            frame.scrollTop = 0;
+            // Their payment step brings no top spacing of its own while their
+            // contact step does, so one padding value cannot be right for both.
+            // This is the moment the screen changes, and the only place that
+            // knows it.
+            frame.classList.add('is-payment');
+          }
           return;
         }
         if (event.event_type === 'checkout.error') {
@@ -208,6 +215,7 @@
 
   function startLoading(root, frame, url) {
     frame.classList.remove('is-ready');
+    frame.classList.remove('is-payment');
     frame.classList.add('is-loading');
     clearTimeout(loadTimer);
     loadTimer = setTimeout(function () {
