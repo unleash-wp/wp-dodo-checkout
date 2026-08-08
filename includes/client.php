@@ -492,7 +492,89 @@ function wpdc_session_finished( string $session ): array {
 	// Only `succeeded` is done. Everything else -- pending, failed, absent --
 	// means keep waiting, because sending somebody to a thank-you page for a
 	// payment that has not succeeded is the one wrong answer here.
-	return array( 'ok' => true, 'finished' => 'succeeded' === $status );
+	if ( 'succeeded' !== $status ) {
+		return array( 'ok' => true, 'finished' => false );
+	}
+
+	$payment = is_string( $result['payment_id'] ?? null ) ? $result['payment_id'] : '';
+
+	return array( 'ok' => true, 'finished' => true ) + wpdc_payment_goods( $payment );
+}
+
+/**
+ * What this payment bought, as things a customer can hold.
+ *
+ * Dodo's grants are the delivery: a Digital Files entitlement puts signed
+ * download URLs on the grant, a License Keys entitlement puts the key there.
+ * There is no grants-by-payment call, so this walks the only path there is --
+ * payment to customer, customer to grants, grants filtered back to THIS
+ * payment. Anything another purchase delivered to the same customer is dropped
+ * on that filter: the session in hand proves this payment, not their history.
+ *
+ * Empty arrays are a normal answer, not a failure. A product with no
+ * entitlement attached delivers nothing, and the panel simply shows less. And
+ * a failure anywhere here is ALSO the empty answer: the order finished, and
+ * "finished but the goods list could not be read" must not read as "not
+ * finished" to a poll that would then never stop.
+ */
+function wpdc_payment_goods( string $payment ): array {
+	$none = array(
+		'files' => array(),
+		'keys'  => array(),
+	);
+	if ( '' === $payment ) {
+		return $none;
+	}
+
+	$paid = wpdc_dodo_request( 'GET', '/payments/' . rawurlencode( $payment ), null );
+	if ( isset( $paid['ok'] ) && false === $paid['ok'] ) {
+		return $none;
+	}
+	$customer = $paid['customer']['customer_id'] ?? null;
+	if ( ! is_string( $customer ) || '' === $customer ) {
+		return $none;
+	}
+
+	$grants = wpdc_dodo_request(
+		'GET',
+		'/customers/' . rawurlencode( $customer ) . '/entitlement-grants?page_size=100',
+		null
+	);
+	if ( isset( $grants['ok'] ) && false === $grants['ok'] ) {
+		return $none;
+	}
+
+	$files = array();
+	$keys  = array();
+	foreach ( ( $grants['items'] ?? array() ) as $grant ) {
+		if ( ! is_array( $grant ) || ( $grant['payment_id'] ?? '' ) !== $payment ) {
+			continue;
+		}
+		if ( 'Delivered' !== ( $grant['status'] ?? '' ) ) {
+			continue;
+		}
+		foreach ( ( $grant['digital_product_delivery']['files'] ?? array() ) as $file ) {
+			$url  = $file['download_url'] ?? '';
+			$name = $file['filename'] ?? '';
+			// Their origin and their scheme, checked rather than trusted: these
+			// travel to a browser and become an href.
+			if ( is_string( $url ) && is_string( $name ) && '' !== $name && str_starts_with( $url, 'https://' ) ) {
+				$files[] = array(
+					'name' => $name,
+					'url'  => $url,
+				);
+			}
+		}
+		$key = $grant['license_key']['key'] ?? '';
+		if ( is_string( $key ) && '' !== $key ) {
+			$keys[] = $key;
+		}
+	}
+
+	return array(
+		'files' => $files,
+		'keys'  => $keys,
+	);
 }
 
 /**

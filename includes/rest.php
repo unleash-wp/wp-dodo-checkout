@@ -171,6 +171,14 @@ function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
 			// worth showing, the browser shows the completion where the
 			// customer already is.
 			'redirect' => wpdc_return_url(),
+			// The goods themselves: Dodo's signed download links and the
+			// licence key, when the product carries those entitlements. Handed
+			// to the holder of the session id on purpose -- it is the browser
+			// that created this checkout, and the same links go into the mail
+			// Dodo sends. The customer's name and email, which ride along on
+			// every response this route reads, still stay on the server.
+			'files'    => $result['files'] ?? array(),
+			'keys'     => $result['keys'] ?? array(),
 		),
 		200
 	);

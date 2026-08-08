@@ -526,7 +526,7 @@
     // A configured thank-you page wins. Without one the completion is shown
     // right here, because leaving for the front page reads as the popup
     // breaking: the purchase ends on a page that says nothing about it.
-    function leave(where) {
+    function leave(where, goods) {
       if (where) {
         window.location.assign(where);
         return;
@@ -536,7 +536,10 @@
       var frame = root.querySelector('.wpdc__frame');
       var done = root.querySelector('.wpdc__done');
       if (frame) frame.hidden = true;
-      if (done) done.hidden = false;
+      if (done) {
+        paintGoods(done, goods);
+        done.hidden = false;
+      }
       say(root, '');
     }
 
@@ -554,8 +557,8 @@
       })
         .then(function (res) { return res.json(); })
         .then(function (data) {
-          if (data && data.finished) return leave(data.redirect);
-          if (tries >= POLL_TRIES) return leave(data && data.redirect);
+          if (data && data.finished) return leave(data.redirect, data);
+          if (tries >= POLL_TRIES) return leave(data && data.redirect, data);
           setTimeout(ask, POLL_EVERY_MS);
         })
         .catch(function () {
@@ -567,6 +570,48 @@
 
     if (!session) return;
     ask();
+  }
+
+  /**
+   * The goods, straight into the completion panel.
+   *
+   * Download links and the licence key, when the purchase delivered any --
+   * the same things Dodo puts in its mail, shown a minute earlier at the
+   * moment the customer is actually looking. Built with DOM nodes and
+   * textContent throughout: filenames and keys come from an API response,
+   * and this file does not paste API responses into markup.
+   */
+  function paintGoods(done, goods) {
+    var box = done.querySelector('.wpdc__done-goods');
+    if (!box || !goods) return;
+    while (box.firstChild) box.removeChild(box.firstChild);
+
+    var files = Array.isArray(goods.files) ? goods.files : [];
+    var keys = Array.isArray(goods.keys) ? goods.keys : [];
+
+    files.forEach(function (file) {
+      if (!file || typeof file.url !== 'string' || file.url.indexOf('https://') !== 0) return;
+      var a = document.createElement('a');
+      a.className = 'wpdc__done-file';
+      a.href = file.url;
+      a.textContent = (cfg.doneFiles || '') + ': ' + (file.name || '');
+      // A download attribute is a polite request; Dodo's signed URL decides.
+      a.setAttribute('download', '');
+      a.rel = 'noopener';
+      box.appendChild(a);
+    });
+
+    keys.forEach(function (key) {
+      if (typeof key !== 'string' || !key) return;
+      var label = document.createElement('p');
+      label.className = 'wpdc__done-key-label';
+      label.textContent = cfg.doneKey || '';
+      var code = document.createElement('code');
+      code.className = 'wpdc__done-key';
+      code.textContent = key;
+      box.appendChild(label);
+      box.appendChild(code);
+    });
   }
 
   function open(root, url) {

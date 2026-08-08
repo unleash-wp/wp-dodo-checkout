@@ -21,7 +21,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.2.1' );
+define( 'WPDC_VERSION', '0.3.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1411,7 +1411,8 @@ check(
 	// header instead of a button sitting on it.
 	'BELL: every corner uses the one radius, and only the ring and the button are round',
 	1 === substr_count( $css, '--wpdc-radius: 5px' )
-		&& 6 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
+		// Eight: plus the download button and the key, both in the completion.
+		&& 8 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
 		// Three circles: the spinner ring, the close button, the done mark.
 		&& 3 === substr_count( $css, 'border-radius: 50%' )
 );
@@ -1625,10 +1626,35 @@ check(
 	// The route answers a boolean about somebody's own checkout. Dodo returns
 	// the customer's name and email in the same response, and this route is
 	// public -- so both stay on the server.
-	'BELL: the status route hands back no customer detail',
+	// The route reads three responses that carry the customer's name and email
+	// -- the session, the payment, the grants -- and hands back none of it. What
+	// does travel is what the purchase delivered: Dodo's own signed links and
+	// the key, the same things it puts in its mail.
+	'BELL: the status route hands back the goods and no customer detail',
 	str_contains( $rest, "'finished' =>" )
 		&& ! preg_match( '/customer_email|customer_name/', $rest )
-		&& str_contains( $client, "'finished' => 'succeeded' === \$status" )
+		&& str_contains( $rest, "'files'    => \$result['files'] ?? array()" )
+		&& str_contains( $client, "'finished' => false" )
+);
+check(
+	// Filenames and keys come out of an API response and go onto the page.
+	// textContent and createElement throughout: no response of theirs becomes
+	// markup here, and a download href must be theirs and must be https.
+	'BELL: the goods are built as nodes, never as markup',
+	str_contains( $js, 'function paintGoods' )
+		&& str_contains( $js, "file.url.indexOf('https://') !== 0" )
+		&& str_contains( $js, 'code.textContent = key' )
+		&& ! preg_match( '/innerHTML|insertAdjacentHTML/', $js )
+		&& str_contains( $client, "str_starts_with( \$url, 'https://' )" )
+);
+check(
+	// A product with no entitlement attached delivers nothing, and a grants
+	// call that fails is the same empty answer -- "finished, goods unreadable"
+	// must never read as "not finished" to a poll that would then never stop.
+	'BELL: no goods is an answer, not a failure',
+	str_contains( $client, 'function wpdc_payment_goods' )
+		&& 4 === substr_count( $client, 'return $none;' )
+		&& str_contains( $client, "( \$grant['payment_id'] ?? '' ) !== \$payment" )
 );
 check(
 	// A guessed session id must not be pasted into an outbound URL path, and a

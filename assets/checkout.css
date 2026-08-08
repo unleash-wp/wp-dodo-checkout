@@ -333,6 +333,49 @@
   font-size: 14px;
   color: #3d4a6e;
 }
+.wpdc__done-goods {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.wpdc__done-goods:empty {
+  display: none;
+}
+/* The one button-shaped thing in the panel: the file is what was bought. */
+.wpdc__done-file {
+  display: inline-block;
+  padding: 12px 22px;
+  border-radius: var(--wpdc-radius, 5px);
+  background: #f5c518;
+  color: #1a1e3c;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+}
+.wpdc__done-file:hover {
+  background: #eab810;
+}
+.wpdc__done-key-label {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #7c8db5;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.wpdc__done-key {
+  display: inline-block;
+  padding: 10px 14px;
+  border-radius: var(--wpdc-radius, 5px);
+  background: #1a1e3c;
+  color: #f5c518;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  word-break: break-all;
+  user-select: all;
+}
+
 /* Flex above owes the platform its hidden case back -- fifth time. */
 .wpdc__done[hidden],
 .wpdc__frame[hidden] {

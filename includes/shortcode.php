@@ -245,6 +245,8 @@ function wpdc_render( $atts ): string {
 			<div class="wpdc__done" hidden>
 				<span class="wpdc__done-mark" aria-hidden="true">&#10003;</span>
 				<h2 class="wpdc__done-title"><?php echo esc_html__( 'Order complete', 'wp-dodo-checkout' ); ?></h2>
+				<?php // Filled by the browser when the purchase delivered files or a key. ?>
+				<div class="wpdc__done-goods"></div>
 				<p class="wpdc__done-text"><?php echo esc_html__( 'Your confirmation is on its way to your inbox.', 'wp-dodo-checkout' ); ?></p>
 			</div>
 			</div>
@@ -402,6 +404,8 @@ function wpdc_enqueue(): void {
 			'discountEmpty'   => __( 'Enter a code first.', 'wp-dodo-checkout' ),
 			'discountShape'   => __( 'A code has letters, digits, dashes and underscores only.', 'wp-dodo-checkout' ),
 			'finishing'       => __( 'Completing your order…', 'wp-dodo-checkout' ),
+			'doneFiles'       => __( 'Your download', 'wp-dodo-checkout' ),
+			'doneKey'         => __( 'Your licence key', 'wp-dodo-checkout' ),
 		)
 	);
 }
