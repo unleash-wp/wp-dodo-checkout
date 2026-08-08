@@ -62,6 +62,11 @@
   position: fixed;
   inset: 0;
   margin: auto;
+  /* showModal() focuses the dialog, and a focused element draws the browser's
+     focus ring -- a blue box around the whole checkout that looks like a
+     rendering fault. Removed HERE ONLY: every control inside keeps its ring,
+     and .wpdc__close has an explicit one. */
+  outline: none;
 
   /* 640 for the frame is measured, not chosen: below it Dodo's checkout breaks
      its own layout and leaves a band of white above the content. The panel
@@ -77,6 +82,11 @@
      what am I buying, then how do I pay. */
   display: grid;
   grid-template-columns: 1fr 640px;
+  /* minmax(0, 1fr), not 1fr. A grid track sized `1fr` has an automatic MINIMUM
+     of its content, so the frame -- an iframe the SDK gives a fixed pixel
+     height -- pushed the row past the dialog and the column could not scroll.
+     The customer reached the form and not the pay button. */
+  grid-template-rows: minmax(0, 1fr);
   /* Grid children default to min-height:auto and refuse to shrink below their
      content, so a tall frame pushed the dialog past the bottom of the screen
      with no way to reach the pay button. Both columns may shrink; each scrolls
@@ -202,30 +212,101 @@
   font-weight: 700;
 }
 
+/* The close button, made reachable rather than decorative: 44px is the size a
+   thumb hits reliably, and it sits above the frame so it is never scrolled away
+   with the content. */
+.wpdc__close {
+  position: fixed;
+}
+
 @media (max-width: 900px) {
-  /* One column, and ONE scroller.
+  /* One column, one scroller, edge to edge.
 
      Stacked, the panel and the frame each kept their own overflow, so the panel
-     was clipped mid-sentence with nothing to scroll it -- the description ended
-     halfway through a word and the customer could not reach the rest. On a
-     narrow screen the whole dialog scrolls instead, and both parts are as tall
-     as their content. */
+     clipped mid-sentence with nothing to scroll it. And a 1rem margin around a
+     checkout on a 375px screen spends room the form needs. */
   .wpdc__dialog {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto;
     overflow-y: auto;
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 100dvh;
+    border-radius: 0;
   }
   .wpdc__panel,
   .wpdc__dialog .wpdc__frame {
     overflow: visible;
     max-height: none;
   }
+
+  /* A STRIP, not a block.
+
+     The full panel ate half the screen before a single payment method was
+     visible -- on a phone that is a scroll between deciding to buy and being
+     able to. It says what and how much, on one line, and Dodo's frame carries
+     the rest: it shows the item and the full breakdown itself once the contact
+     step is done.
+
+     What goes: the description, the subtotal and the tax line. What stays: the
+     cover, the name, the total. */
   .wpdc__panel {
-    gap: 1rem;
-    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: .75rem;
+    padding: .875rem 1rem;
+  }
+  .wpdc__item {
+    display: contents;
   }
   .wpdc__item-img {
-    width: 3.25rem;
+    width: 2.5rem;
+  }
+  .wpdc__item-name {
+    margin: 0;
+    font-size: .9375em;
+    /* Two lines at most; a long product name must not push the payment methods
+       down the screen it was meant to save. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .wpdc__item-desc,
+  .wpdc__row:not(.wpdc__row--total) {
+    display: none;
+  }
+  .wpdc__totals {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .wpdc__row--total {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    display: block;
+    font-size: 1.125em;
+    white-space: nowrap;
+  }
+  .wpdc__row--total dt {
+    display: none;
+  }
+
+  /* Dodo's frame brings its own top spacing on the payment step; ours was
+     added for a desktop layout that no longer applies here. */
+  .wpdc__dialog .wpdc__frame {
+    padding-top: 0;
+  }
+
+  .wpdc__close {
+    top: .375rem;
+    inset-inline-end: .375rem;
+    width: 2.75rem;
+    height: 2.75rem;
+    background: rgb(255 255 255 / .12);
+    color: #fff;
   }
 }
 

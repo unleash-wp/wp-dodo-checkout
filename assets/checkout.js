@@ -378,6 +378,22 @@
   document.addEventListener('click', function (event) {
     if (event.target.closest('.wpdc__close')) {
       closeFrame(sdk());
+      return;
+    }
+
+    // Clicking the dark area beside the checkout.
+    //
+    // A native <dialog> does NOT close on a backdrop click -- the platform
+    // gives you Escape and nothing else, and everything a customer has learned
+    // from every other modal says the outside is a way out. Without this they
+    // hunt for the X, and on a phone the X was the thing they could not find.
+    //
+    // The test is `event.target === dialog` rather than a hit against the
+    // ::backdrop, which no selector can reach: a click inside the checkout
+    // lands on an element WITHIN the dialog, so the dialog itself is only ever
+    // the target when the click was outside its content box.
+    if (event.target.tagName === 'DIALOG' && event.target.classList.contains('wpdc__dialog')) {
+      closeFrame(sdk());
     }
   });
   document.addEventListener('close', function (event) {

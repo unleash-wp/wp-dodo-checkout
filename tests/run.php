@@ -1081,6 +1081,38 @@ check(
 );
 
 check(
+	// A `1fr` track has an automatic minimum of its content, so the frame -- an
+	// iframe the SDK gives a fixed pixel height -- pushed the row past the
+	// dialog and the column would not scroll. The customer reached the form and
+	// not the pay button.
+	'BELL: the frame column can shrink, so it scrolls instead of overflowing',
+	str_contains( $css, 'grid-template-rows: minmax(0, 1fr)' )
+);
+check(
+	// showModal() focuses the dialog, and a focused element draws the browser's
+	// focus ring -- a blue box around the whole checkout that reads as a
+	// rendering fault. Removed on the dialog only; every control inside keeps
+	// its own, and the close button has an explicit one.
+	'BELL: the focus ring is off the dialog and still on its controls',
+	1 === preg_match( '/\.wpdc__dialog \{[^}]*outline: none/', $css )
+		&& str_contains( $css, '.wpdc__close:focus-visible' )
+);
+check(
+	// A native dialog does NOT close on a backdrop click -- the platform gives
+	// Escape and nothing else, while everything a customer has learned from
+	// every other modal says the outside is a way out.
+	'BELL: clicking beside the checkout closes it',
+	str_contains( $js, "event.target.tagName === 'DIALOG'" )
+		&& str_contains( $js, "classList.contains('wpdc__dialog')" )
+);
+check(
+	// On a 375px screen a 1rem margin spends room the form needs, and a card
+	// whose edges nobody can see does not need rounded corners.
+	'BELL: on a phone the checkout runs edge to edge',
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1400}width: 100vw/', $css )
+);
+
+check(
 	// Dodo's own guidance: show a loading indicator until the frame reports
 	// itself open. Without it there are seconds of empty white beside a panel
 	// that is already full, which is what a broken embed looks like.
