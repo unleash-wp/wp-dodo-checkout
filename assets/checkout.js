@@ -529,7 +529,13 @@
 
     function ask() {
       tries += 1;
-      fetch(cfg.status + '?session=' + encodeURIComponent(session), {
+      // `?` only when there is not one already. With plain permalinks
+      // rest_url() returns `.../index.php?rest_route=/...`, and a second `?`
+      // makes the session part of the ROUTE value -- WordPress then looks for a
+      // route named `.../status?session=cks_...`, does not find it, and answers
+      // 404. Which is what happened: five polls, five 404s, nobody told.
+      var join = cfg.status.indexOf('?') === -1 ? '?' : '&';
+      fetch(cfg.status + join + 'session=' + encodeURIComponent(session), {
         headers: { 'x-wp-nonce': cfg.nonce },
         credentials: 'same-origin',
       })

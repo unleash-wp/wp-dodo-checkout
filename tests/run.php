@@ -1606,6 +1606,15 @@ check(
 	// to. This is the one screen the shop finishes itself, and it must stay the
 	// one: a checkout with something to pay completes on the payment step and
 	// their SDK does the redirect.
+	// Both permalink shapes. rest_url() returns `.../wp-json/...` on pretty
+	// permalinks and `.../index.php?rest_route=/...` on plain ones, and a
+	// hard-coded `?` turns the second into a route named `status?session=...`
+	// that does not exist. Measured as five 404s in a row on a live checkout.
+	'BELL: the status call survives plain permalinks',
+	str_contains( $js, "cfg.status.indexOf('?') === -1 ? '?' : '&'" )
+		&& ! str_contains( $js, "cfg.status + '?'" )
+);
+check(
 	'BELL: a zero-total checkout is finished by asking, not by waiting',
 	1 === preg_match( "/customer_details_submitted' && '0' === root\.dataset\.due/", $js )
 		&& str_contains( $js, 'function awaitCompletion' )
