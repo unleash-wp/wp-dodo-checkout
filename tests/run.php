@@ -1373,6 +1373,17 @@ check(
 );
 
 check(
+	// One radius, set once and referenced everywhere, so a site that overrides
+	// --wpdc-radius moves the whole window at once instead of four of six
+	// corners. The spinner is the exception and is not a corner: it is a ring,
+	// and a 5px ring is a square.
+	'BELL: every corner uses the one radius, and only the ring is round',
+	1 === substr_count( $css, '--wpdc-radius: 5px' )
+		&& 5 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
+		&& 1 === substr_count( $css, 'border-radius: 50%' )
+);
+
+check(
 	// Dodo's own guidance: show a loading indicator until the frame reports
 	// itself open. Without it there are seconds of empty white beside a panel
 	// that is already full, which is what a broken embed looks like.
