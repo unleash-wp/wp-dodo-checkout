@@ -1047,7 +1047,10 @@ check(
 	// no-op.
 	'BELL: closing claims the open marker before it closes anything',
 	1 === preg_match( '/function closeFrame[\s\S]{0,600}openRoot = null;[\s\S]{0,400}dialog\.close\(\)/', $js )
-		&& 1 === substr_count( $js, 'openRoot = null;' )
+		// Two occurrences: the declaration at the top and the one claim inside
+		// closeFrame. A third would mean the marker is cleared somewhere else
+		// too, which is how re-entrancy came back.
+		&& 2 === substr_count( $js, 'openRoot = null;' )
 );
 
 check(
