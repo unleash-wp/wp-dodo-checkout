@@ -150,18 +150,6 @@ function wpdc_render( $atts ): string {
 						<dt><?php echo esc_html__( 'Total', 'wp-dodo-checkout' ); ?></dt><dd></dd>
 					</div>
 				</dl>
-
-				<?php
-				// Two lines, both of which are TRUE and neither of which this
-				// plugin can make true on its own. The download is Dodo's digital
-				// delivery; the buyer protection is their Merchant of Record
-				// status, which is also why their name is in the frame's footer.
-				// A reassurance a shop cannot honour is worse than none.
-				?>
-				<ul class="wpdc__trust">
-					<li><?php echo esc_html__( 'Instant download after purchase', 'wp-dodo-checkout' ); ?></li>
-					<li><?php echo esc_html__( 'Buyer protection and secure payment', 'wp-dodo-checkout' ); ?></li>
-				</ul>
 			</aside>
 
 			<div class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"></div>

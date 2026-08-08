@@ -127,7 +127,16 @@
         var root = openRoot;
         if (!root) return;
 
+        // Dodo's own guidance: show a loading state until the frame reports
+        // itself open. Either event will do -- `opened` means the frame is
+        // there, `form_ready` means it can be typed into -- and whichever
+        // arrives first is the moment the skeleton has done its job.
+        if (event.event_type === 'checkout.opened' || event.event_type === 'checkout.form_ready') {
+          settleLoading(root);
+          return;
+        }
         if (event.event_type === 'checkout.error') {
+          settleLoading(root);
           say(root, (event.data && event.data.message) || cfg.failed);
           return;
         }
@@ -155,6 +164,41 @@
    * statement about their bill rather than an admission that it is not known
    * yet.
    */
+  /**
+   * The wait, and the end of it.
+   *
+   * Between showModal() and Dodo rendering into the container there are a few
+   * seconds of empty white beside a panel that is already full. It reads as
+   * broken, and the operator photographed exactly that.
+   *
+   * A skeleton fills it, and a deadline ends it. The deadline is the part worth
+   * arguing for: a spinner with no timeout is how a customer who has decided to
+   * buy sits in front of nothing until they give up, and nobody ever hears
+   * about it. If the frame has not reported itself open by then, they go to
+   * Dodo's own page -- the same fallback used when the SDK is missing, for the
+   * same reason.
+   */
+  var LOAD_DEADLINE_MS = 20000;
+  var loadTimer = null;
+
+  function startLoading(root, frame, url) {
+    frame.classList.add('is-loading');
+    clearTimeout(loadTimer);
+    loadTimer = setTimeout(function () {
+      if (!frame.classList.contains('is-loading')) return;
+      if (window.console && console.warn) {
+        console.warn('[wp-dodo-checkout] the checkout frame never reported itself open; redirecting.');
+      }
+      window.location.assign(url);
+    }, LOAD_DEADLINE_MS);
+  }
+
+  function settleLoading(root) {
+    clearTimeout(loadTimer);
+    var frame = root.querySelector('.wpdc__frame');
+    if (frame) frame.classList.remove('is-loading');
+  }
+
   function paintTotals(root, b) {
     var totals = root.querySelector('.wpdc__totals');
     if (!totals) return;
@@ -232,6 +276,7 @@
     // Shown BEFORE the SDK is told to render: a dialog that is not open has no
     // layout, and an iframe measured inside a zero-height box comes back zero.
     dialog.showModal();
+    startLoading(root, frame, url);
     dodo.Checkout.open({ checkoutUrl: url, elementId: frame.id });
     watchForLateGrowth(frame);
     openRoot = root;
@@ -297,6 +342,9 @@
   function closeFrame(dodo) {
     var root = openRoot;
     if (!root) return;
+    // Before anything else: a deadline that outlives the window it belonged to
+    // would redirect somebody who deliberately closed the checkout.
+    settleLoading(root);
     var dialog = root.querySelector('.wpdc__dialog');
     if (dialog && dialog.open) dialog.close();
     try { if (dodo) dodo.Checkout.close(); } catch (e) { /* already closed */ }

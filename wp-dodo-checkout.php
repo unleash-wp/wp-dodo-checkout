@@ -10,6 +10,7 @@
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: wp-dodo-checkout
+ * Domain Path: /languages
  *
  * ── What this plugin is ────────────────────────────────────────────────────
  *
@@ -48,6 +49,20 @@ require_once WPDC_DIR . 'includes/shortcode.php';
 require_once WPDC_DIR . 'includes/rest.php';
 require_once WPDC_DIR . 'includes/apple-pay.php';
 require_once WPDC_DIR . 'includes/settings.php';
+
+/**
+ * Bundled translations, loaded explicitly.
+ *
+ * The Text Domain header alone does nothing for a plugin that is not on
+ * wordpress.org: WordPress fetches those translations from there, finds
+ * nothing, and every string stays English. On a German shop that means
+ * "Subtotal / Discount / VAT" beside a German checkout, which is how this was
+ * noticed.
+ */
+function wpdc_load_textdomain(): void {
+	load_plugin_textdomain( 'wp-dodo-checkout', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+}
+add_action( 'init', 'wpdc_load_textdomain' );
 
 add_action( 'init', 'wpdc_register_shortcode' );
 add_action( 'init', 'wpdc_serve_apple_pay_association' );

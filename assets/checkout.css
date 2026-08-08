@@ -52,14 +52,20 @@
 /* The modal. A native <dialog>, so the browser owns the top layer, the focus
    trap and Escape; only size, spacing and the backdrop are ours. */
 .wpdc__dialog {
-  /* 640, measured rather than chosen. At 544 Dodo's checkout breaks its own
-     layout and leaves a tall band of white above the content -- it looks like a
-     loading failure and it is just a narrow viewport. At 640 the form renders
-     as intended. Wider buys nothing: the SDK reports the same content height
-     from 640 to 900. */
-  /* Two columns now: the summary Dodo's own reference layout puts beside their
-     frame, and the frame. 640 was the one-column width; the frame still wants
-     its 640 and the panel wants room to breathe beside it. */
+  /* Fixed, not the browser's default absolute.
+
+     The UA stylesheet centres an open dialog with `position: absolute` and
+     `margin: auto`, which centres it in the DOCUMENT. On a scrolled page that
+     drops the checkout wherever the reader happens to be -- photographed half
+     over the site footer with the page header still visible above it. A modal
+     belongs to the viewport. */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+
+  /* 640 for the frame is measured, not chosen: below it Dodo's checkout breaks
+     its own layout and leaves a band of white above the content. The panel
+     takes what is left of 1040. */
   --wpdc-dialog-width: 1040px;
 
   width: min(var(--wpdc-dialog-width), calc(100vw - 2rem));
@@ -71,6 +77,11 @@
      what am I buying, then how do I pay. */
   display: grid;
   grid-template-columns: 1fr 640px;
+  /* Grid children default to min-height:auto and refuse to shrink below their
+     content, so a tall frame pushed the dialog past the bottom of the screen
+     with no way to reach the pay button. Both columns may shrink; each scrolls
+     itself. */
+  align-items: stretch;
   border: 0;
   border-radius: var(--wpdc-radius, 8px);
   background: #fff;
@@ -95,6 +106,7 @@
    owes their frame is the divider between them. Everything a customer can act
    on is still inside the frame, and the frame is shown whole. */
 .wpdc__panel {
+  min-height: 0;
   --wpdc-panel-bg: #203159;
   --wpdc-panel-fg: #ffffff;
   --wpdc-panel-accent: #fcbe00;
@@ -147,6 +159,14 @@
   margin-bottom: .5rem;
   color: rgb(255 255 255 / .8);
 }
+/* `display: flex` above outranks the browser's rule for [hidden], so a row the
+   script hides stayed visible with an empty value beside its label -- "Discount"
+   with nothing after it. The SECOND time this exact collision shipped today:
+   the buy button had it first. Any class this file gives a display to and the
+   script toggles hidden on needs this line, and a test now says so. */
+.wpdc__row[hidden] {
+  display: none;
+}
 .wpdc__row dt,
 .wpdc__row dd {
   margin: 0;
@@ -166,46 +186,27 @@
   font-weight: 700;
 }
 
-/* Marker drawn in CSS rather than shipped as an icon font or an SVG sprite --
-   two ticks do not justify a request, and this one inherits the accent. */
-.wpdc__trust {
-  margin: auto 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: .875em;
-  color: rgb(255 255 255 / .8);
-}
-.wpdc__trust li {
-  position: relative;
-  padding-inline-start: 1.5rem;
-  margin-bottom: .5rem;
-  line-height: 1.4;
-}
-.wpdc__trust li::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: 0;
-  top: .3em;
-  width: .45rem;
-  height: .8rem;
-  border: solid var(--wpdc-panel-accent);
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
 @media (max-width: 900px) {
+  /* One column, and ONE scroller.
+
+     Stacked, the panel and the frame each kept their own overflow, so the panel
+     was clipped mid-sentence with nothing to scroll it -- the description ended
+     halfway through a word and the customer could not reach the rest. On a
+     narrow screen the whole dialog scrolls instead, and both parts are as tall
+     as their content. */
   .wpdc__dialog {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto;
+    overflow-y: auto;
+  }
+  .wpdc__panel,
+  .wpdc__dialog .wpdc__frame {
+    overflow: visible;
+    max-height: none;
   }
   .wpdc__panel {
     gap: 1rem;
     padding: 1.5rem;
-  }
-  /* On a phone the panel is the thing between a customer and the pay button, so
-     it says what it must and gets out of the way. */
-  .wpdc__trust {
-    display: none;
   }
   .wpdc__item-img {
     width: 3.25rem;
@@ -213,8 +214,8 @@
 }
 
 .wpdc__dialog .wpdc__frame {
+  min-height: 0;
   overflow-y: auto;
-  max-height: calc(100vh - 2rem);
   padding: 2.5rem 0 1rem;
 
   /* Reserved ONCE, on the container, so the modal does not open as a sliver and
@@ -234,6 +235,38 @@
   display: block;
   width: 100%;
   border: 0;
+}
+
+/* The wait. Between the window opening and Dodo rendering into it there were a
+   few seconds of empty white beside a panel that was already full -- which is
+   what a broken embed looks like, and what the operator photographed.
+
+   Bars rather than a spinner: they say "a form is coming" instead of "something
+   is happening", and they occupy the space the form will occupy, so nothing
+   jumps when it arrives. */
+.wpdc__frame.is-loading::before {
+  content: "";
+  display: block;
+  margin: 1rem 4.375rem 0;
+  height: 1.25rem;
+  border-radius: 6px;
+  background: rgb(0 0 0 / .07);
+  box-shadow:
+    0 3.25rem 0 rgb(0 0 0 / .05),
+    0 7.5rem 0 rgb(0 0 0 / .07),
+    0 10.75rem 0 rgb(0 0 0 / .05),
+    0 15rem 0 rgb(0 0 0 / .07),
+    0 18.25rem 0 rgb(0 0 0 / .05);
+  animation: wpdc-pulse 1.4s ease-in-out infinite;
+}
+@keyframes wpdc-pulse {
+  50% { opacity: .45; }
+}
+/* Someone who has asked for less motion is not asking for less information. */
+@media (prefers-reduced-motion: reduce) {
+  .wpdc__frame.is-loading::before {
+    animation: none;
+  }
 }
 /* Over the frame, not above it: a row reserved for one button would be a strip
    of nothing on every screen. Quiet rather than a bordered circle -- it sits on

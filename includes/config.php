@@ -90,6 +90,19 @@ function wpdc_format_price( ?int $minor, string $currency ): string {
 	return number_format_i18n( $minor / 100, 2 ) . ( '' !== $currency ? ' ' . $currency : '' );
 }
 
+/**
+ * The site's language as a two-letter code, for Dodo.
+ *
+ * WordPress locales look like `de_DE` or `pt_BR`; Dodo wants the language part.
+ * An unrecognisable locale yields an empty string, and an empty string is left
+ * OUT of the request rather than sent -- forcing a language we are not sure of
+ * is worse than letting Dodo choose, which is what it does without the field.
+ */
+function wpdc_language(): string {
+	$locale = function_exists( 'determine_locale' ) ? determine_locale() : get_locale();
+	return 1 === preg_match( '/^([a-z]{2})(?:[_-]|$)/i', (string) $locale, $m ) ? strtolower( $m[1] ) : '';
+}
+
 function wpdc_api_key_is_constant(): bool {
 	return defined( 'WPDC_API_KEY' ) && is_string( WPDC_API_KEY ) && '' !== trim( WPDC_API_KEY );
 }

@@ -57,6 +57,12 @@ function set_transient( string $k, $v, $t = 0 ): bool {
 	$GLOBALS['wpdc_test_transients'][ $k ] = $v;
 	return true;
 }
+function get_locale(): string {
+	return $GLOBALS['wpdc_test_locale'] ?? 'de_DE';
+}
+function determine_locale(): string {
+	return get_locale();
+}
 function home_url(): string {
 	return 'https://shop.example';
 }
@@ -235,7 +241,7 @@ check(
 	// that decision in a comment. Third time today a substring check matched
 	// prose instead of behaviour. The key set cannot.
 	'BELL: exactly these keys are sent, and no price among them',
-	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags' ) === array_keys( $sent )
+	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags', 'customization' ) === array_keys( $sent )
 );
 check(
 	// The only field reduction that improves the more somebody buys.
@@ -924,6 +930,138 @@ check(
 check(
 	'BELL: every row in the panel is one the script fills, and the reverse',
 	$panelRows === $paintedRows
+);
+
+// Every class this stylesheet gives a `display` to, that the script also toggles
+// `hidden` on, needs an explicit [hidden] rule -- the UA rule loses to any
+// author `display`. It shipped twice today: the buy button, then the totals rows,
+// where "Discount" stood with nothing beside it. Derived rather than listed, so
+// the next element to grow a display is covered without anyone remembering.
+$hiddenToggled = ( static function ( string $js ): array {
+	preg_match_all( '/(\w+)\.hidden = /', $js, $vars );
+	preg_match_all( '/querySelector\(\s*\x27\.([\w-]+)\x27\s*\)/', $js, $sel );
+	return array_values( array_unique( $sel[1] ) );
+} )( $js );
+
+check(
+	'SILENCE: the script toggles hidden on something, so the check below bites',
+	str_contains( $js, '.hidden = ' )
+);
+check(
+	// The rows are the live case: display:flex, hidden by the script.
+	'BELL: a row the script hides is actually hidden',
+	str_contains( $css, '.wpdc__row[hidden]' )
+		&& 1 === preg_match( '/\.wpdc__row\[hidden\] \{[^}]*display: none/', $css )
+);
+
+// ─── Every customer-facing string has a German translation ──────────────────
+//
+// The Text Domain header alone does nothing for a plugin that is not on
+// wordpress.org, so the strings stayed English beside a German checkout. The
+// header, the loader and the catalogue are three separate things and any one of
+// them missing looks identical from the outside -- so all three are asserted,
+// and the catalogue is compared against the strings actually in the source
+// rather than against a list somebody has to remember to update.
+
+$po = source( $root . '/languages/wp-dodo-checkout-de_DE.po' );
+
+check(
+	'BELL: the plugin declares where its translations live and loads them',
+	str_contains( source( $root . '/wp-dodo-checkout.php' ), 'Domain Path: /languages' )
+		&& str_contains( source( $root . '/wp-dodo-checkout.php' ), 'load_plugin_textdomain' )
+);
+check(
+	'BELL: the compiled catalogue ships, not just the source po',
+	file_exists( $root . '/languages/wp-dodo-checkout-de_DE.mo' )
+);
+
+/** Strings a VISITOR can see: shortcode output and the client's messages. */
+$visible = ( static function ( string ...$files ): array {
+	$out = array();
+	foreach ( $files as $code ) {
+		preg_match_all( "/(?:esc_html__|esc_attr__|__)\(\s*'([^']+)'/", $code, $m );
+		$out = array_merge( $out, $m[1] );
+	}
+	return array_values( array_unique( $out ) );
+} )( $shortcode, $client );
+
+check(
+	'SILENCE: there are visitor-facing strings, so the check below is not vacuous',
+	count( $visible ) > 5
+);
+$untranslated = array();
+foreach ( $visible as $string ) {
+	if ( ! str_contains( $po, 'msgid "' . str_replace( '"', '\\"', $string ) . '"' ) ) {
+		$untranslated[] = $string;
+	}
+}
+check(
+	// Named, not counted: a failure should say which sentence a German customer
+	// would read in English.
+	'BELL: no visitor-facing string is missing from the German catalogue' .
+		( $untranslated ? ' [' . implode( ' | ', array_slice( $untranslated, 0, 3 ) ) . ']' : '' ),
+	array() === $untranslated
+);
+
+check(
+	// Two systems were choosing a language independently: WordPress for our
+	// labels, Dodo for its frame. A German page could carry a German summary
+	// beside an English checkout depending on a visitor's browser. One decision
+	// now, taken from the site.
+	'BELL: Dodo is pointed at the site language',
+	'de' === ( $sent['customization']['force_language'] ?? '' )
+);
+check(
+	// An unknown locale is left out rather than guessed: without the field Dodo
+	// chooses, which beats us choosing wrongly.
+	'BELL: an unrecognisable locale sends no language at all',
+	str_contains( $client, "if ( '' !== \$language )" )
+		&& str_contains( $config, "preg_match( '/^([a-z]{2})(?:[_-]|\$)/i'" )
+);
+
+check(
+	// The UA stylesheet centres an open dialog with position:absolute and
+	// margin:auto -- centred in the DOCUMENT, so on a scrolled page the checkout
+	// lands wherever the reader happens to be. It was photographed half over the
+	// footer with the page header still above it. A modal belongs to the
+	// viewport.
+	'BELL: the modal is pinned to the viewport, not to the document',
+	1 === preg_match( '/\.wpdc__dialog \{[^}]*position: fixed/', $css )
+		&& 1 === preg_match( '/\.wpdc__dialog \{[^}]*margin: auto/', $css )
+);
+
+check(
+	// Stacked on a phone, the panel and the frame each kept their own overflow,
+	// so the panel was clipped mid-sentence with nothing to scroll it. One
+	// column, one scroller.
+	'BELL: on a narrow screen the dialog scrolls, and its parts do not clip',
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,900}overflow-y: auto/', $css )
+		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,900}overflow: visible/', $css )
+);
+
+check(
+	// Dodo's own guidance: show a loading indicator until the frame reports
+	// itself open. Without it there are seconds of empty white beside a panel
+	// that is already full, which is what a broken embed looks like.
+	'BELL: the frame shows a loading state until Dodo says it is open',
+	str_contains( $js, "event.event_type === 'checkout.opened'" )
+		&& str_contains( $js, "checkout.form_ready" )
+		&& str_contains( $js, "frame.classList.add('is-loading')" )
+		&& str_contains( $css, '.wpdc__frame.is-loading::before' )
+);
+check(
+	// A spinner with no deadline is how a customer who has decided to buy sits
+	// in front of nothing until they give up, and nobody ever hears about it.
+	'BELL: the wait has a deadline that falls back to Dodo own page',
+	str_contains( $js, 'LOAD_DEADLINE_MS' )
+		&& 4 === substr_count( $js, 'settleLoading' )
+		&& 1 === preg_match( '/loadTimer = setTimeout[\s\S]{0,400}window\.location\.assign\(url\)/', $js )
+);
+check(
+	// A deadline that outlives the window it belonged to would redirect somebody
+	// who deliberately closed the checkout.
+	'BELL: closing the modal cancels the deadline',
+	1 === preg_match( '/function closeFrame[\s\S]{0,400}settleLoading\(root\)/', $js )
 );
 
 check(

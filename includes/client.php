@@ -302,6 +302,19 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	// live held separately. Branding from here would cover one of those three
 	// and disagree with the other two the first time somebody used the page.
 
+	// ONE language for the whole window.
+	//
+	// Dodo's frame localises itself and WordPress localises our labels, and
+	// nothing made the two agree: a German page could carry a German summary
+	// beside an English checkout, or the reverse, depending on a visitor's
+	// browser. This points Dodo at the site's locale so both halves follow one
+	// decision. An unknown locale is left out rather than guessed -- without the
+	// field Dodo chooses, which is better than us choosing wrongly.
+	$language = wpdc_language();
+	if ( '' !== $language ) {
+		$body['customization'] = array( 'force_language' => $language );
+	}
+
 	$return = wpdc_return_url();
 	if ( '' !== $return ) {
 		$body['return_url'] = $return;
