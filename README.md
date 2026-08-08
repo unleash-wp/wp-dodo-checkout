@@ -1,7 +1,7 @@
 # WP Dodo Checkout
 
-A WordPress shortcode that opens a Dodo Payments checkout, inline or as an
-overlay, with an optional order bump.
+A WordPress shortcode that opens a Dodo Payments checkout inside the page, with
+the wallet buttons on top and an optional order bump.
 
 ## What it is
 
@@ -150,7 +150,7 @@ a 404.
 - **No prices or amounts.** Dodo settles what is charged.
 - **No product catalogue in the code.** It comes from the account, so a new
   product sells within ten minutes of being created, with no deploy.
-- **No `@latest` from a CDN.** The overlay SDK is pinned to a major version.
+- **No `@latest` from a CDN.** The checkout SDK is pinned to a major version.
   `@latest` lets a third party change what executes on a checkout page with no
   deploy here, and makes a subresource integrity hash impossible because the
   file behind the URL is allowed to change.
