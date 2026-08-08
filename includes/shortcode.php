@@ -102,15 +102,20 @@ function wpdc_render( $atts ): string {
 	 *
 	 * Subtotal, VAT and Total are rendered here, in WordPress's locale -- which
 	 * on this shop says en_US while the customer reads German. The checkout in
-	 * the frame beside them follows the shortcode or the browser, so the two
-	 * halves of one window disagreed.
+	 * the frame beside them follows the request, so the two halves of one window
+	 * disagreed.
 	 *
-	 * `switch_to_locale` for the render and `restore_previous_locale` straight
-	 * after: the shortcode must not leave the rest of the page speaking a
-	 * different language than it started in.
+	 * `switch_to_locale` was the obvious way and it does not work: measured on a
+	 * real install, it returns FALSE when the site has no core language pack for
+	 * that locale. Which is the normal state of an English WordPress selling to
+	 * Germans -- the exact case this exists for.
+	 *
+	 * So the catalogue is loaded directly. It is OUR file, we know where it is,
+	 * and it does not care whether WordPress core speaks the language. The
+	 * previous one is put back straight after: a shortcode must not leave the
+	 * rest of the page speaking something else.
 	 */
-	$switched = '' !== $lang && function_exists( 'switch_to_locale' )
-		&& switch_to_locale( wpdc_locale_for( $lang ) );
+	$switched = '' !== $lang && wpdc_load_catalogue( $lang );
 
 	ob_start();
 	?>
@@ -190,7 +195,7 @@ function wpdc_render( $atts ): string {
 	$html = (string) ob_get_clean();
 
 	if ( $switched ) {
-		restore_previous_locale();
+		wpdc_restore_catalogue();
 	}
 
 	return $html;
@@ -203,6 +208,30 @@ function wpdc_render( $atts ): string {
  * WordPress falls back on its own if it has nothing. Deliberately a short list
  * rather than a guess like `xx_XX`, which names catalogues that do not exist.
  */
+/**
+ * Load our own catalogue for one render.
+ *
+ * `load_textdomain` takes a path, so nothing here depends on WordPress having
+ * translations of its own. Returns false when there is no file -- English needs
+ * none, and a missing catalogue is not an error, it is the source language.
+ */
+function wpdc_load_catalogue( string $lang ): bool {
+	$file = WPDC_DIR . 'languages/wp-dodo-checkout-' . wpdc_locale_for( $lang ) . '.mo';
+	if ( ! is_readable( $file ) ) {
+		return false;
+	}
+	unload_textdomain( 'wp-dodo-checkout' );
+	return load_textdomain( 'wp-dodo-checkout', $file );
+}
+
+/** Back to whatever the site was using, through the plugin's normal loader. */
+function wpdc_restore_catalogue(): void {
+	unload_textdomain( 'wp-dodo-checkout' );
+	if ( function_exists( 'wpdc_load_textdomain' ) ) {
+		wpdc_load_textdomain();
+	}
+}
+
 function wpdc_locale_for( string $lang ): string {
 	// Two, because the shop speaks two. A longer list would name catalogues
 	// that do not exist and leave the labels English beside a checkout that is

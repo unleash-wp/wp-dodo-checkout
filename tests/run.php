@@ -57,12 +57,12 @@ function set_transient( string $k, $v, $t = 0 ): bool {
 	$GLOBALS['wpdc_test_transients'][ $k ] = $v;
 	return true;
 }
-function switch_to_locale( string $locale ): bool {
-	$GLOBALS['wpdc_test_locale'] = $locale;
+function load_textdomain( string $domain, string $file ): bool {
+	$GLOBALS['wpdc_test_domain'] = $file;
 	return true;
 }
-function restore_previous_locale(): bool {
-	$GLOBALS['wpdc_test_locale'] = 'en_US';
+function unload_textdomain( string $domain ): bool {
+	$GLOBALS['wpdc_test_domain'] = null;
 	return true;
 }
 function get_locale(): string {
@@ -1115,9 +1115,15 @@ check(
 	// the frame beside them follows the shortcode or the browser -- so one window
 	// spoke two languages. They follow the same decision now, and the locale is
 	// restored straight after so the rest of the page is untouched.
+	// `switch_to_locale` was the obvious way and it does not work: measured on a
+	// real install, it returns FALSE when the site has no core language pack for
+	// that locale -- which is the normal state of an English WordPress selling to
+	// Germans, the exact case this exists for. Our own catalogue is loaded by
+	// path instead, and put back straight after.
 	'BELL: our labels speak the language the checkout speaks',
-	str_contains( $shortcode, 'switch_to_locale( wpdc_locale_for( $lang ) )' )
-		&& str_contains( $shortcode, 'restore_previous_locale();' )
+	str_contains( $shortcode, 'wpdc_load_catalogue( $lang )' )
+		&& str_contains( $shortcode, 'wpdc_restore_catalogue();' )
+		&& ! str_contains( $shortcode, 'switch_to_locale(' )
 );
 
 check(
