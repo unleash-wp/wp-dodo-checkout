@@ -218,7 +218,7 @@ function wpdc_catalog( bool $fresh = false ) {
  * @param int         $quantity How many.
  * @param string|null $bump     Optional second product id, one copy.
  */
-function wpdc_create_session( string $product, int $quantity = 1, ?string $bump = null ): array {
+function wpdc_create_session( string $product, int $quantity = 1, ?string $bump = null, ?string $lang = null ): array {
 	if ( ! wpdc_is_configured() ) {
 		return wpdc_error(
 			'not_configured',
@@ -310,7 +310,17 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	// browser. This points Dodo at the site's locale so both halves follow one
 	// decision. An unknown locale is left out rather than guessed -- without the
 	// field Dodo chooses, which is better than us choosing wrongly.
-	$language = wpdc_language();
+	// Whatever the request carried, and nothing else.
+	//
+	// The site locale is deliberately NOT a fallback. It describes the shop --
+	// one answer where a shop selling a German edition and an English one has
+	// two -- and on the operator's install it read en_US while the customer was
+	// reading German. The caller sends the shortcode's language or the browser's;
+	// with neither, the field is omitted and Dodo decides, which is a better
+	// guess than ours.
+	$language = ( null !== $lang && 1 === preg_match( '/^[a-z]{2}$/i', $lang ) )
+		? strtolower( $lang )
+		: '';
 	if ( '' !== $language ) {
 		$body['customization'] = array( 'force_language' => $language );
 	}

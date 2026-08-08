@@ -29,6 +29,14 @@
       product: root.dataset.product,
       quantity: Number(root.dataset.quantity || 1),
     };
+    // The shortcode first, then the BROWSER -- never WordPress.
+    //
+    // The site locale describes the shop: one answer where a shop selling a
+    // German edition and an English one has two, and on this install it said
+    // en_US while the customer was reading German. The browser is the only
+    // party that knows what the person in front of the checkout reads.
+    var lang = root.dataset.lang || (navigator.language || '').slice(0, 2).toLowerCase();
+    if (/^[a-z]{2}$/.test(lang)) body.lang = lang;
     // The checkbox decides which cart is asked for, and nothing else. No
     // price arithmetic anywhere in this file, on purpose: the amount is
     // settled on Dodo's page, where a browser cannot reach it.

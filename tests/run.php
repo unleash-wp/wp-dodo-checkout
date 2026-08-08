@@ -241,7 +241,7 @@ check(
 	// that decision in a comment. Third time today a substring check matched
 	// prose instead of behaviour. The key set cannot.
 	'BELL: exactly these keys are sent, and no price among them',
-	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags', 'customization' ) === array_keys( $sent )
+	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags' ) === array_keys( $sent )
 );
 check(
 	// The only field reduction that improves the more somebody buys.
@@ -845,8 +845,13 @@ check(
 	// modal opening as a sliver turned an invisible element into half a screen
 	// of nothing above the payment methods. Reserve on the container, never on
 	// the elements the SDK is sizing itself.
-	'BELL: no min-height is forced onto the iframes the SDK sizes',
-	str_contains( $css, "\n  min-height: 32rem;\n}" )
+	// The frame reserves height only while it is WAITING, and only on the
+	// container. On the iframe selector it hit both frames the SDK injects --
+	// including the express wallet element, which is a few pixels tall when no
+	// wallet can be offered -- and turned an invisible element into half a
+	// screen of nothing above the payment methods.
+	'BELL: no height is forced onto the iframes the SDK sizes',
+	str_contains( $css, '.wpdc__frame.is-loading {' )
 		&& ! preg_match( '/\.wpdc__frame iframe \{[^}]*min-height/', $css )
 );
 check(
@@ -1030,20 +1035,22 @@ check(
 	array() === $untranslated
 );
 
+// A caller that names a language gets it passed through; one that names none
+// sends no `customization` at all, and Dodo decides. The site locale is never
+// consulted -- it describes the shop, and on the operator's install it said
+// en_US while the customer was reading German.
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_l' ) );
+wpdc_create_session( 'pdt_pro', 1, null, 'de' );
+$withLang = json_decode( last_request()['args']['body'], true );
 check(
-	// Two systems were choosing a language independently: WordPress for our
-	// labels, Dodo for its frame. A German page could carry a German summary
-	// beside an English checkout depending on a visitor's browser. One decision
-	// now, taken from the site.
-	'BELL: Dodo is pointed at the site language',
-	'de' === ( $sent['customization']['force_language'] ?? '' )
+	'BELL: a language from the caller reaches Dodo',
+	'de' === ( $withLang['customization']['force_language'] ?? '' )
 );
 check(
-	// An unknown locale is left out rather than guessed: without the field Dodo
-	// chooses, which beats us choosing wrongly.
-	'BELL: an unrecognisable locale sends no language at all',
-	str_contains( $client, "if ( '' !== \$language )" )
-		&& str_contains( $config, "preg_match( '/^([a-z]{2})(?:[_-]|\$)/i'" )
+	'BELL: and no language means no customization block at all',
+	! isset( $sent['customization'] )
 );
 
 check(
@@ -1108,8 +1115,66 @@ check(
 check(
 	// On a 375px screen a 1rem margin spends room the form needs, and a card
 	// whose edges nobody can see does not need rounded corners.
-	'BELL: on a phone the checkout runs edge to edge',
-	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1400}width: 100vw/', $css )
+	// NOT edge to edge, on the operator's word: a margin down both sides and a
+	// strip of backdrop say "a layer over the shop", where full bleed reads as a
+	// new page and somebody who thinks they navigated away behaves differently
+	// about closing it.
+	'BELL: on a phone the page still shows around the checkout',
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1400}width: min\(30rem/', $css )
+		&& ! preg_match( '/width: 100vw/', $css )
+);
+
+check(
+	// A shop can sell a German edition and an English one from the same site.
+	// The site locale is one answer to a question that has two, and it describes
+	// the SHOP rather than the edition being sold -- so the shortcode decides,
+	// and the locale is only the fallback.
+	'BELL: the shortcode can name the language, and the browser is the fallback',
+	str_contains( $shortcode, "'lang'       => ''" )
+		&& str_contains( $js, "root.dataset.lang || (navigator.language" )
+		&& str_contains( $rest, "'lang'     => array(" )
+		&& str_contains( $client, 'preg_match( \'/^[a-z]{2}$/i\', $lang )' )
+);
+check(
+	// Written by the shop owner, never by this plugin. A refund window is a
+	// promise only the seller can make, and a reassuring sentence invented on
+	// somebody's checkout is a commitment they never gave.
+	//
+	// Checked against the RENDERED strings, not the file: the file explains the
+	// rule in a comment, and grepping the comment for the words it forbids was
+	// the seventh time today a check read prose as behaviour.
+	'BELL: trust lines come from the shortcode, and none are invented here',
+	str_contains( $shortcode, "'trust'      => ''" )
+		&& ( static function ( string $php ): bool {
+			preg_match_all( "/(?:esc_html__|esc_attr__|__)\(\s*'([^']+)'/", $php, $m );
+			foreach ( $m[1] as $string ) {
+				if ( preg_match( '/(money.?back|refund|guarantee|[0-9]+ days?)/i', $string ) ) {
+					return false;
+				}
+			}
+			return true;
+		} )( $shortcode )
+);
+check(
+	// The site locale is not a fallback anywhere: it describes the shop, and on
+	// the operator's install it said en_US while the customer read German.
+	'BELL: the language never comes from WordPress',
+	str_contains( $js, 'navigator.language' )
+		&& ! str_contains( $client, 'wpdc_language()' )
+);
+check(
+	// It was a transparent glyph that read as decoration, and on a phone it was
+	// the thing customers could not find.
+	'BELL: the close control looks like a control',
+	1 === preg_match( '/\.wpdc__close \{[^}]*background: #fff/', $css )
+		&& 1 === preg_match( '/\.wpdc__close \{[^}]*border: 1px solid/', $css )
+);
+check(
+	// Full bleed reads as a new page, and a customer who thinks they navigated
+	// away behaves differently about closing it.
+	'BELL: on a phone the page still shows around the checkout',
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1200}width: min\(30rem, calc\(100vw - 2\.5rem\)\)/', $css )
+		&& ! preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1200}width: 100vw/', $css )
 );
 
 check(

@@ -46,6 +46,11 @@ function wpdc_register_rest(): void {
 					'required'          => false,
 					'validate_callback' => 'wpdc_is_product_id',
 				),
+				'lang'     => array(
+					'required'          => false,
+					'validate_callback' => static fn( $value ): bool =>
+						is_string( $value ) && 1 === preg_match( '/^[a-z]{2}$/i', $value ),
+				),
 				'quantity' => array(
 					'required'          => false,
 					'validate_callback' => static fn( $value ): bool =>
@@ -74,7 +79,8 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 		// Compared against null, not tested for truthiness. The route's own
 		// validator already guarantees the shape, and a truthy test is the kind
 		// of thing that silently drops a bump the customer ticked.
-		null !== $request->get_param( 'bump' ) ? (string) $request->get_param( 'bump' ) : null
+		null !== $request->get_param( 'bump' ) ? (string) $request->get_param( 'bump' ) : null,
+		null !== $request->get_param( 'lang' ) ? (string) $request->get_param( 'lang' ) : null
 	);
 
 	if ( ! $result['ok'] ) {

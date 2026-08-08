@@ -60,6 +60,15 @@ function wpdc_render( $atts ): string {
 			'bump_label' => '',
 			'label'      => __( 'Buy now', 'wp-dodo-checkout' ),
 			'quantity'   => '1',
+			// Per shortcode, because a shop can sell a German edition and an
+			// English one from the same site. The site locale is the fallback and
+			// is wrong here by construction: it describes the SHOP, not the book.
+			'lang'       => '',
+			// Written by the shop owner, never by this plugin. A refund window or
+			// a guarantee is a promise only the seller can make, and inventing a
+			// reassuring sentence on somebody's checkout is how a shop ends up
+			// committed to something it does not offer.
+			'trust'      => '',
 		),
 		is_array( $atts ) ? $atts : array(),
 		'wpdc_checkout'
@@ -80,6 +89,8 @@ function wpdc_render( $atts ): string {
 	}
 
 	$bump     = wpdc_is_product_id( $atts['bump'] ) ? $atts['bump'] : '';
+	$lang     = 1 === preg_match( '/^[a-z]{2}$/i', (string) $atts['lang'] ) ? strtolower( $atts['lang'] ) : '';
+	$trust    = array_values( array_filter( array_map( 'trim', explode( '|', (string) $atts['trust'] ) ) ) );
 	$quantity = max( 1, min( 50, (int) $atts['quantity'] ) );
 	$id       = wp_unique_id( 'wpdc-' );
 
@@ -89,7 +100,8 @@ function wpdc_render( $atts ): string {
 	?>
 	<div class="wp-dodo-checkout" id="<?php echo esc_attr( $id ); ?>"
 		data-product="<?php echo esc_attr( $atts['product'] ); ?>"
-		data-quantity="<?php echo esc_attr( (string) $quantity ); ?>">
+		data-quantity="<?php echo esc_attr( (string) $quantity ); ?>"
+		<?php if ( '' !== $lang ) : ?>data-lang="<?php echo esc_attr( $lang ); ?>"<?php endif; ?>>
 
 		<?php if ( '' !== $bump ) : ?>
 			<label class="wpdc__bump">
@@ -150,6 +162,14 @@ function wpdc_render( $atts ): string {
 						<dt><?php echo esc_html__( 'Total', 'wp-dodo-checkout' ); ?></dt><dd></dd>
 					</div>
 				</dl>
+
+				<?php if ( array() !== $trust ) : ?>
+					<ul class="wpdc__trust">
+						<?php foreach ( $trust as $line ) : ?>
+							<li><?php echo esc_html( $line ); ?></li>
+						<?php endforeach; ?>
+					</ul>
+				<?php endif; ?>
 			</aside>
 
 			<div class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"></div>
