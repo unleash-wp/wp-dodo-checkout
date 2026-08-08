@@ -155,9 +155,298 @@
   flex: 0 0 auto;
   width: 4.5rem;
   height: auto;
-  /* The panel shows through it, so the cover sits in a thin navy mat inside
-     the hairline below. */
+  /* A white mat around the cover, 4px wide. Artwork with a light edge would
+     otherwise dissolve into the navy behind it. */
   padding: 4px;
+  background: #fff;
+  border-radius: 6px;
+  /* The cover is somebody's artwork on an unknown background; a hairline keeps
+     a white edge from dissolving into a dark panel. */
+  box-shadow: 0 0 0 1px rgb(255 255 255 / .15), 0 6px 18px rgb(0 0 0 / .35);
+}
+.wpdc__item-name {
+  margin: 0 0 .25rem;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.wpdc__item-desc {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgb(255 255 255 / .72);
+}
+
+.wpdc__totals {
+  margin: 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgb(255 255 255 / .18);
+}
+.wpdc__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .5rem;
+  font-size: 12px;
+  color: rgb(255 255 255 / .8);
+}
+/* `display: flex` above outranks the browser's rule for [hidden], so a row the
+   script hides stayed visible with an empty value beside its label -- "Discount"
+   with nothing after it. The SECOND time this exact collision shipped today:
+   the buy button had it first. Any class this file gives a display to and the
+   script toggles hidden on needs this line, and a test now says so. */
+.wpdc__row[hidden] {
+  display: none;
+}
+.wpdc__row dt,
+.wpdc__row dd {
+  margin: 0;
+}
+.wpdc__row dd {
+  /* Tabular figures: the total changes as the customer types a postcode, and a
+     number that jumps sideways while it updates reads as instability on the one
+     screen where nobody wants any. */
+  font-variant-numeric: tabular-nums;
+}
+/* Two classes, because .wpdc__row above now carries its own size and a single
+   class would tie on specificity and lose to source order. */
+.wpdc__row.wpdc__row--total {
+  margin: 1rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid rgb(255 255 255 / .18);
+  color: var(--wpdc-panel-fg);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* The close button, made reachable rather than decorative: 44px is the size a
+   thumb hits reliably, and it sits above the frame so it is never scrolled away
+   with the content. */
+.wpdc__close {
+  position: fixed;
+}
+
+@media (max-width: 900px) {
+  /* One column, one scroller, edge to edge.
+
+     Stacked, the panel and the frame each kept their own overflow, so the panel
+     clipped mid-sentence with nothing to scroll it. And a 1rem margin around a
+     checkout on a 375px screen spends room the form needs. */
+  .wpdc__dialog {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    overflow-y: auto;
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+  .wpdc__panel,
+  .wpdc__dialog .wpdc__frame {
+    overflow: visible;
+    max-height: none;
+  }
+
+  /* A STRIP, not a block.
+
+     The full panel ate half the screen before a single payment method was
+     visible -- on a phone that is a scroll between deciding to buy and being
+     able to. It says what and how much, on one line, and Dodo's frame carries
+     the rest: it shows the item and the full breakdown itself once the contact
+     step is done.
+
+     What goes: the description, the subtotal and the tax line. What stays: the
+     cover, the name, the total. */
+  .wpdc__panel {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: .75rem;
+    padding: .875rem 1rem;
+  }
+  .wpdc__item {
+    display: contents;
+  }
+  .wpdc__item-img {
+    width: 2.5rem;
+  }
+  .wpdc__item-name {
+    margin: 0;
+    font-size: .9375em;
+    /* Two lines at most; a long product name must not push the payment methods
+       down the screen it was meant to save. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .wpdc__item-desc,
+  .wpdc__row:not(.wpdc__row--total) {
+    display: none;
+  }
+  .wpdc__totals {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .wpdc__row--total {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    display: block;
+    font-size: 1.125em;
+    white-space: nowrap;
+  }
+  .wpdc__row--total dt {
+    display: none;
+  }
+
+  /* Dodo's frame brings its own top spacing on the payment step; ours was
+     added for a desktop layout that no longer applies here. */
+  .wpdc__dialog .wpdc__frame {
+    padding-top: 0;
+  }
+
+  .wpdc__close {
+    top: .375rem;
+    inset-inline-end: .375rem;
+    width: 2.75rem;
+    height: 2.75rem;
+    background: rgb(255 255 255 / .12);
+    color: #fff;
+  }
+}
+
+.wpdc__dialog .wpdc__frame {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2.5rem 0 1rem;
+
+  /* Reserved ONCE, on the container, so the modal does not open as a sliver and
+     snap to full height a moment later.
+
+     It used to sit on `iframe` instead, and that was the white block the
+     operator kept photographing. The SDK injects TWO iframes -- an express
+     wallet element it sizes to a few pixels when no wallet is offerable, and
+     the checkout it sizes to its content -- and a min-height on the selector
+     `iframe` forced 512px onto BOTH. So the wallet element, which should be
+     invisible, became half a screen of nothing above the payment methods.
+     I measured that 512 earlier and reported it as Dodo's content. It was my
+     own rule. */
+  min-height: 32rem;
+}
+.wpdc__dialog .wpdc__frame iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+}
+
+/* THE WAIT, and the arrival.
+
+   Between the window opening and Dodo rendering into it there are a few
+   seconds. Empty white beside a full panel is what a broken embed looks like,
+   so the space says "a form is coming" instead. */
+.wpdc__frame.is-loading {
+  position: relative;
+  min-height: 22rem;
+}
+.wpdc__frame.is-loading::after {
+  content: "";
+  position: absolute;
+  top: 40%;
+  inset-inline-start: 50%;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: -1.125rem 0 0 -1.125rem;
+  border: 3px solid rgb(0 0 0 / .12);
+  border-top-color: var(--wpdc-panel-accent, #fcbe00);
+  border-radius: 50%;
+  animation: wpdc-spin .8s linear infinite;
+}
+/* Held back rather than shown half-built: Dodo's frame paints its own skeleton
+   for a moment, and two loading states at once look like a fault. */
+.wpdc__frame.is-loading iframe {
+  opacity: 0;
+}
+/* The arrival. Up and in, once, and only on the transition from waiting -- an
+   iframe that reflows later must not replay it. */
+.wpdc__frame.is-ready iframe {
+  animation: wpdc-rise .42s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes wpdc-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes wpdc-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes wpdc-pop {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes wpdc-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* The window itself, on the frame it actually opens: [open] is set by
+   showModal() and by nothing else, so this needs no JavaScript to trigger. */
+.wpdc__dialog[open] {
+  animation: wpdc-pop .3s cubic-bezier(.16, 1, .3, 1) both;
+}
+.wpdc__dialog[open]::backdrop {
+  animation: wpdc-fade .3s ease both;
+}
+
+/* Someone who has asked for less motion is not asking for less information:
+   the spinner keeps turning, because a still ring says "broken" where a moving
+   one says "wait". Everything that merely decorates is dropped. */
+@media (prefers-reduced-motion: reduce) {
+  .wpdc__frame.is-ready iframe,
+  .wpdc__dialog[open],
+  .wpdc__dialog[open]::backdrop {
+    animation: none;
+  }
+  .wpdc__frame.is-loading::after {
+    animation-duration: 1.6s;
+  }
+}
+
+/* The summary column, in the house colours.
+
+   This is OURS end to end: it renders no payment control and shares no edge
+   with Dodo's internals, so it cannot break when they ship. The only thing it
+   owes their frame is the divider between them. Everything a customer can act
+   on is still inside the frame, and the frame is shown whole. */
+.wpdc__panel {
+  min-height: 0;
+  --wpdc-panel-bg: #203159;
+  --wpdc-panel-fg: #ffffff;
+  --wpdc-panel-accent: #fcbe00;
+
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2.25rem 2rem;
+  background: var(--wpdc-panel-bg);
+  color: var(--wpdc-panel-fg);
+  overflow-y: auto;
+}
+
+.wpdc__item {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.wpdc__item-img {
+  flex: 0 0 auto;
+  width: 4.5rem;
+  height: auto;
+  /* A white mat around the cover, 4px wide. Artwork with a light edge would
+     otherwise dissolve into the navy behind it. */
+  padding: 4px;
+  background: #fff;
   border-radius: 6px;
   /* The cover is somebody's artwork on an unknown background; a hairline keeps
      a white edge from dissolving into a dark panel. */

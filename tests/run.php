@@ -1120,7 +1120,24 @@ check(
 	str_contains( $js, "event.event_type === 'checkout.opened'" )
 		&& str_contains( $js, "checkout.form_ready" )
 		&& str_contains( $js, "frame.classList.add('is-loading')" )
-		&& str_contains( $css, '.wpdc__frame.is-loading::before' )
+		&& str_contains( $css, '.wpdc__frame.is-loading::after' )
+);
+check(
+	// The entrance plays on the transition OUT of waiting only. Dodo's frame
+	// reflows on every address change, and replaying it under a customer who is
+	// mid-typing is worse than not having it.
+	'BELL: the arrival plays once, not on every reflow',
+	str_contains( $js, "frame.classList.contains('is-loading')" )
+		&& str_contains( $js, "if (wasWaiting) frame.classList.add('is-ready')" )
+		&& str_contains( $js, "frame.classList.remove('is-ready')" )
+);
+check(
+	// Someone who asked for less motion is not asking for less information: the
+	// spinner keeps turning, because a still ring says "broken" where a moving
+	// one says "wait". Only the decoration is dropped.
+	'BELL: reduced motion drops the decoration and keeps the spinner',
+	1 === preg_match( '/prefers-reduced-motion: reduce\)[\s\S]{0,400}animation: none/', $css )
+		&& 1 === preg_match( '/prefers-reduced-motion: reduce\)[\s\S]{0,500}is-loading::after[\s\S]{0,120}animation-duration/', $css )
 );
 check(
 	// A spinner with no deadline is how a customer who has decided to buy sits

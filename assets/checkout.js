@@ -182,6 +182,7 @@
   var loadTimer = null;
 
   function startLoading(root, frame, url) {
+    frame.classList.remove('is-ready');
     frame.classList.add('is-loading');
     clearTimeout(loadTimer);
     loadTimer = setTimeout(function () {
@@ -196,7 +197,13 @@
   function settleLoading(root) {
     clearTimeout(loadTimer);
     var frame = root.querySelector('.wpdc__frame');
-    if (frame) frame.classList.remove('is-loading');
+    if (!frame) return;
+    // `is-ready` only on the transition OUT of waiting, so a frame that reflows
+    // later -- and Dodo's reflows on every address change -- does not replay
+    // the entrance under a customer who is mid-typing.
+    var wasWaiting = frame.classList.contains('is-loading');
+    frame.classList.remove('is-loading');
+    if (wasWaiting) frame.classList.add('is-ready');
   }
 
   function paintTotals(root, b) {
