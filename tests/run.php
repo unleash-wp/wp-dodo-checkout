@@ -1040,6 +1040,17 @@ check(
 );
 
 check(
+	// `dialog.close()` fires `close` SYNCHRONOUSLY, and the listener for it calls
+	// closeFrame again. With the marker cleared at the END, that second entry
+	// found openRoot still set and ran the whole body twice -- Checkout.close()
+	// included, on an SDK already told once. Claiming it first makes re-entry a
+	// no-op.
+	'BELL: closing claims the open marker before it closes anything',
+	1 === preg_match( '/function closeFrame[\s\S]{0,600}openRoot = null;[\s\S]{0,400}dialog\.close\(\)/', $js )
+		&& 1 === substr_count( $js, 'openRoot = null;' )
+);
+
+check(
 	// Dodo's own guidance: show a loading indicator until the frame reports
 	// itself open. Without it there are seconds of empty white beside a panel
 	// that is already full, which is what a broken embed looks like.
@@ -1061,7 +1072,7 @@ check(
 	// A deadline that outlives the window it belonged to would redirect somebody
 	// who deliberately closed the checkout.
 	'BELL: closing the modal cancels the deadline',
-	1 === preg_match( '/function closeFrame[\s\S]{0,400}settleLoading\(root\)/', $js )
+	1 === preg_match( '/function closeFrame[\s\S]{0,900}settleLoading\(root\)/', $js )
 );
 
 check(

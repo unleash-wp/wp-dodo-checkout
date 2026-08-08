@@ -342,15 +342,25 @@
   function closeFrame(dodo) {
     var root = openRoot;
     if (!root) return;
-    // Before anything else: a deadline that outlives the window it belonged to
-    // would redirect somebody who deliberately closed the checkout.
+
+    // Claimed FIRST, and this is the fix rather than tidiness.
+    //
+    // `dialog.close()` fires the `close` event SYNCHRONOUSLY, and the listener
+    // for it calls this function again -- with openRoot still set, because the
+    // old version cleared it at the end. So everything below ran twice,
+    // including Checkout.close() on an SDK that has already been told once.
+    // Clearing the marker before doing anything makes the second entry a
+    // no-op, which is what a close should be.
+    openRoot = null;
+
+    // A deadline that outlives the window it belonged to would redirect
+    // somebody who deliberately closed the checkout.
     settleLoading(root);
     var dialog = root.querySelector('.wpdc__dialog');
     if (dialog && dialog.open) dialog.close();
     try { if (dodo) dodo.Checkout.close(); } catch (e) { /* already closed */ }
     var button = root.querySelector('.wpdc__button');
     if (button) button.disabled = false;
-    openRoot = null;
   }
 
   function open(root, url) {
