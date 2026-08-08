@@ -761,6 +761,14 @@ check(
 	str_contains( $js, 'dialog.showModal()' ) && ! str_contains( $js, 'button.hidden = true' )
 );
 check(
+	// Measured, not chosen. At 544 Dodo's own checkout breaks its layout and
+	// leaves a tall band of white above the content, which reads as a broken
+	// embed and is a narrow viewport. The SDK reported the same content height
+	// from 640 to 900, so wider buys nothing.
+	'BELL: the modal is wide enough that the checkout inside it renders',
+	str_contains( $css, '--wpdc-dialog-width: 640px' )
+);
+check(
 	// A native <dialog>, so the focus trap, Escape, the backdrop and the top
 	// layer come from the browser. Hand-rolling those is where modals go wrong,
 	// and this is the one page a customer must not get stuck on.

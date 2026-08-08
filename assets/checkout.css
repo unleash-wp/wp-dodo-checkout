@@ -52,7 +52,12 @@
 /* The modal. A native <dialog>, so the browser owns the top layer, the focus
    trap and Escape; only size, spacing and the backdrop are ours. */
 .wpdc__dialog {
-  --wpdc-dialog-width: 34rem;
+  /* 640, measured rather than chosen. At 544 Dodo's checkout breaks its own
+     layout and leaves a tall band of white above the content -- it looks like a
+     loading failure and it is just a narrow viewport. At 640 the form renders
+     as intended. Wider buys nothing: the SDK reports the same content height
+     from 640 to 900. */
+  --wpdc-dialog-width: 640px;
 
   width: min(var(--wpdc-dialog-width), calc(100vw - 2rem));
   max-height: calc(100vh - 2rem);

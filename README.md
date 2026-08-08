@@ -176,6 +176,24 @@ turn `minimal_address` off** — there is nothing to ship here.
 The "buy as a business" checkbox stays. A WordPress audience contains people who
 need a VAT invoice, and it is one collapsed line.
 
+### Dodo's checkout is two steps, and nothing here changes that
+
+Measured in a browser, not read out of a document:
+
+| Step | What the customer sees |
+|---|---|
+| 1 | Full name, email, country, ZIP, "purchasing as a business", **Continue to Payment** |
+| 2 | Google Pay, then Card and SEPA Direct Debit |
+
+So the wallet button is behind a form, not in front of it. A customer who would
+have paid in two taps fills four fields first. That is Dodo's checkout, not a
+setting: `minimal_address` and the phone flag make step one as short as it can
+be — country and ZIP, nothing more — and the step itself remains.
+
+Checkouts that put the wallets first do the tax-country work from the payment
+sheet or the IP instead. If that difference matters more than everything else on
+this page, it is a provider question, not a configuration one.
+
 ### What is NOT done here, and where it belongs instead
 
 **Branding.** Dodo's dashboard has a **Design page** that sets colours, fonts,
