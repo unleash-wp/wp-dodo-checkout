@@ -150,6 +150,18 @@ function wpdc_render( $atts ): string {
 						<dt><?php echo esc_html__( 'Total', 'wp-dodo-checkout' ); ?></dt><dd></dd>
 					</div>
 				</dl>
+
+				<?php
+				// Two lines, both of which are TRUE and neither of which this
+				// plugin can make true on its own. The download is Dodo's digital
+				// delivery; the buyer protection is their Merchant of Record
+				// status, which is also why their name is in the frame's footer.
+				// A reassurance a shop cannot honour is worse than none.
+				?>
+				<ul class="wpdc__trust">
+					<li><?php echo esc_html__( 'Instant download after purchase', 'wp-dodo-checkout' ); ?></li>
+					<li><?php echo esc_html__( 'Buyer protection and secure payment', 'wp-dodo-checkout' ); ?></li>
+				</ul>
 			</aside>
 
 			<div class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"></div>
@@ -193,13 +205,23 @@ function wpdc_render_item( string $product ): void {
 		return;
 	}
 	?>
-	<p class="wpdc__item-name"><?php echo esc_html( $item['name'] ); ?></p>
-	<?php if ( '' !== $item['description'] ) : ?>
-		<p class="wpdc__item-desc"><?php echo esc_html( wp_trim_words( wpdc_plain_text( $item['description'] ), 26 ) ); ?></p>
-	<?php endif; ?>
-	<?php if ( null !== $item['price'] ) : ?>
-		<p class="wpdc__item-price"><?php echo esc_html( wpdc_format_price( $item['price'], $item['currency'] ) ); ?></p>
-	<?php endif; ?>
+	<div class="wpdc__item">
+		<?php if ( '' !== $item['image'] ) : ?>
+			<?php
+			// Decorative: the name sits right beside it, so a screen reader that
+			// announced the file as well would say the product twice. loading and
+			// decoding are async because nothing waits on a cover.
+			?>
+			<img class="wpdc__item-img" src="<?php echo esc_url( $item['image'] ); ?>"
+				alt="" loading="lazy" decoding="async">
+		<?php endif; ?>
+		<div>
+			<p class="wpdc__item-name"><?php echo esc_html( $item['name'] ); ?></p>
+			<?php if ( '' !== $item['description'] ) : ?>
+				<p class="wpdc__item-desc"><?php echo esc_html( wp_trim_words( wpdc_plain_text( $item['description'] ), 22 ) ); ?></p>
+			<?php endif; ?>
+		</div>
+	</div>
 	<?php
 }
 

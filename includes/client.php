@@ -150,7 +150,7 @@ function wpdc_catalog_shape_ok( array $catalog ): bool {
 		if ( ! is_array( $row ) ) {
 			return false;
 		}
-		foreach ( array( 'name', 'description', 'price', 'currency' ) as $key ) {
+		foreach ( array( 'name', 'image', 'description', 'price', 'currency' ) as $key ) {
 			if ( ! array_key_exists( $key, $row ) ) {
 				return false;
 			}
@@ -171,7 +171,7 @@ function wpdc_catalog_shape_ok( array $catalog ): bool {
  * allow-list wanted: archiving something in the dashboard is how it stops being
  * sellable here.
  *
- * @return array<string, array{name: string, description: string, price: int|null, currency: string}>|array{ok: false}
+ * @return array<string, array{name: string, image: string, description: string, price: int|null, currency: string}>|array{ok: false}
  */
 function wpdc_catalog( bool $fresh = false ) {
 	$cached = $fresh ? false : get_transient( wpdc_catalog_key() );
@@ -198,6 +198,9 @@ function wpdc_catalog( bool $fresh = false ) {
 
 		$catalog[ $id ] = array(
 			'name'        => is_string( $item['name'] ?? null ) ? $item['name'] : $id,
+			// Dodo hosts the product image; showing it is what turns a window of
+			// text into the thing the customer just decided to buy.
+			'image'       => is_string( $item['image'] ?? null ) ? $item['image'] : '',
 			'description' => is_string( $item['description'] ?? null ) ? $item['description'] : '',
 			'price'       => is_int( $item['price'] ?? null ) ? $item['price'] : null,
 			'currency'    => is_string( $item['currency'] ?? null ) ? $item['currency'] : '',

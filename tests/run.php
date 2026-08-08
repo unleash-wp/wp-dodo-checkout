@@ -800,7 +800,7 @@ check(
 configure();
 set_transient( wpdc_catalog_key(), array( 'pdt_old' => array( 'name' => 'Old', 'price' => 100 ) ), 600 );
 respond( 200, array( 'items' => array(
-	array( 'product_id' => 'pdt_new', 'name' => 'New', 'description' => 'd', 'price' => 200, 'currency' => 'EUR' ),
+	array( 'product_id' => 'pdt_new', 'name' => 'New', 'image' => 'https://img/x.png', 'description' => 'd', 'price' => 200, 'currency' => 'EUR' ),
 ) ) );
 $refetched = wpdc_catalog();
 check(
@@ -813,7 +813,7 @@ check(
 	// plus a red. A failing check should say what is wrong, not add noise.
 	'BELL: and every row it returns carries every field',
 	isset( $refetched['pdt_new'] )
-		&& array( 'name', 'description', 'price', 'currency' ) === array_keys( $refetched['pdt_new'] )
+		&& array( 'name', 'image', 'description', 'price', 'currency' ) === array_keys( $refetched['pdt_new'] )
 );
 
 check(
@@ -893,6 +893,53 @@ check(
 		&& str_contains( $shortcode, 'data-row="tax"' )
 		&& str_contains( $shortcode, 'data-row="total"' )
 		&& 2 === substr_count( $shortcode, 'wpdc_render_item' )
+);
+// ─── Every row the panel renders is a row the script fills ──────────────────
+//
+// The same shape of defect as the class selector that once swallowed every
+// click: two files, one set of names, and nothing comparing them. A row in the
+// markup that the script never writes to stays blank forever, and a key the
+// script writes with no row to write into goes nowhere. Both directions,
+// because they fail differently and neither is visible in one file.
+
+$panelRows = ( static function ( string $php ): array {
+	preg_match_all( '/data-row="(\w+)"/', $php, $m );
+	sort( $m[1] );
+	return $m[1];
+} )( $shortcode );
+
+$paintedRows = ( static function ( string $js ): array {
+	if ( ! preg_match( '/var rows = \{(.*?)\};/s', $js, $m ) ) {
+		return array();
+	}
+	preg_match_all( '/^\s*(\w+):/m', $m[1], $keys );
+	sort( $keys[1] );
+	return $keys[1];
+} )( $js );
+
+check(
+	'SILENCE: the panel renders rows at all, so the check below is not vacuous',
+	count( $panelRows ) > 0 && count( $paintedRows ) > 0
+);
+check(
+	'BELL: every row in the panel is one the script fills, and the reverse',
+	$panelRows === $paintedRows
+);
+
+check(
+	// The panel is ours end to end: it renders no payment control and shares no
+	// edge with Dodo's internals, so it cannot break when they ship. That is the
+	// line between styling our own column and building against their surface.
+	'BELL: the panel carries no payment control of its own',
+	! preg_match( '/wpdc__panel[\s\S]{0,2000}?<(input|button|form)/', $shortcode )
+);
+check(
+	// A cover turns a window of text into the thing the customer just chose. The
+	// image is Dodo's own, and decorative -- the name is right beside it, so an
+	// alt would say the product twice.
+	'BELL: the cover is shown, and not announced twice',
+	str_contains( $shortcode, 'wpdc__item-img' ) && str_contains( $shortcode, 'alt=""' )
+		&& str_contains( $client, "'image'" )
 );
 check(
 	// "Removing or hiding legal information violates compliance requirements",
