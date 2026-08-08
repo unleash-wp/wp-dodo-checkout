@@ -49,6 +49,19 @@
   margin-bottom: .75rem;
   cursor: pointer;
 }
+/* Dodo injects its iframe here. Empty until then, and taking no space until
+   then: a reserved box above the fold would push the button down for every
+   visitor to pay for the few who click. Once filled it gets a floor, because a
+   frame that starts at zero height and grows makes the page jump under the
+   cursor of somebody about to hand over money. */
+.wpdc__frame:not(:empty) {
+  min-height: 32rem;
+  margin-top: 1rem;
+}
+.wpdc__frame iframe {
+  width: 100%;
+  border: 0;
+}
 .wpdc__message:empty {
   display: none;
 }

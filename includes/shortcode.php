@@ -12,22 +12,26 @@
  * Impreza is WPBakery-based, so a shortcode is placeable as an element and
  * survives a theme change. Nothing here depends on the theme.
  *
- ── The overlay is the only mode ────────────────────────────────────────────
+ ── The checkout is embedded, never a navigation ────────────────────────────
  *
- * Operator decision: the checkout opens over the page, never as a navigation
- * away from it. So there is no `display` attribute to get wrong and the SDK is
- * always loaded.
+ * Operator goal, in his words: direct sales, and the form is what costs
+ * conversion. So the checkout opens INSIDE the page, in a frame Dodo renders,
+ * and the wallet buttons sit above the form. A customer with Apple Pay or
+ * Google Pay types nothing at all -- name, email and address come from the
+ * wallet. The form is the path beside that one, not in front of it.
+ *
+ * Inline rather than the overlay, and the reason is Apple Pay. Dodo's Overlay
+ * Checkout page says "Apple Pay is not yet supported in overlay checkout" and
+ * its Inline page warns the same; only the Digital Wallets page claims all
+ * wallets work everywhere. Two specific pages against one general list, so the
+ * overlay is not a surface to bet Apple Pay on. Inline supports it, at the cost
+ * of one dashboard step: the domain must be registered under Settings >
+ * Payment Methods > Apple Pay. This plugin already serves the association file
+ * Apple asks for, from `init`.
  *
  * A redirect to Dodo's own page survives as the FAILURE path only, in
  * checkout.js: if the SDK did not load, a customer who has decided to buy must
  * not be stopped by our script loader. That is a fallback, not a mode.
- *
- * The cost, and it is Dodo's own documentation contradicting itself: the
- * Overlay Checkout page says "Apple Pay is not yet supported in overlay
- * checkout" and the Inline page warns the same, while the Digital Wallets page
- * lists overlay among the surfaces where all wallets are fully supported. Two
- * specific pages against one general list. Google Pay in overlay is not
- * contested; Apple Pay wants a test on a real device before anyone claims it.
  *
  * ── Why no price is written here ────────────────────────────────────────────
  *
@@ -104,6 +108,14 @@ function wpdc_render( $atts ): string {
 		<button type="button" class="wpdc__button">
 			<?php echo esc_html( $atts['label'] ); ?>
 		</button>
+
+		<?php
+		// Where Dodo's frame is injected. An earlier version of this plugin
+		// rendered an empty wpdc__frame that nothing filled and nothing styled,
+		// and it was deleted as dead markup -- correctly, at the time. It comes
+		// back because it now has the job it was named for.
+		?>
+		<div class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"></div>
 
 		<p class="wpdc__message" role="status" aria-live="polite"></p>
 	</div>

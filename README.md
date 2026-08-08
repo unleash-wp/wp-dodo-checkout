@@ -44,19 +44,25 @@ shortcode ready to copy.
 
 ```
 [wpdc_checkout product="pdt_…"]
+[wpdc_checkout product="pdt_…" label="Jetzt kaufen"]
 [wpdc_checkout product="pdt_…" quantity="20" label="Get Team 20"]
 [wpdc_checkout product="pdt_…" bump="pdt_…" bump_label="Add the eBook for 9 EUR"]
-[wpdc_checkout product="pdt_…" display="overlay"]
 ```
 
 | Attribute | Default | Notes |
 |---|---|---|
 | `product` | — | Required. A Dodo product id (`pdt_…`). |
-| `display` | `inline` | `inline` navigates to Dodo; `overlay` opens their SDK. |
+| `label` | Buy now | Button text. |
 | `bump` | — | A second product id. Always one copy, never one per seat. |
 | `bump_label` | generic | What the checkbox says. Write the price here if you want one shown. |
-| `label` | Buy now | Button text. |
 | `quantity` | `1` | 1 to 50. |
+
+The button is styled through custom properties, so a theme restyles it without
+touching this plugin:
+
+```css
+.wpdc__button { --wpdc-bg: #fcbe00; --wpdc-fg: #203159; --wpdc-radius: 8px; }
+```
 
 ### Why the id and not a nickname
 
@@ -82,13 +88,43 @@ test products.
 
 Archiving in Dodo is also the off switch: nothing on the site needs changing.
 
-### Why inline is the default
+## The checkout is embedded, and why that is the conversion answer
 
-Overlay needs a third-party SDK on the page. Inline navigates to Dodo's own
-page, which is what keeps card fields off this origin and out of PCI scope.
+Clicking the button does not navigate anywhere. Dodo renders its checkout in a
+frame inside the page, and the wallet buttons sit above the form: a customer
+with Apple Pay or Google Pay types nothing at all, because name, email and
+address come from the wallet. The form is the path beside that one, not in front
+of it.
 
-Digital wallets, Apple Pay included, work in both. Dodo's documentation is
-explicit about that, and an earlier version of this file claimed the opposite.
+Card fields still never touch this origin. The frame is an iframe from Dodo's
+origin, so the PCI surface is the same as a redirect: this page cannot read what
+is typed into it, and neither can anything else running here.
+
+### Inline rather than the overlay, and Apple Pay is the reason
+
+Dodo's documentation contradicts itself:
+
+| Page | Says |
+|---|---|
+| Overlay Checkout | "Apple Pay is not yet supported in overlay checkout." |
+| Inline Checkout | "Apple Pay is not available for overlay checkout." |
+| Digital Wallets | "All digital wallets are fully supported in: Overlay Checkout, …" |
+
+Two specific pages against one general list, so the overlay is not a surface to
+bet Apple Pay on. Inline supports it, at the cost of one dashboard step:
+**register the domain under Settings > Payment Methods > Apple Pay > Manage
+domains.** Apple's association file is already served by this plugin, from
+`init`, at `/.well-known/apple-developer-merchantid-domain-association`.
+
+Google Pay needs nothing beyond being enabled on the account.
+
+### Payment methods are never restricted
+
+`allowed_payment_method_types` is deliberately not sent. Dodo's own note: adding
+a method there does not make it available, and if everything listed is
+unavailable the session fails outright. Sending nothing is what leaves the wallet
+buttons on. A test pins this, because a future well-meant allow-list is exactly
+how express checkout disappears.
 
 ### Why no price is written in the shortcode
 

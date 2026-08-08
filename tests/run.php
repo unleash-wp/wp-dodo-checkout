@@ -366,20 +366,45 @@ check(
 	str_contains( $shortcode, 'dodopayments-checkout@1' ) && ! str_contains( $shortcode, '@latest' )
 );
 check(
-	// Operator decision: the checkout opens over the page, never as a navigation
-	// away from it. So the SDK is unconditional and there is no display
-	// attribute left to get wrong.
-	'BELL: the overlay SDK is loaded unconditionally, and no display mode remains',
+	// Operator decision: the checkout is embedded in the page, never a
+	// navigation away from it. So the SDK is unconditional and there is no
+	// display attribute left to get wrong.
+	'BELL: the SDK is loaded unconditionally, and no display mode remains',
 	! str_contains( $shortcode, 'if ( $overlay )' )
 		&& ! str_contains( $shortcode, "'display'" )
 		&& ! str_contains( $js, "dataset.display" )
 );
 check(
+	// Inline rather than overlay, and Apple Pay is the whole reason: Dodo's
+	// Overlay page says it is not supported there. A displayType quietly reverted
+	// to 'overlay' would take Apple Pay off the page with nothing failing.
+	'BELL: the SDK is initialised for inline display, not overlay',
+	str_contains( $js, "displayType: 'inline'" ) && ! str_contains( $js, "displayType: 'overlay'" )
+);
+check(
+	// Dodo: "Initialization should happen once when your application loads."
+	// It cannot happen at load here -- the mode is read off the session URL and
+	// no session exists until a click -- so it happens on the first click and
+	// not again.
+	'BELL: the SDK is initialised once, not on every click',
+	str_contains( $js, 'if (ready) return;' ) && 1 === substr_count( $js, 'dodo.Initialize(' )
+);
+check(
+	// The frame needs an element to be injected into, and the id it is opened
+	// with has to be the id that was rendered. Two files, one name -- the same
+	// shape of defect as the class selector that swallowed every click.
+	'BELL: the container the shortcode renders is the one the SDK is given',
+	str_contains( $shortcode, 'class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"' )
+		&& str_contains( $js, "root.querySelector('.wpdc__frame')" )
+		&& str_contains( $js, 'elementId: frame.id' )
+);
+check(
 	// The redirect survives as the FAILURE path: a customer who has decided to
 	// buy must not be stopped because our script loader had a bad day. Deleting
-	// it in the name of "popup only" would turn a CDN hiccup into a dead button.
+	// it in the name of "embedded only" would turn a CDN hiccup into a dead
+	// button.
 	'BELL: a redirect fallback still exists for when the SDK is absent',
-	str_contains( $js, 'window.location.assign(url)' ) && str_contains( $js, 'if (openOverlay(root, url)) return;' )
+	str_contains( $js, 'window.location.assign(url)' ) && str_contains( $js, 'if (openFrame(root, url)) return;' )
 );
 check(
 	// Dodo's own words: "adding a method here does not guarantee customers will
