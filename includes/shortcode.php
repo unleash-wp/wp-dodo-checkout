@@ -58,7 +58,7 @@ function wpdc_render( $atts ): string {
 
 	if ( ! wpdc_is_configured() ) {
 		return current_user_can( 'manage_options' )
-			? '<p>' . esc_html__( 'wpdc_checkout: set WPDC_ENDPOINT and WPDC_SECRET.', 'wp-dodo-checkout' ) . '</p>'
+			? '<p>' . esc_html__( 'wpdc_checkout: set WPDC_API_KEY in wp-config.php.', 'wp-dodo-checkout' ) . '</p>'
 			: '';
 	}
 

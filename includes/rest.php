@@ -57,9 +57,6 @@ function wpdc_register_rest(): void {
 }
 
 /** Lowercase, digits, underscores. The same shape the server registers. */
-function wpdc_is_plan_key( $value ): bool {
-	return is_string( $value ) && 1 === preg_match( '/^[a-z0-9_]{1,64}$/', $value );
-}
 
 function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 	$nonce = $request->get_header( 'x-wp-nonce' );
@@ -98,5 +95,8 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 		);
 	}
 
-	return new WP_REST_Response( array( 'url' => $result['url'] ), 200 );
+	// Dodo's name stays inside the client; the browser gets this route's own
+	// contract. Translating here is what stops a provider rename from reaching
+	// the JavaScript.
+	return new WP_REST_Response( array( 'url' => $result['checkout_url'] ), 200 );
 }

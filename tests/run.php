@@ -19,9 +19,13 @@ $root = dirname( __DIR__ );
 
 define( 'ABSPATH', $root . '/' );
 
-$GLOBALS['wpdc_test_options']  = array();
-$GLOBALS['wpdc_test_response'] = null;
-$GLOBALS['wpdc_test_request']  = null;
+$GLOBALS['wpdc_test_options']    = array();
+$GLOBALS['wpdc_test_transients'] = array();
+// A queue, not a single value: one checkout now costs a product list, a read
+// per product, and the session itself. A stub that answered the same thing to
+// all of them would prove nothing about which call carried what.
+$GLOBALS['wpdc_test_queue']    = array();
+$GLOBALS['wpdc_test_requests'] = array();
 
 function get_option( string $name, $default = false ) {
 	return $GLOBALS['wpdc_test_options'][ $name ] ?? $default;
@@ -35,9 +39,25 @@ function wp_json_encode( $data ) {
 function is_wp_error( $thing ): bool {
 	return $thing instanceof WP_Error;
 }
-function wp_remote_post( string $url, array $args ) {
-	$GLOBALS['wpdc_test_request'] = array( 'url' => $url, 'args' => $args );
-	return $GLOBALS['wpdc_test_response'];
+function wp_remote_request( string $url, array $args ) {
+	$GLOBALS['wpdc_test_requests'][] = array( 'url' => $url, 'args' => $args );
+	$next = array_shift( $GLOBALS['wpdc_test_queue'] );
+	// An exhausted queue is a test that asked for more calls than it scripted,
+	// which is a fact about the test rather than about the code. Said loudly.
+	return $next ?? new WP_Error( 'wpdc_test', 'no scripted response left' );
+}
+function get_transient( string $k ) {
+	return $GLOBALS['wpdc_test_transients'][ $k ] ?? false;
+}
+function set_transient( string $k, $v, $t = 0 ): bool {
+	$GLOBALS['wpdc_test_transients'][ $k ] = $v;
+	return true;
+}
+function home_url(): string {
+	return 'https://shop.example';
+}
+function wp_parse_url( string $url, int $component = -1 ) {
+	return parse_url( $url, $component );
 }
 function wp_remote_retrieve_response_code( $response ): int {
 	return (int) ( $response['response']['code'] ?? 0 );
@@ -80,17 +100,39 @@ function source( string $path ): string {
 }
 
 function configure(): void {
-	$GLOBALS['wpdc_test_options'] = array(
-		'wpdc_endpoint' => 'https://mcp.example/',
-		'wpdc_secret'   => 's3cret',
-	);
+	$GLOBALS['wpdc_test_options']    = array( 'wpdc_api_key' => 'sk_test_key' );
+	$GLOBALS['wpdc_test_transients'] = array();
+	$GLOBALS['wpdc_test_requests']   = array();
+	$GLOBALS['wpdc_test_queue']      = array();
+	$GLOBALS['wpdc_test_log']        = array();
 }
 
 function respond( int $status, array $body ): void {
-	$GLOBALS['wpdc_test_response'] = array(
+	$GLOBALS['wpdc_test_queue'][] = array(
 		'response' => array( 'code' => $status ),
 		'body'     => json_encode( $body ),
 	);
+}
+
+/**
+ * Script a catalogue: the list call, then one read per product.
+ *
+ * @param array<string, string> $plans plan key => product id.
+ */
+function catalogue( array $plans ): void {
+	$items = array();
+	foreach ( $plans as $id ) {
+		$items[] = array( 'product_id' => $id );
+	}
+	respond( 200, array( 'items' => $items ) );
+	foreach ( $plans as $plan => $id ) {
+		respond( 200, array( 'product_id' => $id, 'metadata' => array( 'uwp_plan' => $plan ) ) );
+	}
+}
+
+function last_request(): ?array {
+	$all = $GLOBALS['wpdc_test_requests'];
+	return $all ? $all[ count( $all ) - 1 ] : null;
 }
 
 // ─── The failure vocabulary ──────────────────────────────────────────────────
@@ -99,86 +141,167 @@ function respond( int $status, array $body ): void {
 
 configure();
 
-respond( 200, array( 'checkoutUrl' => 'https://checkout.dodo/x' ) );
-$ok = wpdc_create_session( 'pro' );
-check( 'SILENCE: a good response yields the url', true === $ok['ok'] && 'https://checkout.dodo/x' === $ok['url'] );
+// Tested at the transport, which is where the vocabulary is decided. Going
+// through wpdc_create_session would spend the scripted responses on a product
+// list and prove something about the catalogue instead.
+
+respond( 200, array( 'checkout_url' => 'https://checkout.dodo/x' ) );
+$ok = wpdc_dodo_request( 'POST', '/checkouts', array() );
+check( 'SILENCE: a good response comes back decoded', 'https://checkout.dodo/x' === $ok['checkout_url'] );
 
 respond( 401, array() );
-$unauth = wpdc_create_session( 'pro' );
-check( 'BELL: 401 is not retriable, because retrying cannot fix a wrong secret', false === $unauth['ok'] && 'unauthorized' === $unauth['reason'] && false === $unauth['retriable'] );
+$unauth = wpdc_dodo_request( 'GET', '/products' );
+check( 'BELL: 401 is not retriable, because retrying cannot fix a wrong key', 'unauthorised' === $unauth['reason'] && false === $unauth['retriable'] );
+
+respond( 403, array() );
+$forbidden = wpdc_dodo_request( 'GET', '/products' );
+check( 'BELL: 403 is treated as 401, not as a visitor error', 'unauthorised' === $forbidden['reason'] );
 
 respond( 400, array() );
-$plan = wpdc_create_session( 'nope' );
-check( 'BELL: 400 is not retriable, because the shortcode is wrong', false === $plan['ok'] && 'unknown_plan' === $plan['reason'] && false === $plan['retriable'] );
-
-respond( 429, array() );
-$rate = wpdc_create_session( 'pro' );
-check( 'BELL: 429 IS retriable', 'rate_limited' === $rate['reason'] && true === $rate['retriable'] );
+$bad = wpdc_dodo_request( 'POST', '/checkouts', array() );
+check( 'BELL: a 4xx is not retriable, because the request was wrong', 'upstream_error' === $bad['reason'] && false === $bad['retriable'] );
 
 respond( 503, array() );
-$down = wpdc_create_session( 'pro' );
-check( 'BELL: 5xx IS retriable', 'unavailable' === $down['reason'] && true === $down['retriable'] );
+$down = wpdc_dodo_request( 'GET', '/products' );
+check( 'BELL: 5xx IS retriable', 'upstream_error' === $down['reason'] && true === $down['retriable'] );
 
-$GLOBALS['wpdc_test_response'] = new WP_Error( 'http_request_failed', 'cURL error 6: Could not resolve host: mcp.example' );
-$err = wpdc_create_session( 'pro' );
+$GLOBALS['wpdc_test_queue'][] = new WP_Error( 'http_request_failed', 'cURL error 6: Could not resolve host: live.dodopayments.com' );
+$err = wpdc_dodo_request( 'GET', '/products' );
 check( 'BELL: a transport error is retriable', 'unreachable' === $err['reason'] && true === $err['retriable'] );
 check(
 	'BELL: the transport error message never reaches the visitor',
-	! str_contains( $err['message'], 'mcp.example' ) && ! str_contains( $err['message'], 'cURL' )
+	! str_contains( $err['message'], 'cURL' ) && ! str_contains( $err['message'], 'dodopayments.com' )
 );
 
-respond( 200, array() );
-$empty = wpdc_create_session( 'pro' );
-check( 'BELL: a 200 with no url is a failure, not an empty redirect', false === $empty['ok'] );
-
-$GLOBALS['wpdc_test_options'] = array();
-$GLOBALS['wpdc_test_request']  = null;
-$unconfigured = wpdc_create_session( 'pro' );
-check( 'BELL: unconfigured is not retriable', 'not_configured' === $unconfigured['reason'] && false === $unconfigured['retriable'] );
-// Asserted against the recorded request, not against a constant. The previous
-// version of this line was `check( ..., true )`: a check that cannot fail,
-// counted toward the total, which is exactly the false all-clear the rest of
-// this file exists to catch.
-check( 'BELL: unconfigured makes no request at all', null === $GLOBALS['wpdc_test_request'] );
-
-// ─── What reaches the outbound request ───────────────────────────────────────
+$GLOBALS['wpdc_test_queue'][] = array( 'response' => array( 'code' => 200 ), 'body' => 'not json' );
+$junk = wpdc_dodo_request( 'GET', '/products' );
+check( 'BELL: a 200 that is not an answer is a failure', 'bad_response' === $junk['reason'] );
 
 configure();
-respond( 200, array( 'checkoutUrl' => 'u' ) );
-wpdc_create_session( 'pro', 20, 'ebook' );
-$sent = json_decode( $GLOBALS['wpdc_test_request']['args']['body'], true );
+catalogue( array( 'pro' => 'pdt_pro' ) );
+respond( 200, array() ); // a session with no url
+$empty = wpdc_create_session( 'pro' );
+check( 'BELL: a session with no url is a failure, not an empty overlay', false === $empty['ok'] && 'no_url' === $empty['reason'] );
 
-check( 'SILENCE: the plan key is sent', 'pro' === $sent['plan'] );
-check( 'SILENCE: the seat count is sent', 20 === $sent['quantity'] );
-check( 'SILENCE: the bump is sent', 'ebook' === $sent['bump'] );
+$GLOBALS['wpdc_test_options']  = array();
+$GLOBALS['wpdc_test_requests'] = array();
+$unconfigured = wpdc_create_session( 'pro' );
+check( 'BELL: unconfigured is not retriable', 'not_configured' === $unconfigured['reason'] && false === $unconfigured['retriable'] );
+// Asserted against the recorded requests, not against a constant. An earlier
+// version of this line was `check( ..., true )`: a check that cannot fail,
+// counted toward the total, which is the false all-clear this file exists to
+// catch.
+check( 'BELL: unconfigured makes no request at all', array() === $GLOBALS['wpdc_test_requests'] );
+
+// ─── A request names a plan key, never a product id ──────────────────────────
+//
+// The route is public, because buying does not require an account. If a body
+// could name a product id, any visitor could mint a checkout for any product on
+// the account -- a one cent test product, an archived one, one meant for a
+// different site. The plan key is the allow-list, and it resolves only through
+// products the owner marked in Dodo.
+
+configure();
+catalogue( array( 'pro' => 'pdt_pro', 'ebook' => 'pdt_book' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_1' ) );
+
+$result = wpdc_create_session( 'pro', 20, 'ebook' );
+check( 'SILENCE: a known plan produces a checkout url', true === $result['ok'] && str_contains( $result['checkout_url'], 'cks_1' ) );
+
+$session = last_request();
+$sent    = json_decode( $session['args']['body'], true );
+
+check( 'SILENCE: the plan resolved to its product', 'pdt_pro' === $sent['product_cart'][0]['product_id'] );
+check( 'SILENCE: the quantity travels', 20 === $sent['product_cart'][0]['quantity'] );
+check( 'SILENCE: the bump resolved to its own product', 'pdt_book' === $sent['product_cart'][1]['product_id'] );
 check(
-	'BELL: nothing else is sent -- no price, no product id, no return url',
-	array( 'bump', 'plan', 'quantity' ) === ( static function ( array $keys ): array {
-		sort( $keys );
-		return $keys;
-	} )( array_keys( $sent ) )
+	// A quantity on an add-on is a way to sell somebody fifty of something they
+	// ticked a box for.
+	'BELL: a bump is always exactly one copy',
+	1 === $sent['product_cart'][1]['quantity']
 );
 check(
-	'BELL: the secret travels in a header, never in the url or the body',
-	's3cret' === $GLOBALS['wpdc_test_request']['args']['headers']['x-lumo-checkout-secret']
-		&& ! str_contains( $GLOBALS['wpdc_test_request']['url'], 's3cret' )
-		&& ! str_contains( $GLOBALS['wpdc_test_request']['args']['body'], 's3cret' )
+	'BELL: nothing else is sent -- no price, no return url from a caller',
+	array( 'product_cart' ) === array_keys( $sent )
 );
 check(
-	'BELL: a trailing slash on the endpoint does not double up',
-	'https://mcp.example/api/checkout-session' === $GLOBALS['wpdc_test_request']['url']
+	'BELL: the api key travels in a header, never in the url or the body',
+	'Bearer sk_test_key' === $session['args']['headers']['authorization']
+		&& ! str_contains( $session['url'], 'sk_test_key' )
+		&& ! str_contains( $session['args']['body'], 'sk_test_key' )
+);
+check(
+	// Live would take real money from a real card during a half-finished setup.
+	'BELL: the mode defaults to test, not live',
+	str_starts_with( $session['url'], 'https://test.dodopayments.com' )
 );
 
+// ─── A plan nobody marked is refused, and no session is created ──────────────
+
+configure();
+catalogue( array( 'pro' => 'pdt_pro' ) );
+catalogue( array( 'pro' => 'pdt_pro' ) ); // the deliberate second look
+$unknown = wpdc_create_session( 'ghost' );
+check( 'BELL: an unknown plan is refused', 'unknown_plan' === $unknown['reason'] );
+check( 'BELL: and it is not retriable -- trying again cannot help', false === $unknown['retriable'] );
+check(
+	'BELL: no checkout was created for it',
+	! str_contains( json_encode( $GLOBALS['wpdc_test_requests'] ), '/checkouts' )
+);
+
+// ─── Two products claiming one key make BOTH unsellable ──────────────────────
+//
+// Guessing which of two the owner meant is how somebody sells the wrong thing.
+
+configure();
+respond( 200, array( 'items' => array( array( 'product_id' => 'pdt_a' ), array( 'product_id' => 'pdt_b' ) ) ) );
+respond( 200, array( 'product_id' => 'pdt_a', 'metadata' => array( 'uwp_plan' => 'clash' ) ) );
+respond( 200, array( 'product_id' => 'pdt_b', 'metadata' => array( 'uwp_plan' => 'clash' ) ) );
+respond( 200, array( 'items' => array() ) ); // the second look finds nothing new
+$clash = wpdc_create_session( 'clash' );
+check( 'BELL: a contested plan key sells nothing', 'unknown_plan' === $clash['reason'] );
+
+// ─── The catalogue is cached, so a busy page is not a busy API ───────────────
+
+configure();
+catalogue( array( 'pro' => 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_2' ) );
 wpdc_create_session( 'pro' );
-$plain = json_decode( $GLOBALS['wpdc_test_request']['args']['body'], true );
-check( 'SILENCE: no bump means no bump key', ! array_key_exists( 'bump', $plain ) );
+$firstCount = count( $GLOBALS['wpdc_test_requests'] );
+
+respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_3' ) );
+wpdc_create_session( 'pro' );
+check(
+	'BELL: the second sale costs one call, not another catalogue read',
+	count( $GLOBALS['wpdc_test_requests'] ) === $firstCount + 1
+);
+
+// ─── A refused key is ours, and never shown as the visitor\'s fault ──────────
+
+configure();
+respond( 401, array( 'error' => 'bad key' ) );
+$refused = wpdc_create_session( 'pro' );
+check( 'BELL: a refused api key is not retriable', 'unauthorised' === $refused['reason'] && false === $refused['retriable'] );
+check(
+	'BELL: and the visitor is not told it is their problem',
+	str_contains( $refused['message'], 'our side' )
+);
 
 // ─── Configuration precedence ────────────────────────────────────────────────
 
-define( 'WPDC_SECRET', 'from-wp-config' );
+define( 'WPDC_API_KEY', 'from-wp-config' );
 check(
+	// The reason to support constants at all: a key in wp-config.php is not in
+	// the database, and database dumps travel -- backups, staging copies, a
+	// support request with an export attached. This key can issue refunds.
 	'BELL: a wp-config constant beats the stored option',
-	'from-wp-config' === wpdc_secret()
+	'from-wp-config' === wpdc_api_key()
+);
+
+define( 'WPDC_MODE', 'nonsense' );
+check(
+	'BELL: an unrecognised mode falls to test, never to live',
+	'test_mode' === wpdc_mode()
 );
 
 // ─── Source contracts ────────────────────────────────────────────────────────
@@ -451,6 +574,72 @@ check(
 );
 
 // ─── Report ──────────────────────────────────────────────────────────────────
+
+// ─── Every option the plugin READS must be one somebody can WRITE ────────────
+//
+// The gap this catches was shipped: wpdc_api_key() fell back to
+// get_option( 'wpdc_api_key' ) and nothing registered or rendered it. A
+// fallback to a value nobody can set is a promise the code makes and the
+// interface breaks, and it is invisible from either side alone.
+
+$config   = source( $root . '/includes/config.php' );
+$settings = source( $root . '/includes/settings.php' );
+
+preg_match_all( "/get_option\(\s*'([a-z0-9_]+)'/", $config, $reads );
+$read_names = array_values( array_unique( $reads[1] ) );
+
+check(
+	'SILENCE: config.php reads at least one option, so the check below is not vacuous',
+	count( $read_names ) > 0
+);
+
+foreach ( $read_names as $name ) {
+	// Matched INSIDE a register_setting call, not anywhere in the file. The
+	// first version of this check tested `str_contains( $settings, "'name'" )`
+	// and passed on the <label for> and the get_option that were already there
+	// -- it said "registered" and proved "appears". Caught by a mutation that
+	// renamed the registration and killed nothing.
+	check(
+		"BELL: the option {$name} is registered, so it can actually be set",
+		1 === preg_match( "/register_setting\(\s*'wpdc',\s*'{$name}'/", $settings )
+	);
+}
+
+// ─── A wp-config constant must survive Save ──────────────────────────────────
+//
+// The same defect found in a shipped plugin earlier: rendering the resolved key
+// into the field means the next Save copies it into an option, putting it
+// exactly where the constant existed to keep it out. `disabled` is what fixes
+// it, and the reason is the browser rather than the styling: a disabled input
+// is not submitted, so Save has nothing to write.
+
+check(
+	'BELL: the key field is disabled when the constant is set',
+	str_contains( $settings, 'disabled( $from_constant )' )
+);
+check(
+	'BELL: and it renders the stored option, never the resolved key',
+	str_contains( $settings, '$from_constant ? \'\' : esc_attr( $stored )' )
+		&& ! str_contains( $settings, 'esc_attr( wpdc_api_key() )' )
+);
+check(
+	'BELL: the mode falls to test when saved with anything unrecognised',
+	str_contains( $settings, "'live_mode' === \$value ? 'live_mode' : 'test_mode'" )
+);
+check(
+	// Not fetching the value is a stronger guarantee than not echoing it, and
+	// it is what the source should show. An earlier version of this check
+	// matched the loop variable itself and failed on correct code -- a check
+	// wrong in the safe direction, but wrong.
+	'BELL: the settings table iterates keys, so a product id is never in scope',
+	str_contains( $settings, 'foreach ( array_keys( $map ) as $plan )' )
+		&& ! str_contains( $settings, '$product_id' )
+);
+check(
+	'BELL: no admin text names a constant that no longer exists',
+	! str_contains( $settings, 'WPDC_ENDPOINT' ) && ! str_contains( $shortcode, 'WPDC_ENDPOINT' )
+		&& ! str_contains( $settings, 'WPDC_SECRET' ) && ! str_contains( $shortcode, 'WPDC_SECRET' )
+);
 
 if ( $failures ) {
 	echo count( $failures ) . " of $checks checks FAILED\n";
