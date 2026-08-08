@@ -141,10 +141,10 @@ function wpdc_dodo_request( string $method, string $path, ?array $body = null ) 
  * allow-list wanted: archiving something in the dashboard is how it stops being
  * sellable here.
  *
- * @return array<string, array{name: string, price: int|null, currency: string}>|array{ok: false}
+ * @return array<string, array{name: string, description: string, price: int|null, currency: string, tax_inclusive: bool}>|array{ok: false}
  */
 function wpdc_catalog( bool $fresh = false ) {
-	$cached = $fresh ? false : get_transient( 'wpdc_catalog' );
+	$cached = $fresh ? false : get_transient( wpdc_catalog_key() );
 	if ( is_array( $cached ) ) {
 		return $cached;
 	}
@@ -167,13 +167,18 @@ function wpdc_catalog( bool $fresh = false ) {
 		}
 
 		$catalog[ $id ] = array(
-			'name'     => is_string( $item['name'] ?? null ) ? $item['name'] : $id,
-			'price'    => is_int( $item['price'] ?? null ) ? $item['price'] : null,
-			'currency' => is_string( $item['currency'] ?? null ) ? $item['currency'] : '',
+			'name'          => is_string( $item['name'] ?? null ) ? $item['name'] : $id,
+			// Shown in our own summary, so the customer reads what they are
+			// buying in the window they are buying it in, rather than trusting
+			// that the page behind the modal still says the same thing.
+			'description'   => is_string( $item['description'] ?? null ) ? $item['description'] : '',
+			'price'         => is_int( $item['price'] ?? null ) ? $item['price'] : null,
+			'currency'      => is_string( $item['currency'] ?? null ) ? $item['currency'] : '',
+			'tax_inclusive' => true === ( $item['tax_inclusive'] ?? null ),
 		);
 	}
 
-	set_transient( 'wpdc_catalog', $catalog, WPDC_CATALOG_TTL );
+	set_transient( wpdc_catalog_key(), $catalog, WPDC_CATALOG_TTL );
 	return $catalog;
 }
 
@@ -254,6 +259,11 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 			// field on a payment form is not free: it is one more thing between
 			// a decision to buy and the money.
 			'allow_phone_number_collection' => false,
+
+			// A field the shop owner can point a campaign at. Off means a code
+			// printed on a newsletter has nowhere to go and the customer writes
+			// to support instead of buying.
+			'allow_discount_code'           => true,
 		),
 	);
 

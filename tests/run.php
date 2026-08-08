@@ -18,6 +18,10 @@ $root = dirname( __DIR__ );
 // ─── Enough WordPress to run the client ──────────────────────────────────────
 
 define( 'ABSPATH', $root . '/' );
+// Defined by the plugin's main file, which these tests deliberately do not load
+// -- so the harness stands in for it, exactly as WordPress would. Leaving it out
+// made config.php fatal on a constant that is always present in production.
+define( 'WPDC_VERSION', '0.1.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -386,6 +390,7 @@ $rest      = source( $root . '/includes/rest.php' );
 $applepay  = source( $root . '/includes/apple-pay.php' );
 $client    = source( $root . '/includes/client.php' );
 $css       = source( $root . '/assets/checkout.css' );
+$config    = source( $root . '/includes/config.php' );
 
 check(
 	'BELL: the overlay SDK is version-pinned, never @latest',
@@ -759,6 +764,73 @@ check(
 	// clickable, in every browser, with no rule to defeat.
 	'BELL: the checkout is modal, so a second click cannot reach the button',
 	str_contains( $js, 'dialog.showModal()' ) && ! str_contains( $js, 'button.hidden = true' )
+);
+check(
+	// The operator's requirement, stated five times: the payment choice comes
+	// first. Dodo will not reorder its own checkout, so the checkout is folded
+	// away while the express wallet stands alone, and a link brings it back.
+	'BELL: the form is folded behind the wallet, and a link brings it back',
+	str_contains( $js, 'wpdc__frame--folded' )
+		&& str_contains( $css, '.wpdc__frame--folded' )
+		&& str_contains( $shortcode, 'wpdc__reveal' )
+		&& str_contains( $js, "root.querySelector('.wpdc__reveal')" )
+);
+check(
+	// THE condition. With no wallet available the fold would be a step we
+	// invented on top of the one Dodo already charges, and the modal would open
+	// on a link to nothing. It happens only inside the branch that fired because
+	// a wallet element actually grew.
+	'BELL: nothing is folded away when no wallet turned up',
+	str_contains( $js, 'if (openRoot) foldFormBehind(openRoot, frame, entries[i].target);' )
+		&& 2 === substr_count( $js, 'foldFormBehind' )
+);
+check(
+	// display:none on a live payment frame is how an SDK re-measures to zero and
+	// never recovers. Clipped, not removed.
+	'BELL: the folded frame is clipped, never display:none',
+	preg_match( '/\.wpdc__frame--folded \{[^}]*max-height: 0/', $css )
+		&& ! preg_match( '/\.wpdc__frame--folded \{[^}]*display: none/', $css )
+);
+check(
+	// A modal that opens on a bare form makes somebody check whether they hit
+	// the right button. Name, description and price, from the same cached
+	// catalogue the settings screen reads.
+	//
+	// Counted. Fifth time today a check matched a name that the DEFINITION
+	// satisfies on its own, so deleting the call killed nothing.
+	'BELL: the customer reads what they are buying inside the window',
+	2 === substr_count( $shortcode, 'wpdc_render_summary' )
+		&& str_contains( $shortcode, 'wpdc__summary-price' )
+		&& str_contains( $client, "'description'" )
+);
+check(
+	// Never used to charge. What is owed is settled inside the frame, where a
+	// browser cannot reach it.
+	'SILENCE: the summary price is display only, and the body still carries none',
+	str_contains( $shortcode, 'NEVER used to charge' )
+);
+check(
+	// The harness defines WPDC_VERSION on the main file's behalf. If the two drift
+	// the cache key under test is not the cache key that ships.
+	'BELL: the version the tests stand in for is the version the plugin declares',
+	1 === preg_match( "/define\( 'WPDC_VERSION', '([^']+)' \);/", source( $root . '/wp-dodo-checkout.php' ), $m )
+		&& WPDC_VERSION === $m[1]
+);
+check(
+	// The cached catalogue is a shape, not just data. Adding a field to it left
+	// every updated site reading rows written by the previous version -- ten
+	// minutes of "Undefined array key" on a page a customer is standing on.
+	// Found in a browser; a test builds its own cache and never meets a stale
+	// one, which is exactly why this asserts the mechanism instead.
+	'BELL: the catalogue cache key carries the version, so an update invalidates it',
+	str_contains( $config, "'wpdc_catalog_' . WPDC_VERSION" )
+		&& ! preg_match( "/transient\(\s*'wpdc_catalog'/", $client )
+);
+check(
+	// A code printed on a newsletter with nowhere to type it is a support email
+	// instead of a sale.
+	'BELL: a discount code can be entered',
+	str_contains( $client, "'allow_discount_code'           => true" )
 );
 check(
 	// The white block in every screenshot. A min-height on the `iframe` selector

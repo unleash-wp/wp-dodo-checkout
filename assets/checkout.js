@@ -186,6 +186,37 @@
    * alone: a customer who has scrolled down deliberately must not be yanked
    * back every time something reflows.
    */
+  /**
+   * Express first: show the wallet, fold the form away behind a link.
+   *
+   * The operator's requirement, stated five times: the payment choice must come
+   * first. Dodo's checkout will not do that -- it is contact, then Continue to
+   * Payment, then methods, and no flag reorders it.
+   *
+   * What CAN be done is to stop showing it until it is wanted. The SDK injects
+   * the express wallet element and the checkout as two separate frames in our
+   * container, so the checkout can be folded to nothing while the wallet stands
+   * alone. A customer with Apple Pay or Google Pay meets one button. A customer
+   * who wants a card clicks once and gets the form.
+   *
+   * THE CONDITION IS THE WHOLE DESIGN. This only happens when a wallet actually
+   * turned up. With no wallet the fold would be a step we invented on top of the
+   * one Dodo already charges, and the modal would open on a link to nothing.
+   */
+  function foldFormBehind(root, frame, wallet) {
+    var reveal = root.querySelector('.wpdc__reveal');
+    if (!reveal) return;
+
+    frame.classList.add('wpdc__frame--folded');
+    reveal.hidden = false;
+    reveal.onclick = function () {
+      frame.classList.remove('wpdc__frame--folded');
+      reveal.hidden = true;
+      // The wallet stays. Somebody who opened the form and then changes their
+      // mind should not have to close the window to get the button back.
+    };
+  }
+
   function watchForLateGrowth(frame) {
     if (!window.ResizeObserver) return;
 
@@ -198,6 +229,7 @@
         if (entries[i].contentRect.height > 24) {
           settled = true;
           frame.scrollTop = 0;
+          if (openRoot) foldFormBehind(openRoot, frame, entries[i].target);
           observer.disconnect();
           return;
         }

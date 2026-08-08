@@ -126,6 +126,52 @@
   outline: 2px solid currentColor;
   outline-offset: 2px;
 }
+/* Folded, not removed. `display: none` on a live payment frame is the kind of
+   thing that makes an SDK re-measure to zero and never recover; height zero with
+   the content clipped keeps it loaded and laid out. */
+.wpdc__frame--folded {
+  max-height: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.wpdc__reveal {
+  display: block;
+  width: calc(100% - 3rem);
+  margin: 0 1.5rem 1.5rem;
+  padding: .75rem 1rem;
+  border: 1px solid rgb(0 0 0 / .15);
+  border-radius: var(--wpdc-radius, 8px);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.wpdc__reveal:hover {
+  background: rgb(0 0 0 / .04);
+}
+.wpdc__summary {
+  padding: 0 1.5rem 1rem;
+}
+.wpdc__summary-name {
+  margin: 0 0 .25rem;
+  font-weight: 700;
+}
+.wpdc__summary-desc {
+  margin: 0 0 .5rem;
+  opacity: .75;
+  font-size: .9em;
+}
+.wpdc__summary-price {
+  margin: 0;
+  font-size: 1.25em;
+  font-weight: 700;
+}
+.wpdc__summary-tax {
+  margin-inline-start: .5rem;
+  font-size: .7em;
+  font-weight: 400;
+  opacity: .7;
+}
 .wpdc__message:empty {
   display: none;
 }

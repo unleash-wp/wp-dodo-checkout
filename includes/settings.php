@@ -68,12 +68,12 @@ function wpdc_register_settings(): void {
  * cache.
  */
 function wpdc_sanitise_api_key( $value ): string {
-	delete_transient( 'wpdc_catalog' );
+	delete_transient( wpdc_catalog_key() );
 	return is_string( $value ) ? trim( sanitize_text_field( $value ) ) : '';
 }
 
 function wpdc_sanitise_mode( $value ): string {
-	delete_transient( 'wpdc_catalog' );
+	delete_transient( wpdc_catalog_key() );
 	// Anything unrecognised falls to test. Falling to live would mean a typo
 	// starts taking real money from real cards.
 	return 'live_mode' === $value ? 'live_mode' : 'test_mode';
@@ -216,10 +216,3 @@ function wpdc_render_catalogue(): void {
 	echo '<p class="description">' . esc_html__( 'Archiving a product in Dodo stops it selling here within ten minutes. Nothing on this site needs changing.', 'wp-dodo-checkout' ) . '</p>';
 }
 
-/** Minor units to something readable, said plainly when there is no price. */
-function wpdc_format_price( ?int $minor, string $currency ): string {
-	if ( null === $minor ) {
-		return __( 'no price set', 'wp-dodo-checkout' );
-	}
-	return number_format_i18n( $minor / 100, 2 ) . ( '' !== $currency ? ' ' . $currency : '' );
-}
