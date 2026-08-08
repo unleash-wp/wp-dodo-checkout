@@ -535,6 +535,10 @@ function wpdc_payment_goods( string $payment ): array {
 		return $none;
 	}
 
+	// KNOWN LIMIT, stated rather than discovered: one page. A customer with more
+	// than a hundred grants could have this payment's grant fall off it, and the
+	// panel would quietly show nothing. Two products and no repeat buyers make
+	// that impossible today; a shop with a catalogue wants paging here.
 	$grants = wpdc_dodo_request(
 		'GET',
 		'/customers/' . rawurlencode( $customer ) . '/entitlement-grants?page_size=100',
@@ -550,7 +554,12 @@ function wpdc_payment_goods( string $payment ): array {
 		if ( ! is_array( $grant ) || ( $grant['payment_id'] ?? '' ) !== $payment ) {
 			continue;
 		}
-		if ( 'Delivered' !== ( $grant['status'] ?? '' ) ) {
+		// Case-insensitive, because their own documentation spells this status
+		// two ways: `Delivered` on this endpoint and `delivered` on
+		// /customers/{id}/entitlements. An exact compare that guesses wrong
+		// shows an empty panel for ever, with no error anywhere -- and nobody
+		// could tell that apart from "no entitlement attached yet".
+		if ( 0 !== strcasecmp( 'delivered', (string) ( $grant['status'] ?? '' ) ) ) {
 			continue;
 		}
 		foreach ( ( $grant['digital_product_delivery']['files'] ?? array() ) as $file ) {

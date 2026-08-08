@@ -21,7 +21,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.3.0' );
+define( 'WPDC_VERSION', '0.3.1' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1651,6 +1651,15 @@ check(
 	// A product with no entitlement attached delivers nothing, and a grants
 	// call that fails is the same empty answer -- "finished, goods unreadable"
 	// must never read as "not finished" to a poll that would then never stop.
+	// Their documentation spells this status `Delivered` here and `delivered`
+	// on the neighbouring endpoint. An exact compare that guesses wrong is
+	// invisible: an empty panel for ever, indistinguishable from a product with
+	// no entitlement attached.
+	'BELL: a delivered grant is recognised whichever way they capitalise it',
+	str_contains( $client, "strcasecmp( 'delivered'" )
+		&& ! preg_match( "/'Delivered' !== /", $client )
+);
+check(
 	'BELL: no goods is an answer, not a failure',
 	str_contains( $client, 'function wpdc_payment_goods' )
 		&& 4 === substr_count( $client, 'return $none;' )
