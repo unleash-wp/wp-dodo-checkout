@@ -21,7 +21,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.3.2' );
+define( 'WPDC_VERSION', '0.3.3' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1597,9 +1597,10 @@ check(
 	// in front of nothing until they give up, and nobody ever hears about it.
 	'BELL: the wait has a deadline that falls back to Dodo own page',
 	str_contains( $js, 'LOAD_DEADLINE_MS' )
-		// Five: the definition, the two events that end the wait, the close, and
-		// the zero-total branch, which ends it because nothing else will.
-		&& 5 === substr_count( $js, 'settleLoading' )
+		// Six: the definition, the two events that end the wait, the close, the
+		// zero-total branch, and the poll giving up -- which ends it because
+		// nothing else will.
+		&& 6 === substr_count( $js, 'settleLoading' )
 		&& 1 === preg_match( '/loadTimer = setTimeout[\s\S]{0,400}window\.location\.assign\(url\)/', $js )
 );
 check(
@@ -1650,6 +1651,25 @@ check(
 		&& ! preg_match( '/customer_email|customer_name/', $rest )
 		&& str_contains( $rest, "'files'    => \$result['files'] ?? array()" )
 		&& str_contains( $client, "'finished' => false" )
+);
+check(
+	// The poll used to show the completion panel when it ran out of tries, or
+	// navigate to the thank-you page -- a claim the shop cannot support. Whoever
+	// paid and failed read "order complete"; with a thank-you page configured
+	// they landed on "thanks for your order" for an order that may not exist.
+	// The rate ceiling on this very route made reaching that more likely.
+	//
+	// Success is claimed on a confirmed success and nowhere else, and both ways
+	// out of the poll -- refusals and thrown requests -- end in the same honest
+	// sentence rather than in silence.
+	'BELL: an unconfirmed order is never reported as a finished one',
+	str_contains( $js, 'function giveUp' )
+		&& 2 === substr_count( $js, 'giveUp();' )
+		// Two: the definition, and the single confirmed-success call site.
+		&& 2 === substr_count( $js, 'leave(' )
+		&& str_contains( $js, 'if (data && data.finished) return leave(data.redirect, data);' )
+		&& ! str_contains( $js, 'tries >= POLL_TRIES) return leave(' )
+		&& str_contains( $js, 'cfg.unconfirmed' )
 );
 check(
 	// Filenames and keys come out of an API response and go onto the page.

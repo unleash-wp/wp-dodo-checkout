@@ -158,3 +158,6 @@ msgstr "Dein Download"
 
 msgid "Your licence key"
 msgstr "Dein Lizenzschlüssel"
+
+msgid "We could not confirm your order in time. If you were charged it is on its way — check your inbox, or contact us and we will sort it out."
+msgstr "Wir konnten deine Bestellung nicht rechtzeitig bestätigen. Falls abgebucht wurde, ist sie unterwegs — sieh in dein Postfach oder melde dich bei uns, wir klären das."

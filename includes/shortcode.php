@@ -406,6 +406,7 @@ function wpdc_enqueue(): void {
 			'finishing'       => __( 'Completing your order…', 'wp-dodo-checkout' ),
 			'doneFiles'       => __( 'Your download', 'wp-dodo-checkout' ),
 			'doneKey'         => __( 'Your licence key', 'wp-dodo-checkout' ),
+			'unconfirmed'     => __( 'We could not confirm your order in time. If you were charged it is on its way — check your inbox, or contact us and we will sort it out.', 'wp-dodo-checkout' ),
 		)
 	);
 }

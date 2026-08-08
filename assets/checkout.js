@@ -523,9 +523,10 @@
     var session = root.dataset.session || '';
     var tries = 0;
 
-    // A configured thank-you page wins. Without one the completion is shown
-    // right here, because leaving for the front page reads as the popup
-    // breaking: the purchase ends on a page that says nothing about it.
+    // Reached ONLY on a confirmed success. A configured thank-you page wins;
+    // without one the completion is shown right here, because leaving for the
+    // front page reads as the popup breaking -- the purchase would end on a
+    // page that says nothing about it.
     function leave(where, goods) {
       if (where) {
         window.location.assign(where);
@@ -541,6 +542,25 @@
         done.hidden = false;
       }
       say(root, '');
+    }
+
+    /**
+     * Out of tries, and no confirmation. Say that, and nothing more.
+     *
+     * The previous version showed the completion panel here, or navigated to
+     * the thank-you page -- a claim the shop cannot support. Somebody whose
+     * payment failed read "order complete", and with a thank-you page
+     * configured they landed on "thanks for your order" for an order that may
+     * not exist. That is the worst answer available on this screen, and the
+     * rate ceiling on the poll route made reaching it more likely rather than
+     * less.
+     *
+     * The dialog stays open. The customer can close it, or write to us with a
+     * screen that says what actually happened.
+     */
+    function giveUp() {
+      settleLoading(root);
+      say(root, cfg.unconfirmed);
     }
 
     function ask() {
@@ -560,13 +580,19 @@
         .then(function (res) { return res.json(); })
         .then(function (data) {
           if (data && data.finished) return leave(data.redirect, data);
-          if (tries >= POLL_TRIES) return leave(data && data.redirect, data);
+          if (tries >= POLL_TRIES) return giveUp();
           setTimeout(ask, POLL_EVERY_MS);
         })
         .catch(function () {
           // A failed poll is not a failed order, and there is nothing a
-          // customer could do about it. Keep asking until the tries run out.
-          if (tries < POLL_TRIES) setTimeout(ask, POLL_EVERY_MS);
+          // customer could do about a single one. Keep asking until the tries
+          // run out -- and then say so, rather than leaving somebody in front
+          // of a sentence that never changes.
+          if (tries < POLL_TRIES) {
+            setTimeout(ask, POLL_EVERY_MS);
+            return;
+          }
+          giveUp();
         });
     }
 
