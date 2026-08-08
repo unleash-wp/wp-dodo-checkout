@@ -26,9 +26,9 @@
  *
  * ── Nothing here is specific to UnleashWP ───────────────────────────────────
  *
- * No product ids, no prices, no copy about Lumo. The endpoint URL, the secret
- * and the plan keys are all configuration. Dropping this into another site
- * that speaks the same endpoint is a matter of two constants.
+ * No product ids, no prices, no copy about any particular shop. The API key,
+ * the mode and the plan keys are configuration, and the plan keys come from
+ * Dodo itself. Dropping this into another site is a matter of one key.
  */
 
 declare(strict_types=1);
@@ -45,7 +45,10 @@ require_once WPDC_DIR . 'includes/client.php';
 require_once WPDC_DIR . 'includes/shortcode.php';
 require_once WPDC_DIR . 'includes/rest.php';
 require_once WPDC_DIR . 'includes/apple-pay.php';
+require_once WPDC_DIR . 'includes/settings.php';
 
 add_action( 'init', 'wpdc_register_shortcode' );
 add_action( 'init', 'wpdc_serve_apple_pay_association' );
 add_action( 'rest_api_init', 'wpdc_register_rest' );
+add_action( 'admin_init', 'wpdc_register_settings' );
+add_action( 'admin_menu', 'wpdc_register_settings_page' );

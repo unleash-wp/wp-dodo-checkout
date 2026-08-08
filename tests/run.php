@@ -575,6 +575,72 @@ check(
 
 // ─── Report ──────────────────────────────────────────────────────────────────
 
+// ─── Every option the plugin READS must be one somebody can WRITE ────────────
+//
+// The gap this catches was shipped: wpdc_api_key() fell back to
+// get_option( 'wpdc_api_key' ) and nothing registered or rendered it. A
+// fallback to a value nobody can set is a promise the code makes and the
+// interface breaks, and it is invisible from either side alone.
+
+$config   = source( $root . '/includes/config.php' );
+$settings = source( $root . '/includes/settings.php' );
+
+preg_match_all( "/get_option\(\s*'([a-z0-9_]+)'/", $config, $reads );
+$read_names = array_values( array_unique( $reads[1] ) );
+
+check(
+	'SILENCE: config.php reads at least one option, so the check below is not vacuous',
+	count( $read_names ) > 0
+);
+
+foreach ( $read_names as $name ) {
+	// Matched INSIDE a register_setting call, not anywhere in the file. The
+	// first version of this check tested `str_contains( $settings, "'name'" )`
+	// and passed on the <label for> and the get_option that were already there
+	// -- it said "registered" and proved "appears". Caught by a mutation that
+	// renamed the registration and killed nothing.
+	check(
+		"BELL: the option {$name} is registered, so it can actually be set",
+		1 === preg_match( "/register_setting\(\s*'wpdc',\s*'{$name}'/", $settings )
+	);
+}
+
+// ─── A wp-config constant must survive Save ──────────────────────────────────
+//
+// The same defect found in a shipped plugin earlier: rendering the resolved key
+// into the field means the next Save copies it into an option, putting it
+// exactly where the constant existed to keep it out. `disabled` is what fixes
+// it, and the reason is the browser rather than the styling: a disabled input
+// is not submitted, so Save has nothing to write.
+
+check(
+	'BELL: the key field is disabled when the constant is set',
+	str_contains( $settings, 'disabled( $from_constant )' )
+);
+check(
+	'BELL: and it renders the stored option, never the resolved key',
+	str_contains( $settings, '$from_constant ? \'\' : esc_attr( $stored )' )
+		&& ! str_contains( $settings, 'esc_attr( wpdc_api_key() )' )
+);
+check(
+	'BELL: the mode falls to test when saved with anything unrecognised',
+	str_contains( $settings, "'live_mode' === \$value ? 'live_mode' : 'test_mode'" )
+);
+check(
+	// Not fetching the value is a stronger guarantee than not echoing it, and
+	// it is what the source should show. An earlier version of this check
+	// matched the loop variable itself and failed on correct code -- a check
+	// wrong in the safe direction, but wrong.
+	'BELL: the settings table iterates keys, so a product id is never in scope',
+	str_contains( $settings, 'foreach ( array_keys( $map ) as $plan )' )
+		&& ! str_contains( $settings, '$product_id' )
+);
+check(
+	'BELL: no admin text names a constant that no longer exists',
+	! str_contains( $settings, 'WPDC_ENDPOINT' ) && ! str_contains( $shortcode, 'WPDC_ENDPOINT' )
+		&& ! str_contains( $settings, 'WPDC_SECRET' ) && ! str_contains( $shortcode, 'WPDC_SECRET' )
+);
+
 if ( $failures ) {
 	echo count( $failures ) . " of $checks checks FAILED\n";
 	foreach ( $failures as $name ) {
