@@ -41,13 +41,6 @@
   opacity: .6;
   cursor: default;
 }
-/* `display: inline-block` above outranks the browser's own rule for [hidden],
-   so the JS that hides the button once the checkout is open did nothing and it
-   sat there under an open frame, inviting a second click and a second session.
-   Found in a screenshot, not by a test -- so there is a test now. */
-.wpdc__button[hidden] {
-  display: none;
-}
 
 .wpdc__bump {
   display: flex;
@@ -56,18 +49,57 @@
   margin-bottom: .75rem;
   cursor: pointer;
 }
-/* Dodo injects its iframe here. Empty until then, and taking no space until
-   then: a reserved box above the fold would push the button down for every
-   visitor to pay for the few who click. Once filled it gets a floor, because a
-   frame that starts at zero height and grows makes the page jump under the
-   cursor of somebody about to hand over money. */
-.wpdc__frame:not(:empty) {
-  min-height: 32rem;
-  margin-top: 1rem;
-}
-.wpdc__frame iframe {
-  width: 100%;
+/* The modal. A native <dialog>, so the browser owns the top layer, the focus
+   trap and Escape; only size, spacing and the backdrop are ours. */
+.wpdc__dialog {
+  --wpdc-dialog-width: 34rem;
+
+  width: min(var(--wpdc-dialog-width), calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 0;
   border: 0;
+  border-radius: var(--wpdc-radius, 8px);
+  background: #fff;
+  overflow: hidden;
+}
+.wpdc__dialog::backdrop {
+  background: rgb(0 0 0 / .55);
+}
+/* Scrolls inside the dialog, never the page behind it. A page that scrolls
+   under an open checkout loses the customer's place in it. */
+.wpdc__dialog .wpdc__frame {
+  overflow-y: auto;
+  max-height: calc(100vh - 2rem);
+}
+.wpdc__dialog .wpdc__frame iframe {
+  display: block;
+  width: 100%;
+  min-height: 32rem;
+  border: 0;
+}
+/* Over the frame, not above it: Dodo's own page starts at the top edge, and a
+   row reserved for one button would be a strip of nothing on every screen. */
+.wpdc__close {
+  position: absolute;
+  top: .5rem;
+  inset-inline-end: .5rem;
+  z-index: 1;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / .9);
+  color: #111;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.wpdc__close:hover {
+  background: #fff;
+}
+.wpdc__close:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 .wpdc__message:empty {
   display: none;

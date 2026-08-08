@@ -741,12 +741,42 @@ check(
 		&& ! str_contains( $settings, 'esc_attr( wpdc_api_key() )' )
 );
 check(
-	// The JS hides the button once the frame is open, and `display: inline-block`
-	// on the same element outranks the browser's rule for [hidden] -- so it did
-	// not hide, and sat under an open checkout inviting a second session. Found
-	// in a screenshot. A rule that is only correct in one file is not a rule.
-	'BELL: hiding the button actually hides it',
-	str_contains( $css, '.wpdc__button[hidden]' ) && str_contains( $js, 'button.hidden = true' )
+	// This replaced a rule about hiding the button. The button used to be hidden
+	// while the checkout was open, so a second click could not start a second
+	// session -- and a CSS `display` outranking [hidden] quietly defeated it.
+	// A modal makes the same guarantee structurally: nothing behind it is
+	// clickable, in every browser, with no rule to defeat.
+	'BELL: the checkout is modal, so a second click cannot reach the button',
+	str_contains( $js, 'dialog.showModal()' ) && ! str_contains( $js, 'button.hidden = true' )
+);
+check(
+	// A native <dialog>, so the focus trap, Escape, the backdrop and the top
+	// layer come from the browser. Hand-rolling those is where modals go wrong,
+	// and this is the one page a customer must not get stuck on.
+	'BELL: the modal is a real dialog element, not a div pretending',
+	str_contains( $shortcode, '<dialog class="wpdc__dialog"' )
+		&& str_contains( $js, "root.querySelector('.wpdc__dialog')" )
+);
+check(
+	// Order, not presence: a dialog that is not open has no layout, and an
+	// iframe measured inside a zero-height box comes back zero. Opened after the
+	// SDK renders, the frame is there and invisible.
+	'BELL: the dialog is shown before the SDK is told to render into it',
+	strpos( $js, 'dialog.showModal()' ) < strpos( $js, 'dodo.Checkout.open(' )
+);
+check(
+	// Closing the window without telling the SDK leaves Dodo holding a live
+	// frame in a hidden element, and the next open finds it already there.
+	'BELL: closing the modal also closes the checkout',
+	str_contains( $js, 'dodo.Checkout.close()' )
+		&& str_contains( $js, "if (dialog && dialog.open) dialog.close();" )
+);
+check(
+	// Escape and the backdrop are the dialog's own, and both fire `close` --
+	// listened for, so the bookkeeping happens however it was dismissed, not
+	// only when the X was used.
+	'BELL: a dismissal by Escape or backdrop is handled, not just the X button',
+	str_contains( $js, "document.addEventListener('close'" )
 );
 check(
 	'BELL: the mode falls to test when saved with anything unrecognised',

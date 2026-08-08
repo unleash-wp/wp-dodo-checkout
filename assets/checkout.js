@@ -2,7 +2,7 @@
  * The button.
  *
  * It sends a product id and a checkbox state, receives a URL, and hands that URL
- * to Dodo's SDK to render a checkout frame inside the page. It never sees a
+ * to Dodo's SDK to render a checkout frame inside a modal on the page. It never sees a
  * price and never a credential, and the id it sends is the same one Dodo puts in
  * its own public payment links -- so there is nothing here for a browser
  * extension or a compromised third-party script to take. Tampering with the id
@@ -151,36 +151,39 @@
 
     ensureReady(dodo, url);
 
-    // One checkout at a time. Two frames on one page would be two carts open at
-    // once, and the customer would have no way to tell which one the wallet
-    // button belongs to.
-    if (openRoot && openRoot !== root) {
-      try { dodo.Checkout.close(); } catch (e) { /* already closed */ }
-      reveal(openRoot);
-    }
-
+    var dialog = root.querySelector('.wpdc__dialog');
     var frame = root.querySelector('.wpdc__frame');
-    if (!frame || !frame.id) return false;
+    if (!dialog || !frame || !frame.id || !dialog.showModal) return false;
 
+    // One checkout at a time. The modal enforces it by itself -- nothing behind
+    // it is clickable -- but a second block's dialog left open underneath would
+    // still be a second cart.
+    if (openRoot && openRoot !== root) closeFrame(dodo);
+
+    // Shown BEFORE the SDK is told to render: a dialog that is not open has no
+    // layout, and an iframe measured inside a zero-height box comes back zero.
+    dialog.showModal();
     dodo.Checkout.open({ checkoutUrl: url, elementId: frame.id });
     openRoot = root;
-
-    // The button has done its job. Leaving it under an open checkout invites a
-    // second click and a second session.
-    var button = root.querySelector('.wpdc__button');
-    if (button) button.hidden = true;
-    var bump = root.querySelector('.wpdc__bump');
-    if (bump) bump.hidden = true;
     say(root, '');
     return true;
   }
 
-  /** Put a block back the way it was, so a customer can start over. */
-  function reveal(root) {
+  /**
+   * Close the modal and tell the SDK, in that order.
+   *
+   * Closing the dialog without closing the checkout leaves Dodo holding a live
+   * frame in a hidden element, and the next open would find it already there.
+   */
+  function closeFrame(dodo) {
+    var root = openRoot;
+    if (!root) return;
+    var dialog = root.querySelector('.wpdc__dialog');
+    if (dialog && dialog.open) dialog.close();
+    try { if (dodo) dodo.Checkout.close(); } catch (e) { /* already closed */ }
     var button = root.querySelector('.wpdc__button');
-    if (button) { button.hidden = false; button.disabled = false; }
-    var bump = root.querySelector('.wpdc__bump');
-    if (bump) bump.hidden = false;
+    if (button) button.disabled = false;
+    openRoot = null;
   }
 
   function open(root, url) {
@@ -192,6 +195,19 @@
     // sells the same thing at the same price.
     window.location.assign(url);
   }
+
+  // Escape and the backdrop are the dialog's own doing; this is the X, and the
+  // bookkeeping that has to happen however it closes.
+  document.addEventListener('click', function (event) {
+    if (event.target.closest('.wpdc__close')) {
+      closeFrame(sdk());
+    }
+  });
+  document.addEventListener('close', function (event) {
+    if (event.target.classList && event.target.classList.contains('wpdc__dialog')) {
+      closeFrame(sdk());
+    }
+  }, true);
 
   document.addEventListener('click', function (event) {
     var button = event.target.closest('.wpdc__button');
@@ -219,9 +235,8 @@
         say(root, err && err.uwpFromServer ? err.message : cfg.failed);
       })
       .finally(function () {
-        // Re-enabled even on success. On success it is also hidden, so this is
-        // for the failure path and for a customer who starts over: a button
-        // left disabled is a customer who cannot buy.
+        // Re-enabled even on success: the modal can be dismissed, and a button
+        // left disabled behind it is a customer who cannot buy.
         button.disabled = false;
       });
   });

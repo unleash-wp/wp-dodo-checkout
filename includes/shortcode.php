@@ -110,12 +110,19 @@ function wpdc_render( $atts ): string {
 		</button>
 
 		<?php
-		// Where Dodo's frame is injected. An earlier version of this plugin
-		// rendered an empty wpdc__frame that nothing filled and nothing styled,
-		// and it was deleted as dead markup -- correctly, at the time. It comes
-		// back because it now has the job it was named for.
+		// A native <dialog>, not a div pretending to be one. showModal() brings
+		// the focus trap, Escape, the backdrop and the top layer with it -- four
+		// things that are individually easy and collectively where hand-rolled
+		// modals go wrong, on the one page where a customer must not get stuck.
+		//
+		// Inside it sits the element Dodo's SDK injects its iframe into. This is
+		// still `displayType: inline`: "inline" describes who owns the window,
+		// not where it appears. Ours is the window; Dodo's is the frame.
 		?>
-		<div class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"></div>
+		<dialog class="wpdc__dialog" aria-label="<?php echo esc_attr__( 'Checkout', 'wp-dodo-checkout' ); ?>">
+			<button type="button" class="wpdc__close" aria-label="<?php echo esc_attr__( 'Close checkout', 'wp-dodo-checkout' ); ?>">&times;</button>
+			<div class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"></div>
+		</dialog>
 
 		<p class="wpdc__message" role="status" aria-live="polite"></p>
 	</div>
