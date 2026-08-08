@@ -867,8 +867,13 @@ check(
 	// stacked into a band of empty white above the first field. The close button
 	// is a solid disc with a border precisely so it stays legible over whatever
 	// their frame puts beneath it.
-	'BELL: the frame adds no space above Dodo own first screen',
-	1 === preg_match( '/\.wpdc__frame \{[^}]*padding: 0 0 [0-9.]+rem/', $css )
+	// Small, and the size is the argument. At 2.5rem it doubled with the spacing
+	// Dodo's contact step brings and left a band of white; at zero the payment
+	// step -- which brings none -- went flush against the edge, under the close
+	// button. The sides get air because their inset is a few pixels on a narrow
+	// screen and content against the glass reads as a rendering fault.
+	'BELL: the frame breathes without stacking a gap on Dodo own spacing',
+	1 === preg_match( '/\.wpdc__frame \{[^}]*padding: \.75rem \.5rem 1rem/', $css )
 		&& ! str_contains( $css, 'padding: 2.5rem 0 1rem' )
 );
 check(
@@ -1214,6 +1219,15 @@ check(
 	// receipt would go nowhere.
 	'BELL: an address that is not one is dropped, not forwarded',
 	! isset( $bad['customer'] )
+);
+
+check(
+	// The close button is absolutely positioned in that corner, and on a phone
+	// the panel is a single strip -- so without room reserved for it the button
+	// sat ON the total, "24,99" cut in half behind a white disc, on the one line
+	// of that strip that has to be readable.
+	'BELL: on a phone the strip reserves room for the close button',
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1800}padding: \.875rem 3\.75rem/', $css )
 );
 
 check(
