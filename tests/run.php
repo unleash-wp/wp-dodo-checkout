@@ -57,6 +57,14 @@ function set_transient( string $k, $v, $t = 0 ): bool {
 	$GLOBALS['wpdc_test_transients'][ $k ] = $v;
 	return true;
 }
+function switch_to_locale( string $locale ): bool {
+	$GLOBALS['wpdc_test_locale'] = $locale;
+	return true;
+}
+function restore_previous_locale(): bool {
+	$GLOBALS['wpdc_test_locale'] = 'en_US';
+	return true;
+}
 function get_locale(): string {
 	return $GLOBALS['wpdc_test_locale'] ?? 'de_DE';
 }
@@ -873,7 +881,7 @@ check(
 	// button. The sides get air because their inset is a few pixels on a narrow
 	// screen and content against the glass reads as a rendering fault.
 	'BELL: the frame breathes without stacking a gap on Dodo own spacing',
-	1 === preg_match( '/\.wpdc__frame \{[^}]*padding: \.75rem \.5rem 1rem/', $css )
+	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: \.75rem 1\.25rem 1rem/', $css )
 		&& ! str_contains( $css, 'padding: 2.5rem 0 1rem' )
 );
 check(
@@ -1087,9 +1095,29 @@ check(
 	// scrolled away with the content, which is what `position: fixed` was then
 	// used to paper over, pinning the button to the VIEWPORT instead: floating
 	// mid-screen, attached to nothing.
-	'BELL: on a phone the header stays and only the frame scrolls',
-	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1200}grid-template-rows: auto minmax\(0, 1fr\)/', $css )
+	// A pinned header was tried and is wrong on a phone: it costs 3.4rem of the
+	// screen permanently, on the one surface where the pay button has to come
+	// into view. The window scrolls as one document, the way a page does -- and
+	// the close button rides with the header it belongs to.
+	'BELL: on a phone the window scrolls as one, header included',
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1400}overflow-y: auto/', $css )
 		&& ! preg_match( '/\.wpdc__close \{[^}]*position: fixed/', $css )
+);
+check(
+	// Dodo's own inset is a few pixels on a narrow screen, so their fields ran to
+	// the glass and the window read as unfinished.
+	'BELL: their frame gets room down both sides, on both sizes',
+	1 === preg_match( '/\.wpdc__dialog \.wpdc__frame \{[^}]*padding: \.75rem 1\.25rem 1rem/', $css )
+		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,5000}padding: \.5rem \.875rem 1rem/', $css )
+);
+check(
+	// Subtotal, VAT and Total are rendered by us, in WordPress's locale, while
+	// the frame beside them follows the shortcode or the browser -- so one window
+	// spoke two languages. They follow the same decision now, and the locale is
+	// restored straight after so the rest of the page is untouched.
+	'BELL: our labels speak the language the checkout speaks',
+	str_contains( $shortcode, 'switch_to_locale( wpdc_locale_for( $lang ) )' )
+		&& str_contains( $shortcode, 'restore_previous_locale();' )
 );
 
 check(

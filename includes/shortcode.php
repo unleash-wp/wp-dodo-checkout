@@ -96,6 +96,21 @@ function wpdc_render( $atts ): string {
 
 	wpdc_enqueue();
 
+	/**
+	 * Our labels speak the language the checkout speaks.
+	 *
+	 * Subtotal, VAT and Total are rendered here, in WordPress's locale -- which
+	 * on this shop says en_US while the customer reads German. The checkout in
+	 * the frame beside them follows the shortcode or the browser, so the two
+	 * halves of one window disagreed.
+	 *
+	 * `switch_to_locale` for the render and `restore_previous_locale` straight
+	 * after: the shortcode must not leave the rest of the page speaking a
+	 * different language than it started in.
+	 */
+	$switched = '' !== $lang && function_exists( 'switch_to_locale' )
+		&& switch_to_locale( wpdc_locale_for( $lang ) );
+
 	ob_start();
 	?>
 	<div class="wp-dodo-checkout" id="<?php echo esc_attr( $id ); ?>"
@@ -178,7 +193,25 @@ function wpdc_render( $atts ): string {
 		<p class="wpdc__message" role="status" aria-live="polite"></p>
 	</div>
 	<?php
-	return (string) ob_get_clean();
+	$html = (string) ob_get_clean();
+
+	if ( $switched ) {
+		restore_previous_locale();
+	}
+
+	return $html;
+}
+
+/**
+ * A two-letter language to the locale WordPress names its catalogues with.
+ *
+ * `de` is `de_DE` and `en` is `en_US`; anything else is passed through and
+ * WordPress falls back on its own if it has nothing. Deliberately a short list
+ * rather than a guess like `xx_XX`, which names catalogues that do not exist.
+ */
+function wpdc_locale_for( string $lang ): string {
+	$known = array( 'de' => 'de_DE', 'en' => 'en_US', 'fr' => 'fr_FR', 'es' => 'es_ES', 'it' => 'it_IT', 'nl' => 'nl_NL' );
+	return $known[ $lang ] ?? $lang;
 }
 
 /**

@@ -257,10 +257,13 @@
    hand reads it as decoration. Small type, muted, one thin rule above it, a
    tick that is a tick and not a shield -- it reads as a footnote from the shop,
    which is what it is. */
+/* No rule above it, and no gap held open for one. The panel is a flex column
+   with its own gap, so a border plus a margin plus that gap left the line
+   stranded a long way under the total with a stripe in between -- three
+   separators for one sentence. */
 .wpdc__trust {
-  margin: 1.25rem 0 0;
-  padding: 1rem 0 0;
-  border-top: 1px solid rgb(255 255 255 / .14);
+  margin: -.5rem 0 0;
+  padding: 0;
   list-style: none;
   font-size: 11px;
   line-height: 1.5;
@@ -303,7 +306,7 @@
      doubling on the contact step reads as spacing rather than as a gap. The
      sides get air too: their frame's own inset is a few pixels on a narrow
      screen, and content against the glass looks like a rendering fault. */
-  padding: .75rem .5rem 1rem;
+  padding: .75rem 1.25rem 1rem;
 }
 .wpdc__dialog .wpdc__frame iframe {
   display: block;
@@ -364,29 +367,28 @@
      below say "a layer over the shop". Edge to edge reads as a new page, and
      somebody who thinks they navigated away behaves differently about closing
      it. */
-  /* The strip stays, the frame scrolls.
+  /* One scroller, and the header scrolls with it.
 
-     The dialog used to be the single scroller, so the header -- and the close
-     button positioned against it -- scrolled away with the content. `position:
-     fixed` was then used to pin the button, which pinned it to the VIEWPORT
-     instead: floating mid-screen, half outside the rounded edge, attached to
-     nothing.
+     A pinned header was tried and is wrong here, on the operator's word and on
+     the arithmetic: it costs 3.4rem of a phone screen permanently, on the one
+     surface where the pay button needs to come into view. The window scrolls as
+     one document, the way a page does.
 
-     A header row that does not move fixes both. The strip is one line and never
-     needed to scroll; the frame is the only thing that does. */
+     Which puts the close button back in play -- an absolutely positioned button
+     scrolls away with the content. It is the FIRST thing in the dialog and the
+     strip is at the top, so it is on screen exactly when the header is, and the
+     header is where it belongs. */
   .wpdc__dialog {
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
-    overflow: hidden;
+    grid-template-rows: auto auto;
+    overflow-y: auto;
     width: min(30rem, calc(100vw - 2.5rem));
     max-height: calc(100dvh - 5rem);
     border-radius: 14px;
   }
-  .wpdc__panel {
-    overflow: visible;
-  }
+  .wpdc__panel,
   .wpdc__dialog .wpdc__frame {
-    overflow-y: auto;
+    overflow: visible;
     max-height: none;
   }
 
@@ -441,8 +443,10 @@
     display: none;
   }
 
+  /* Room down both sides. Dodo's own inset is a few pixels on a narrow screen,
+     so their fields ran to the glass and the window read as unfinished. */
   .wpdc__dialog .wpdc__frame {
-    padding: .5rem .375rem .75rem;
+    padding: .5rem .875rem 1rem;
   }
 
   .wpdc__close {
