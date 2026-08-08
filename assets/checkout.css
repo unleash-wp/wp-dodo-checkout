@@ -479,16 +479,44 @@
   /* A STRIP, not a block. The full panel filled half a phone before a single
      payment method was visible -- a scroll between deciding to buy and being
      able to. Cover, name, total, one line; Dodo's frame carries the rest. */
+  /* Two rows, placed explicitly rather than left to source order.
+
+     The strip was three columns filled in document order, and the discount form
+     arrived as a fourth box -- so it took the third column, the name was
+     squeezed to "UnleashWP Learn |…" and the price dropped to a second row.
+     Every child says where it goes now, and adding another one cannot rearrange
+     the two that matter. */
   .wpdc__panel {
     display: grid;
     grid-template-columns: auto 1fr auto;
+    grid-template-rows: auto auto;
     align-items: center;
-    gap: .75rem;
+    column-gap: .75rem;
+    row-gap: .875rem;
     /* The end padding is the close button's width plus its offset. The button
        is absolutely positioned in that corner, so without room reserved for it
-       it sat ON the total -- "24,99" cut in half behind a white disc, on the
-       one line of this strip that has to be readable. */
+       it sat ON the total. */
     padding: 1rem 4rem 1rem 1.25rem;
+  }
+  .wpdc__item-img {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .wpdc__item > div {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .wpdc__totals {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  /* Full width on its own row: a code field beside a price is two things
+     competing for the same glance. */
+  .wpdc__discount {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin: 0;
   }
   .wpdc__item {
     display: contents;
@@ -514,6 +542,7 @@
     margin: 0;
     padding: 0;
     border: 0;
+    white-space: nowrap;
   }
   .wpdc__row.wpdc__row--total {
     display: block;

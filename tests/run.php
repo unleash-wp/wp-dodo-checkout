@@ -1299,7 +1299,7 @@ check(
 	// sat ON the total, "24,99" cut in half behind a white disc, on the one line
 	// of that strip that has to be readable.
 	'BELL: on a phone the strip reserves room for the close button',
-	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,2400}padding: 1rem 4rem/', $css )
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,3200}padding: 1rem 4rem/', $css )
 );
 check(
 	// Dodo's breakdown carries an amount and no rate, and a customer reading
@@ -1343,8 +1343,8 @@ check(
 	// -- not the strip -- so on a phone the button floated halfway down the whole
 	// window, over the form and half outside the rounded edge.
 	'BELL: on a phone the close button sits in the strip, not mid-window',
-	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,4000}\.wpdc__close \{[^}]*top: \.55rem/', $css )
-		&& ! preg_match( '/@media \(max-width: 900px\)[\s\S]{0,4000}translateY\(-50%\)/', $css )
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,6000}\.wpdc__close \{[^}]*top: \.55rem/', $css )
+		&& ! preg_match( '/@media \(max-width: 900px\)[\s\S]{0,6000}translateY\(-50%\)/', $css )
 );
 
 // ─── The labels are rendered before any JavaScript runs ─────────────────────
@@ -1487,6 +1487,18 @@ check(
 	'BELL: applied and refused differ by more than colour',
 	1 === preg_match( '/\.wpdc__discount-note::before \{[^}]*border-width: 0 1\.5px 1\.5px 0/', $css )
 		&& 1 === preg_match( '/\.wpdc__discount-note\.is-error::before \{[^}]*linear-gradient/', $css )
+);
+
+check(
+	// The strip was three columns filled in DOCUMENT ORDER, so the discount form
+	// arrived as a fourth box, took the third column, squeezed the name to
+	// "UnleashWP Learn |…" and pushed the price to a second row. Every child
+	// says where it goes now, and the next one added cannot rearrange the two
+	// that matter.
+	'BELL: on a phone every part of the strip is placed, not left to source order',
+	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,3600}\.wpdc__item-img \{[^}]*grid-column: 1/', $css )
+		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,3600}\.wpdc__totals \{[^}]*grid-column: 3/', $css )
+		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,3600}\.wpdc__discount \{[^}]*grid-column: 1 \/ -1/', $css )
 );
 
 check(
