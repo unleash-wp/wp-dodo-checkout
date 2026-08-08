@@ -138,3 +138,5 @@ msgstr "Bitte zuerst einen Code eingeben."
 msgid "A code has letters, digits, dashes and underscores only."
 msgstr "Ein Code besteht nur aus Buchstaben, Ziffern, Binde- und Unterstrichen."
 
+msgid "Remove code"
+msgstr "Code entfernen"

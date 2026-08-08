@@ -284,7 +284,7 @@
   gap: .5rem;
   margin: .125rem 0 0;
   font-size: 11px;
-  color: #7ee2a8;
+  color: #4ade80;
 }
 .wpdc__discount-note:empty {
   display: none;
@@ -299,7 +299,38 @@
   transform: rotate(45deg) translate(-1px, -1px);
 }
 .wpdc__discount-note.is-error {
-  color: #ff9b9b;
+  color: #ff8080;
+}
+
+/* Under the note, quiet: removing a code is a correction, not an action the
+   panel is inviting. Underlined rather than boxed so it does not read as a
+   second Apply. */
+.wpdc__discount-clear {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgb(255 255 255 / .6);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.wpdc__discount-clear:hover:not([disabled]) {
+  color: var(--wpdc-panel-fg);
+}
+.wpdc__discount-clear[disabled] {
+  opacity: .5;
+  cursor: default;
+}
+/* `justify-self` above gives this element a layout, which means the platform's
+   own way of hiding it needs writing back -- the fourth time this file has had
+   to learn that. */
+.wpdc__discount-clear[hidden] {
+  display: none;
 }
 /* A cross, from the same two borders: rotated the other way and squared off, so
    the two states differ in shape and not only in colour. */
@@ -344,7 +375,7 @@
 }
 /* Money coming off reads as money coming off. */
 .wpdc__row--discount dd {
-  color: #7ee2a8;
+  color: #4ade80;
 }
 .wpdc__row dd {
   /* Tabular figures: the total changes as a customer types their postcode, and

@@ -1454,13 +1454,34 @@ check(
 	'BELL: applying a code re-mints the session and replaces the frame',
 	str_contains( $js, "event.target.closest('.wpdc__discount')" )
 		&& str_contains( $js, 'dodo.Checkout.close()' )
-		&& str_contains( $js, "root.dataset.discount = code;" )
+		&& str_contains( $js, 'function remintWith' )
+);
+check(
+	// Applying a code and removing one are the SAME operation with a different
+	// value: the code is part of the session, and Dodo's checkout can neither be
+	// told about one after the fact nor told to forget one. Two copies of that
+	// would be two places to fix the next thing found in it.
+	'BELL: applying and removing share one path',
+	3 === substr_count( $js, 'remintWith' )
+		&& str_contains( $js, "event.target.closest('.wpdc__discount-clear')" )
+		&& str_contains( $js, "delete root.dataset.discount;" )
+);
+check(
+	// `justify-self` gives the element a layout, and the platform's way of
+	// hiding it stops working -- the fourth time this stylesheet has had to
+	// write that case back.
+	'BELL: the remove control is hidden until there is something to remove',
+	str_contains( $shortcode, 'class="wpdc__discount-clear" hidden' )
+		&& 1 === preg_match( '/\.wpdc__discount-clear\[hidden\] \{[^}]*display: none/', $css )
 );
 check(
 	// Somebody who mistypes a code must not lose the checkout they already had
 	// open, and the next attempt must not carry the bad code.
+	// Both directions: a failed apply must not leave the bad code behind, and a
+	// failed removal must not leave the code half-gone.
 	'BELL: a failed code leaves the open checkout alone and is not remembered',
-	str_contains( $js, 'root.dataset.discount = previous' )
+	str_contains( $js, 'root.dataset.discount = previous;' )
+		&& 2 === substr_count( $js, 'delete root.dataset.discount;' )
 );
 
 check(

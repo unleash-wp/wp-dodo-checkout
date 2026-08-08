@@ -209,6 +209,13 @@ function wpdc_render( $atts ): string {
 						<?php echo esc_html__( 'Apply', 'wp-dodo-checkout' ); ?>
 					</button>
 					<p class="wpdc__discount-note" role="status" aria-live="polite"></p>
+					<?php
+					// type="button", because a button inside a form submits it by
+					// default -- and this one means the opposite of submitting.
+					?>
+					<button type="button" class="wpdc__discount-clear" hidden>
+						<?php echo esc_html__( 'Remove code', 'wp-dodo-checkout' ); ?>
+					</button>
 				</form>
 
 				<dl class="wpdc__totals" hidden>

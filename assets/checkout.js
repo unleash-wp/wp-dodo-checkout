@@ -521,6 +521,84 @@
    * is forgotten so the next attempt is not poisoned by it. Somebody who
    * mistypes must not lose the checkout they had.
    */
+  /**
+   * Mint the session again and swap the frame under it.
+   *
+   * Applying a code and removing one are the same operation with a different
+   * value, because the code is part of the SESSION -- Dodo's checkout cannot be
+   * told about one after the fact, or told to forget one. So both go through
+   * here, and the only difference is what `root.dataset.discount` holds when it
+   * runs.
+   */
+  function remintWith(root, code, note, controls) {
+    var previous = root.dataset.discount || '';
+    if (code) {
+      root.dataset.discount = code;
+    } else {
+      delete root.dataset.discount;
+    }
+    controls.forEach(function (el) { if (el) el.disabled = true; });
+    note.classList.remove('is-error');
+    note.textContent = cfg.busy;
+
+    return requestUrl(root)
+      .then(function (url) {
+        var dodo = sdk();
+        var frame = root.querySelector('.wpdc__frame');
+        if (dodo) {
+          try { dodo.Checkout.close(); } catch (e) { /* nothing open */ }
+        }
+        if (frame) {
+          frame.classList.remove('is-ready');
+          frame.classList.remove('is-payment');
+          startLoading(root, frame, url);
+        }
+        if (dodo && frame) {
+          dodo.Checkout.open({ checkoutUrl: url, elementId: frame.id });
+        } else {
+          window.location.assign(url);
+        }
+      })
+      .catch(function (err) {
+        // The checkout that was already open stays open, and the value goes
+        // back: somebody who mistypes must not lose the checkout they had, and
+        // a failed removal must not leave the code half-gone.
+        if (previous) {
+          root.dataset.discount = previous;
+        } else {
+          delete root.dataset.discount;
+        }
+        throw err;
+      })
+      .finally(function () {
+        controls.forEach(function (el) { if (el) el.disabled = false; });
+      });
+  }
+
+  // Removing the code. Same operation, empty value.
+  document.addEventListener('click', function (event) {
+    var clear = event.target.closest('.wpdc__discount-clear');
+    if (!clear) return;
+
+    var root = clear.closest('.wp-dodo-checkout');
+    var form = clear.closest('.wpdc__discount');
+    var input = form.querySelector('.wpdc__discount-input');
+    var apply = form.querySelector('.wpdc__discount-apply');
+    var note = form.querySelector('.wpdc__discount-note');
+
+    remintWith(root, '', note, [clear, apply, input])
+      .then(function () {
+        input.readOnly = false;
+        input.value = '';
+        note.textContent = '';
+        clear.hidden = true;
+      })
+      .catch(function (err) {
+        note.textContent = err && err.uwpFromServer ? err.message : cfg.failed;
+        note.classList.add('is-error');
+      });
+  });
+
   document.addEventListener('submit', function (event) {
     var form = event.target.closest('.wpdc__discount');
     if (!form) return;
@@ -552,41 +630,17 @@
       return;
     }
 
-    var previous = root.dataset.discount || '';
-    root.dataset.discount = code;
-    if (apply) apply.disabled = true;
-    input.disabled = true;
-    note.classList.remove('is-error');
-    note.textContent = cfg.busy;
+    var clear = form.querySelector('.wpdc__discount-clear');
 
-    requestUrl(root)
-      .then(function (url) {
-        var dodo = sdk();
-        var frame = root.querySelector('.wpdc__frame');
-        if (dodo) {
-          try { dodo.Checkout.close(); } catch (e) { /* nothing open */ }
-        }
-        if (frame) {
-          frame.classList.remove('is-ready');
-          frame.classList.remove('is-payment');
-          startLoading(root, frame, url);
-        }
-        if (dodo && frame) {
-          dodo.Checkout.open({ checkoutUrl: url, elementId: frame.id });
-        } else {
-          window.location.assign(url);
-        }
+    remintWith(root, code, note, [apply, input, clear])
+      .then(function () {
         note.textContent = cfg.discountApplied;
         input.readOnly = true;
+        if (clear) clear.hidden = false;
       })
       .catch(function (err) {
-        root.dataset.discount = previous;
         note.textContent = err && err.uwpFromServer ? err.message : cfg.failed;
         note.classList.add('is-error');
-      })
-      .finally(function () {
-        if (apply) apply.disabled = false;
-        input.disabled = false;
       });
   });
 
