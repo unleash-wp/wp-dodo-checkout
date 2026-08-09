@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.6.9' );
+define( 'WPDC_VERSION', '0.7.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1782,7 +1782,14 @@ function wpdc_armour_rule( string $css, string $class ): array {
 	return $best;
 }
 
-$panel_controls = array( '.wpdc__discount-input', '.wpdc__discount-apply' );
+/*
+ * `.wpdc__done-file` joined this list after a live order: it is an <a>, and a
+ * theme styles links harder than anything else on a page. Impreza painted the
+ * label a pale link colour on our yellow -- legible in a screenshot only if you
+ * already knew what it said, hopeless for anyone whose sight is not perfect.
+ * On the one control a customer has to find after paying.
+ */
+$panel_controls = array( '.wpdc__discount-input', '.wpdc__discount-apply', '.wpdc__done-file' );
 $armoured       = true;
 foreach ( $panel_controls as $selector ) {
 	list( $classes, $block ) = wpdc_armour_rule( $css, $selector );
@@ -2324,8 +2331,37 @@ check(
 	 * the REST response.
 	 */
 	'BELL: a hosted link is marked as needing the key, a signed file is not',
-	1 === preg_match( "/'url'\s*=> \\\$external,[\s\S]{0,900}'needs_key' => true/", $client )
+	1 === preg_match( "/'url'\s*=> \\\$hosted_url,[\s\S]{0,300}'needs_key' => true/", $client )
 		&& 1 === preg_match( "/'url'\s*=> \\\$url,[\s\S]{0,400}'needs_key' => false/", $client )
+);
+check(
+	/*
+	 * THE bug this replaces, and it fired on every single order.
+	 *
+	 * One product carries TWO entitlements -- a licence key and a set of files
+	 * -- and Dodo delivers each as its own grant row. The address lives on the
+	 * file row, the key on the other one. Asking for a direct link inside the
+	 * loop therefore asked with whatever half had arrived, which was an empty
+	 * key every time, so it fell back to the page and the operator kept seeing
+	 *
+	 *   href="https://downloads.unleash-wp.com/#k=6c70bf62-..."
+	 *
+	 * The link can only be built once every grant of the payment is walked.
+	 * Pinned as a POSITION, not a presence: the call being in the file proves
+	 * nothing about when it runs.
+	 */
+	'BELL: the direct link is built after the grants, never inside the loop',
+	( static function ( string $source ): bool {
+		$loop = strpos( $source, "foreach ( ( \$grants['items'] ?? array() ) as \$grant )" );
+		$call = strpos( $source, 'wpdc_direct_link( $hosted_url' );
+		if ( false === $loop || false === $call ) {
+			return false;
+		}
+		// The key is collected at the bottom of the loop; the call has to come
+		// after that line, not merely after the loop's opening brace.
+		$collects = strpos( $source, '$keys[] = $key;' );
+		return false !== $collects && $call > $collects;
+	} )( $client )
 );
 check(
 	// The other half, in the browser. The fragment and not a query: it is the one

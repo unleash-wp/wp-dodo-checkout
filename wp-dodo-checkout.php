@@ -3,7 +3,7 @@
  * Plugin Name: WP Dodo Checkout
  * Plugin URI: https://unleash-wp.com
  * Description: Puts a Dodo Payments checkout on a WordPress page via shortcode, inline or as an overlay, with an optional order bump. Products come from your Dodo account; nothing is configured twice.
- * Version: 0.6.9
+ * Version: 0.7.0
  * Requires at least: 6.5
  * Requires PHP: 8.0
  * Author: UnleashWP
@@ -40,7 +40,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPDC_VERSION', '0.6.9' );
+define( 'WPDC_VERSION', '0.7.0' );
 define( 'WPDC_DIR', plugin_dir_path( __FILE__ ) );
 
 require_once WPDC_DIR . 'includes/config.php';

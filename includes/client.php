@@ -596,70 +596,28 @@ function wpdc_payment_goods( string $payment ): array {
 		 * correctly by mail and show nothing at all in the popup.
 		 */
 		$external = $grant['digital_product_delivery']['external_url'] ?? '';
-		$hosted   = is_string( $external ) && str_starts_with( $external, 'https://' );
-		// Reset per grant. Left over from the previous round it would hand one
-		// buyer's signed link to the next entitlement in the same order.
-		$direct   = '';
-		if ( $hosted ) {
+		if ( is_string( $external ) && str_starts_with( $external, 'https://' ) ) {
 			/**
-			 * Ask the download host for a link that IS the file.
+			 * REMEMBERED, not resolved -- and that is the fix for a live bug.
 			 *
-			 * The operator, five times: the download must start on the click.
-			 * It could not, because a licence check wants the key in an
-			 * Authorization header and an <a href> cannot send one -- so the
-			 * button pointed at a page whose only job was to turn one into the
-			 * other.
+			 * Turning this into a direct link needs the licence key, and the key
+			 * is on a DIFFERENT GRANT. One product carries two entitlements: a
+			 * `license_key` one and a `digital_files` one, each arriving as its
+			 * own row. Reading `$grant['license_key']` from the file row gives
+			 * nothing, every time.
 			 *
-			 * The host can mint a short-lived signed URL instead. We hold the
-			 * key already, and this runs on OUR server, so the key never
-			 * travels anywhere it was not already.
+			 * So the first version asked for a link with an empty key, got
+			 * refused, and silently fell back to the page -- which is exactly
+			 * what the operator kept seeing:
+			 *   href="https://downloads.unleash-wp.com/#k=6c70bf62-..."
 			 *
-			 * Best effort by construction: a failure leaves the page link
-			 * standing, and the customer reaches their file in two clicks
-			 * rather than none. A download that needs one more click is a worse
-			 * afternoon; a download that errors is a refund.
+			 * The grants are walked to the end first. The link is built below,
+			 * once every key of this payment is known.
 			 */
-			$direct = wpdc_direct_link( $external, (string) ( $grant['license_key']['key'] ?? '' ) );
+			$hosted_url          = $external;
+			$hosted_instructions = (string) ( $grant['digital_product_delivery']['instructions'] ?? '' );
 		}
-		if ( $hosted && '' !== $direct ) {
-			$files[] = array(
-				'name'      => '',
-				'url'       => $direct,
-				// Already personal and already complete. Appending a key would
-				// put one in an address for no gain.
-				'needs_key' => false,
-			);
-		} elseif ( $hosted ) {
-			// No `continue` anywhere in this branch, and that is deliberate: the
-			// licence key is collected at the BOTTOM of this loop, and skipping
-			// to the next grant would take it with us. The panel would show a
-			// download and no key.
-			$files[] = array(
-				'name'      => (string) ( $grant['digital_product_delivery']['instructions'] ?? '' ),
-				'url'       => $external,
-				/**
-				 * THE difference between the two kinds of link, and getting it
-				 * wrong shipped a button that led nowhere.
-				 *
-				 * An uploaded file arrives as a SIGNED url: personal, complete,
-				 * clickable. A hosted `external_url` is the opposite -- Dodo
-				 * hands every buyer the same static address, so it carries no
-				 * proof of purchase at all. It is a PAGE, and that page needs
-				 * the licence key.
-				 *
-				 * Measured on a live order: the popup rendered
-				 * `href="https://downloads.unleash-wp.com/"` with no key, so a
-				 * customer who had just paid landed on an empty form and was
-				 * asked to type in something the popup was holding two lines
-				 * further down.
-				 *
-				 * The browser attaches the key; it is not put here, because
-				 * this array travels through a REST response and a key belongs
-				 * in as few places as possible.
-				 */
-				'needs_key' => true,
-			);
-		}
+		$hosted = isset( $hosted_url ) && $hosted_url === $external;
 
 		// A hosted link wins outright, and only over the uploaded files -- a
 		// `continue` here would skip this grant's licence key too. Offering the
@@ -694,6 +652,37 @@ function wpdc_payment_goods( string $payment ): array {
 		if ( is_string( $key ) && '' !== $key ) {
 			$keys[] = $key;
 		}
+	}
+
+	/**
+	 * Now, and only now, the hosted link can become the file.
+	 *
+	 * Both halves are known here and nowhere earlier: the address comes from the
+	 * `digital_files` grant, the licence key from the `license_key` one, and
+	 * Dodo delivers them as separate rows in whichever order it likes. Building
+	 * the link inside the loop meant asking with whatever half had arrived --
+	 * which was an empty key, every time, on every order.
+	 *
+	 * Best effort by construction. Any doubt leaves the page link standing, and
+	 * the customer reaches the file in two clicks rather than none: one more
+	 * click is a worse afternoon, a broken link is a refund.
+	 */
+	if ( isset( $hosted_url ) ) {
+		$direct = wpdc_direct_link( $hosted_url, (string) ( $keys[0] ?? '' ) );
+		$files[] = '' !== $direct
+			? array(
+				'name'      => '',
+				'url'       => $direct,
+				// Signed, personal and complete. Nothing to append.
+				'needs_key' => false,
+			)
+			: array(
+				'name'      => $hosted_instructions ?? '',
+				'url'       => $hosted_url,
+				// The page, and it needs the key to show anything. The browser
+				// attaches it after the '#', which no server ever sees.
+				'needs_key' => true,
+			);
 	}
 
 	return array(

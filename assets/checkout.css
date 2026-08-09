@@ -453,17 +453,47 @@
 }
 /* The one button-shaped thing in the panel: the file is what was bought. */
 .wpdc__done-file {
-  display: inline-block;
-  padding: 12px 22px;
   border-radius: var(--wpdc-radius, 5px);
-  background: #f5c518;
-  color: #1a1e3c;
-  font-weight: 700;
-  font-size: 14px;
-  text-decoration: none;
 }
-.wpdc__done-file:hover {
-  background: #eab810;
+/* Armoured, same arithmetic as the discount controls and for the same reason.
+
+   This is an <a>, and a theme styles links harder than anything else on a page.
+   Impreza painted the label a pale link colour on our yellow -- readable in a
+   screenshot only if you already knew what it said, and hopeless for anybody
+   who does not have perfect sight. On the one control a customer must find
+   after paying.
+
+   Dark navy on #f5c518 is about 8:1, well past the 4.5:1 that WCAG asks for
+   body text and past the 3:1 for large. That ratio is the point of pinning it:
+   whatever a theme prefers, this one control stays legible. */
+.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-file {
+  display: inline-block !important;
+  padding: 12px 22px !important;
+  background: #f5c518 !important;
+  color: #1a1e3c !important;
+  border: 0 !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  text-decoration: none !important;
+  text-transform: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+/* Hover and focus carry the chain too: an armoured declaration outranks a plain
+   one whatever the selector says, so without this the button would have lost
+   its own states to its own stylesheet. */
+.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-file:hover,
+.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-file:focus {
+  background: #eab810 !important;
+  color: #1a1e3c !important;
+  text-decoration: none !important;
+}
+/* Keyboard users get a ring the theme cannot take away. The browser default is
+   blue, and blue on yellow is a ring nobody sees. */
+.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-file:focus-visible {
+  outline: 3px solid #1a1e3c !important;
+  outline-offset: 2px !important;
 }
 /* Label, field and status are one answer, so they are one block.
 
