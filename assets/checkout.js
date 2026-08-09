@@ -651,7 +651,11 @@
       var a = document.createElement('a');
       a.className = 'wpdc__done-file';
       a.href = file.url;
-      a.textContent = (cfg.doneFiles || '') + ': ' + (file.name || '');
+      // The name is the filename for an uploaded file and the entitlement's
+      // instructions line for a hosted link, which may be empty. Empty means
+      // the label stands alone rather than trailing a colon into nothing.
+      var name = typeof file.name === 'string' ? file.name.trim() : '';
+      a.textContent = name ? (cfg.doneFiles || '') + ': ' + name : (cfg.doneFiles || '');
       // A download attribute is a polite request; Dodo's signed URL decides.
       a.setAttribute('download', '');
       a.rel = 'noopener';

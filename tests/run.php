@@ -21,7 +21,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.4.0' );
+define( 'WPDC_VERSION', '0.5.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1687,6 +1687,17 @@ check(
 		&& str_contains( $js, 'if (data && data.finished) return leave(data.redirect, data);' )
 		&& ! str_contains( $js, 'tries >= POLL_TRIES) return leave(' )
 		&& str_contains( $js, 'cfg.unconfirmed' )
+);
+check(
+	// The shop hosts the ZIP behind Cloudflare so a buyer's link resolves to the
+	// current build; Dodo's own note on uploaded files is explicit that
+	// replacing one does not reach downloads already issued. Their entitlement
+	// takes an `external_url` for exactly that, and it arrives in the same place
+	// as the files -- dropped, a purchase set up this way would deliver by mail
+	// and show nothing at all in the popup.
+	'BELL: a hosted link counts as delivery, not only an uploaded file',
+	str_contains( $client, "digital_product_delivery'\]\['external_url" )
+		|| str_contains( $client, "['digital_product_delivery']['external_url']" )
 );
 check(
 	// Filenames and keys come out of an API response and go onto the page.

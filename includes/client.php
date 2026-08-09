@@ -562,6 +562,28 @@ function wpdc_payment_goods( string $payment ): array {
 		if ( 0 !== strcasecmp( 'delivered', (string) ( $grant['status'] ?? '' ) ) ) {
 			continue;
 		}
+		/**
+		 * A link the shop hosts, not a copy Dodo keeps.
+		 *
+		 * Their `digital_files` entitlement takes an `external_url` beside the
+		 * uploaded files, and that is the shape this shop wants: the ZIP lives
+		 * behind Cloudflare, so a buyer's link resolves to the current build
+		 * rather than to whatever was uploaded on the day they bought. Dodo's
+		 * own note on uploaded files is explicit that replacing one does not
+		 * reach downloads already issued.
+		 *
+		 * Read here because it arrives in the same place as the files and would
+		 * otherwise be dropped -- a purchase set up this way would deliver
+		 * correctly by mail and show nothing at all in the popup.
+		 */
+		$external = $grant['digital_product_delivery']['external_url'] ?? '';
+		if ( is_string( $external ) && str_starts_with( $external, 'https://' ) ) {
+			$files[] = array(
+				'name' => (string) ( $grant['digital_product_delivery']['instructions'] ?? '' ),
+				'url'  => $external,
+			);
+		}
+
 		foreach ( ( $grant['digital_product_delivery']['files'] ?? array() ) as $file ) {
 			$url  = $file['download_url'] ?? '';
 			$name = $file['filename'] ?? '';
