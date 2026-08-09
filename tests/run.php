@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.11' );
+define( 'WPDC_VERSION', '0.7.12' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1344,6 +1344,14 @@ check(
 		// one anywhere else is a caller that will stop finding its dialog.
 		&& 1 === substr_count( $jsCode, "root.querySelector('.wpdc__dialog')" )
 		&& 1 === preg_match( "/function dialogFor\\([\\s\\S]{0,400}root\\.querySelector\\('\\.wpdc__dialog'\\)/", $jsCode )
+);
+
+check(
+	// The only signal the order mail has for German or English. Without it the
+	// mail falls back to the billing country, and an English page selling to a
+	// German address sent German -- found on a real order placed with lang="en".
+	'BELL: the session carries the language the buyer was reading',
+	1 === preg_match( "/metadata.\\]\\s*=\\s*array\\(\\s*'uwp_lang'/", $client )
 );
 
 check(

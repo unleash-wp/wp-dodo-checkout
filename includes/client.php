@@ -316,6 +316,21 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		),
 	);
 
+	/*
+	 * The language the buyer was READING, written into the order itself.
+	 *
+	 * Not decoration: it is the only signal the order mail has for choosing
+	 * German or English. Without it the mail falls back to the billing country,
+	 * so an English page selling to a German address sent a German mail --
+	 * reported after a real order placed with `lang="en"` on the shortcode.
+	 *
+	 * Metadata survives the round trip: Dodo returns it on the webhook, where
+	 * nothing else about the page the customer stood on is left.
+	 */
+	if ( '' !== (string) $lang ) {
+		$body['metadata'] = array( 'uwp_lang' => (string) $lang );
+	}
+
 	// Deliberately NOT sent: `customization.theme_config`. Dodo's dashboard has
 	// a Design page that does the same thing visually and applies it to the
 	// checkout, the customer portal AND the storefront at once, with test and
