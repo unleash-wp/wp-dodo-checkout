@@ -597,7 +597,43 @@ function wpdc_payment_goods( string $payment ): array {
 		 */
 		$external = $grant['digital_product_delivery']['external_url'] ?? '';
 		$hosted   = is_string( $external ) && str_starts_with( $external, 'https://' );
+		// Reset per grant. Left over from the previous round it would hand one
+		// buyer's signed link to the next entitlement in the same order.
+		$direct   = '';
 		if ( $hosted ) {
+			/**
+			 * Ask the download host for a link that IS the file.
+			 *
+			 * The operator, five times: the download must start on the click.
+			 * It could not, because a licence check wants the key in an
+			 * Authorization header and an <a href> cannot send one -- so the
+			 * button pointed at a page whose only job was to turn one into the
+			 * other.
+			 *
+			 * The host can mint a short-lived signed URL instead. We hold the
+			 * key already, and this runs on OUR server, so the key never
+			 * travels anywhere it was not already.
+			 *
+			 * Best effort by construction: a failure leaves the page link
+			 * standing, and the customer reaches their file in two clicks
+			 * rather than none. A download that needs one more click is a worse
+			 * afternoon; a download that errors is a refund.
+			 */
+			$direct = wpdc_direct_link( $external, (string) ( $grant['license_key']['key'] ?? '' ) );
+		}
+		if ( $hosted && '' !== $direct ) {
+			$files[] = array(
+				'name'      => '',
+				'url'       => $direct,
+				// Already personal and already complete. Appending a key would
+				// put one in an address for no gain.
+				'needs_key' => false,
+			);
+		} elseif ( $hosted ) {
+			// No `continue` anywhere in this branch, and that is deliberate: the
+			// licence key is collected at the BOTTOM of this loop, and skipping
+			// to the next grant would take it with us. The panel would show a
+			// download and no key.
 			$files[] = array(
 				'name'      => (string) ( $grant['digital_product_delivery']['instructions'] ?? '' ),
 				'url'       => $external,
@@ -688,6 +724,63 @@ function wpdc_payment_goods( string $payment ): array {
  * and it carries their key in the fragment; plain http would put that on the
  * wire in the clear.
  */
+/**
+ * A link that IS the file, asked of the shop's own download host.
+ *
+ * Two calls, both from this server with the buyer's key: what that key bought,
+ * and then a signed URL for it. The customer gets a plain href and their
+ * download starts on the click.
+ *
+ * ── Empty string on every doubt ─────────────────────────────────────────────
+ *
+ * Best effort, and the caller falls back to the page. There is no error path
+ * that improves a customer's afternoon: one more click is worse than none, and
+ * a broken link is a refund.
+ *
+ * ── Why only one file ───────────────────────────────────────────────────────
+ *
+ * With two, there is no way to know which the button means, and minting for
+ * the first would be a guess. The page shows both and lets somebody choose,
+ * which is what a page is good at.
+ */
+function wpdc_direct_link( string $page, string $key ): string {
+	if ( '' === $key ) {
+		return '';
+	}
+	$origin = wp_parse_url( $page, PHP_URL_SCHEME ) . '://' . wp_parse_url( $page, PHP_URL_HOST );
+	if ( ! str_starts_with( $origin, 'https://' ) ) {
+		return '';
+	}
+
+	$headers = array( 'Authorization' => 'Bearer ' . $key );
+
+	$listed = wp_remote_get( $origin . '/artifacts', array( 'timeout' => WPDC_TIMEOUT, 'headers' => $headers ) );
+	if ( is_wp_error( $listed ) || 200 !== wp_remote_retrieve_response_code( $listed ) ) {
+		return '';
+	}
+	$body = json_decode( wp_remote_retrieve_body( $listed ), true );
+	$artifacts = is_array( $body ) && isset( $body['artifacts'] ) && is_array( $body['artifacts'] )
+		? $body['artifacts']
+		: array();
+	if ( 1 !== count( $artifacts ) || ! is_string( $artifacts[0] ) ) {
+		return '';
+	}
+
+	$minted = wp_remote_get(
+		$origin . '/link?artifact=' . rawurlencode( $artifacts[0] ),
+		array( 'timeout' => WPDC_TIMEOUT, 'headers' => $headers )
+	);
+	if ( is_wp_error( $minted ) || 200 !== wp_remote_retrieve_response_code( $minted ) ) {
+		return '';
+	}
+	$link = json_decode( wp_remote_retrieve_body( $minted ), true );
+	$url  = is_array( $link ) && isset( $link['url'] ) ? $link['url'] : '';
+
+	// Their origin and their scheme, checked rather than trusted: this becomes
+	// an href on a page that has just taken money.
+	return is_string( $url ) && str_starts_with( $url, $origin . '/' ) ? $url : '';
+}
+
 function wpdc_download_url(): string {
 	if ( defined( 'WPDC_DOWNLOAD_URL' ) && is_string( WPDC_DOWNLOAD_URL ) ) {
 		$configured = trim( WPDC_DOWNLOAD_URL );
