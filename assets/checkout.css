@@ -16,7 +16,46 @@
 
    The last put the whole checkout on the page before anyone clicked. So: any
    rule here that sets a display owes the platform its hidden case back, and a
-   test walks this file to check that it was paid. */
+   test walks this file to check that it was paid.
+
+   ── Why the controls on the dark panel carry !important ─────────────────────
+
+   Measured on unleash-wp.com, which runs Impreza, on the day the plugin first
+   went live:
+
+     theme   [type="submit"]:not(.w-btn):not(.button)   specificity 0,3,0
+     ours    .wpdc__discount-apply                      specificity 0,1,0
+
+   The apply button came out `color: rgb(32,49,89)` -- the panel's own navy, on
+   the panel's own navy. Present, clickable, invisible. The operator clicked
+   where it should be, hit it blind, and got "enter a code first" from a field
+   he also could not read: the input arrived white, 54px tall, 18px text,
+   because `input[type="text"]` is 0,1,1 and a single class is 0,1,0.
+
+   Important ALONE does not fix it, and that was measured too rather than
+   assumed. The first attempt added `!important` and the button stayed navy,
+   because the theme's rule is important as well:
+
+     theme   [type="submit"]:not(.w-btn):not(.button)   color: … !important
+     ours    .wpdc__discount-apply                      color: … !important
+
+   Between two important declarations specificity decides again, so 0,3,0 beat
+   0,1,0 exactly as before. Hence the four-class chain below: important AND
+   specific, because either one on its own loses to this theme.
+
+   That is defence in depth, not a proof. `#main .a .b .c .d` would still win,
+   and no selector we can write forecloses that. Real isolation would mean a
+   shadow root or an iframe, which is a different plugin. What this buys is
+   every theme that styles form controls the ordinary way -- which is the one
+   that broke us.
+
+   Only the properties where losing means INVISIBLE rather than merely
+   different, and only on this panel.
+
+   Deliberately NOT armoured: the buy button, the close button, the layout.
+   Those were measured against the same theme and came through intact, and
+   important on a rule that is already winning buys nothing while making the
+   next override harder to reason about. */
 
 /* ── The button ──────────────────────────────────────────────────────────── */
 
@@ -227,18 +266,35 @@
 }
 .wpdc__discount-input {
   min-width: 0;
-  padding: .5rem .625rem;
-  border: 1px solid rgb(255 255 255 / .25);
   border-radius: var(--wpdc-radius, 5px);
-  background: rgb(255 255 255 / .08);
-  color: var(--wpdc-panel-fg);
   font: inherit;
-  font-size: 12px;
-  text-transform: uppercase;
 }
-.wpdc__discount-input::placeholder {
-  color: rgb(255 255 255 / .45);
-  text-transform: none;
+/* Armoured: see the note at the top of this file. A theme's
+   `input[type="text"]` is 0,1,1 and beat the plain class, and what arrived was
+   a white 54px box with 18px dark text sitting on a navy panel. */
+.wp-dodo-checkout .wpdc__dialog .wpdc__panel .wpdc__discount-input {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: .5rem .625rem !important;
+  border: 1px solid rgb(255 255 255 / .25) !important;
+  background: rgb(255 255 255 / .08) !important;
+  box-shadow: none !important;
+  color: var(--wpdc-panel-fg) !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  text-transform: uppercase !important;
+}
+/* Armoured for the same reason as the field itself: a theme that sets a
+   placeholder colour for its own light inputs makes ours unreadable, and an
+   empty-looking box is the state that got the operator to click a button he
+   could not see. */
+.wp-dodo-checkout .wpdc__dialog .wpdc__panel .wpdc__discount-input::placeholder {
+  color: rgb(255 255 255 / .45) !important;
+  opacity: 1 !important;
+  text-transform: none !important;
 }
 .wpdc__discount-input:focus-visible {
   outline: 2px solid var(--wpdc-panel-accent);
@@ -248,14 +304,29 @@
   opacity: .7;
 }
 .wpdc__discount-apply {
-  padding: .5rem .875rem;
-  border: 1px solid rgb(255 255 255 / .25);
   border-radius: var(--wpdc-radius, 5px);
-  background: transparent;
-  color: var(--wpdc-panel-fg);
   font: inherit;
-  font-size: 12px;
   cursor: pointer;
+}
+/* Armoured, and this is the one that was actually invisible: the theme's
+   `[type="submit"]:not(.w-btn):not(.button)` is 0,3,0, important, and painted
+   it navy on a navy panel. It was there the whole time, full size, unreadable.
+   Four classes because three would only tie with it. */
+.wp-dodo-checkout .wpdc__dialog .wpdc__panel .wpdc__discount-apply {
+  box-sizing: border-box !important;
+  width: auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: .5rem .875rem !important;
+  border: 1px solid rgb(255 255 255 / .25) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--wpdc-panel-fg) !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
 }
 /* The browser's own ring is blue, and blue on navy is a ring nobody sees. The
    accent is the same colour the rest of this panel uses to point at things. */
@@ -263,8 +334,12 @@
   outline: 2px solid var(--wpdc-panel-accent);
   outline-offset: 1px;
 }
-.wpdc__discount-apply:hover:not([disabled]) {
-  background: rgb(255 255 255 / .1);
+/* Carries the same chain as the armour above, and for the same arithmetic: the
+   armour is important, so a plain hover rule loses to it no matter how specific
+   the selector. Without this the button would have lost its hover to its own
+   stylesheet -- a self-inflicted version of the bug being fixed. */
+.wp-dodo-checkout .wpdc__dialog .wpdc__panel .wpdc__discount-apply:hover:not([disabled]) {
+  background: rgb(255 255 255 / .1) !important;
 }
 .wpdc__discount-apply[disabled] {
   opacity: .5;
@@ -364,8 +439,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
+  /* Room between the file button and the key block. They are two different
+     things a customer might act on, and 8px read as one crowded group. */
+  gap: 18px;
+  width: 100%;
+  margin-top: 14px;
 }
 .wpdc__done-goods:empty {
   display: none;
@@ -384,23 +462,91 @@
 .wpdc__done-file:hover {
   background: #eab810;
 }
+/* Label, field and status are one answer, so they are one block.
+
+   As siblings of the download button they took the goods container's spacing,
+   and it measured backwards: the label sat 26px from the field it names and
+   18px from the button above it. The outer gap separates the two ANSWERS -- the
+   file and the key -- and this inner one keeps each answer together. */
+.wpdc__done-key-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
 .wpdc__done-key-label {
-  margin: 8px 0 0;
-  font-size: 12px;
+  margin: 0;
+  font-size: 11px;
   color: #7c8db5;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
+
+/* ── The licence key ─────────────────────────────────────────────────────────
+
+   Light, not dark. This block used to be near-black with yellow text -- a
+   terminal dropped into a receipt, on a panel that is otherwise white. It also
+   read as decoration rather than as something to act on, and the one thing a
+   customer must do here is take the key with them.
+
+   So: a quiet field with a copy button attached, which is the shape every
+   password manager and dashboard uses for exactly this. The key stays
+   monospaced, because it is read character by character when it is read at
+   all, and `user-select: all` stays so one click takes the whole thing for
+   anybody who ignores the button. */
+
+.wpdc__done-key-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  max-width: 26rem;
+}
 .wpdc__done-key {
-  display: inline-block;
-  padding: 10px 14px;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 14px;
+  border: 1px solid #d7deec;
   border-radius: var(--wpdc-radius, 5px);
-  background: #1a1e3c;
-  color: #f5c518;
+  background: #f4f6fb;
+  color: #1a1e3c;
   font-size: 13px;
-  letter-spacing: 1.5px;
+  letter-spacing: 1px;
+  line-height: 1.4;
   word-break: break-all;
   user-select: all;
+}
+.wpdc__done-copy {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  border: 1px solid #d7deec;
+  border-radius: var(--wpdc-radius, 5px);
+  background: #fff;
+  color: #3d4a6e;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.wpdc__done-copy:hover {
+  background: #f4f6fb;
+  color: #1a1e3c;
+}
+.wpdc__done-copy:focus-visible {
+  outline: 2px solid var(--wpdc-panel-accent, #fcbe00);
+  outline-offset: 2px;
+}
+/* Holds its line whether or not it has anything to say, so confirming a copy
+   does not shove the panel down and move what somebody is looking at. */
+.wpdc__done-copied {
+  min-height: 1.2em;
+  margin: 0;
+  font-size: 12px;
+  color: #3d4a6e;
 }
 
 /* Flex above owes the platform its hidden case back -- fifth time. */

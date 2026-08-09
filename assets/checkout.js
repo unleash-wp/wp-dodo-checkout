@@ -563,14 +563,35 @@
    * never leaves it, and neither does the name and email that come back in the
    * same response.
    *
-   * A minute of asking, every two seconds. Long enough for an order that takes
-   * a moment, short enough that a customer is not left watching a sentence
-   * forever: when it runs out they are sent to the same place anyway, because
-   * by then the likeliest truth is that it worked and we stopped asking too
-   * early -- and their own confirmation is on the other side of that page.
+   * Two speeds, because one loop serves two different waits.
+   *
+   * Most orders confirm within seconds, so the first stretch stays fast and the
+   * tick appears almost at once. A card payment does not behave that way: 3-D
+   * Secure sends the buyer to their bank's app, and approving there routinely
+   * takes longer than a minute.
+   *
+   * THE DEFECT THIS REPLACES: a single phase that gave up at sixty seconds flat
+   * and told somebody who had just paid that we could not confirm their order.
+   * The worst sentence this screen can say, on the most ordinary payment there
+   * is.
+   *
+   * It survived because it had never once run. Every successful purchase on
+   * this shop so far went through a hundred-percent discount code, and a
+   * zero-total order has no payment step to be slow -- so the branch that
+   * breaks on a real card is the one branch no test purchase ever entered.
+   *
+   * Five minutes in total. Past that, the mail Dodo sends serves a customer
+   * better than a page still asking.
+   *
+   * POLL_TRIES is bounded by the server's per-session ceiling, and the two are
+   * checked against each other in tests/run.php. Raising this one alone would
+   * throttle a paying customer into the give-up path -- which is precisely the
+   * failure that ceiling exists to avoid causing.
    */
-  var POLL_EVERY_MS = 2000;
-  var POLL_TRIES = 30;
+  var POLL_FAST_MS = 2000;
+  var POLL_FAST_TRIES = 30;
+  var POLL_SLOW_MS = 5000;
+  var POLL_TRIES = 78;
 
   function awaitCompletion(root) {
     var session = root.dataset.session || '';
@@ -659,6 +680,18 @@
     if (root.dataset.awaiting === '1') return;
     root.dataset.awaiting = '1';
 
+    /**
+     * Fast while a fast answer is plausible, then patient.
+     *
+     * One function rather than the constant repeated at both call sites: the
+     * success path and the network-failure path each schedule the next ask, and
+     * two copies of a schedule is one place to change it in and forget the
+     * other.
+     */
+    function nextDelay() {
+      return tries < POLL_FAST_TRIES ? POLL_FAST_MS : POLL_SLOW_MS;
+    }
+
     function ask() {
       // Checked here too, not only on the reply: a timer that fires after the
       // dialog closed would otherwise still spend a request, and the ceiling
@@ -682,7 +715,7 @@
           if (stale()) return;
           if (data && data.finished) return leave(data.redirect, data);
           if (tries >= POLL_TRIES) return giveUp();
-          setTimeout(ask, POLL_EVERY_MS);
+          setTimeout(ask, nextDelay());
         })
         .catch(function () {
           // A failed poll is not a failed order, and there is nothing a
@@ -691,7 +724,7 @@
           // of a sentence that never changes.
           if (stale()) return;
           if (tries < POLL_TRIES) {
-            setTimeout(ask, POLL_EVERY_MS);
+            setTimeout(ask, nextDelay());
             return;
           }
           giveUp();
@@ -750,6 +783,44 @@
     return done;
   }
 
+  /**
+   * Two icons, drawn as nodes rather than markup.
+   *
+   * No innerHTML anywhere in this file, and not from superstition: these end up
+   * on a page that has just taken money, and a plugin that parses HTML strings
+   * into a purchase confirmation is one careless edit away from parsing
+   * something it was handed. Nodes cost six lines and close the question.
+   */
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var ICON_COPY = [
+    { tag: 'rect', x: '9', y: '9', width: '13', height: '13', rx: '2' },
+    { tag: 'path', d: 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1' },
+  ];
+  var ICON_TICK = [{ tag: 'polyline', points: '20 6 9 17 4 12' }];
+
+  function icon(shapes) {
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    // Decorative: the button carries the label, so a screen reader that
+    // announced the drawing as well would say the action twice.
+    svg.setAttribute('aria-hidden', 'true');
+    shapes.forEach(function (shape) {
+      var node = document.createElementNS(SVG_NS, shape.tag);
+      Object.keys(shape).forEach(function (name) {
+        if (name !== 'tag') node.setAttribute(name, shape[name]);
+      });
+      svg.appendChild(node);
+    });
+    return svg;
+  }
+
   function paintGoods(done, goods) {
     var box = done.querySelector('.wpdc__done-goods');
     if (!box || !goods) return;
@@ -758,16 +829,37 @@
     var files = Array.isArray(goods.files) ? goods.files : [];
     var keys = Array.isArray(goods.keys) ? goods.keys : [];
 
-    files.forEach(function (file) {
-      if (!file || typeof file.url !== 'string' || file.url.indexOf('https://') !== 0) return;
+    /**
+     * The format, when there is more than one file and only then.
+     *
+     * The filename is deliberately never shown: `unleashwp-learn-band-1-v2.pdf`
+     * is our bookkeeping, and a customer who has just paid wants a button, not
+     * an inventory. But a product can deliver several files -- this shop sells
+     * "the PDF plus eBook versions" -- and three buttons all reading "Download
+     * now" is worse than a filename, because none of them says which is which.
+     *
+     * So: one file gets the plain call to action, several get the format
+     * appended. An extension is not a filename; it is the one word that tells
+     * somebody which button is theirs.
+     */
+    function fileLabel(file, many) {
+      var cta = cfg.downloadCta || '';
+      if (!many) return cta;
+      var name = typeof file.name === 'string' ? file.name : '';
+      var dot = name.lastIndexOf('.');
+      var ext = dot > 0 ? name.slice(dot + 1).toUpperCase() : '';
+      return ext ? cta + ' · ' + ext : cta;
+    }
+
+    var deliverable = files.filter(function (file) {
+      return file && typeof file.url === 'string' && file.url.indexOf('https://') === 0;
+    });
+
+    deliverable.forEach(function (file) {
       var a = document.createElement('a');
       a.className = 'wpdc__done-file';
       a.href = file.url;
-      // The name is the filename for an uploaded file and the entitlement's
-      // instructions line for a hosted link, which may be empty. Empty means
-      // the label stands alone rather than trailing a colon into nothing.
-      var name = typeof file.name === 'string' ? file.name.trim() : '';
-      a.textContent = name ? (cfg.doneFiles || '') + ': ' + name : (cfg.doneFiles || '');
+      a.textContent = fileLabel(file, deliverable.length > 1);
       // A download attribute is a polite request; Dodo's signed URL decides.
       a.setAttribute('download', '');
       a.rel = 'noopener';
@@ -805,11 +897,95 @@
       var label = document.createElement('p');
       label.className = 'wpdc__done-key-label';
       label.textContent = cfg.doneKey || '';
+
       var code = document.createElement('code');
       code.className = 'wpdc__done-key';
       code.textContent = key;
-      box.appendChild(label);
-      box.appendChild(code);
+
+      var copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'wpdc__done-copy';
+      copy.title = cfg.copyKey || '';
+      copy.setAttribute('aria-label', cfg.copyKey || '');
+      copy.appendChild(icon(ICON_COPY));
+
+      var said = document.createElement('p');
+      said.className = 'wpdc__done-copied';
+      said.setAttribute('role', 'status');
+      said.setAttribute('aria-live', 'polite');
+
+      /**
+       * Say it, show a tick, and go back after a moment.
+       *
+       * The tick replaces the icon rather than sitting beside it: two icons on
+       * one button is two affordances where there is one action.
+       */
+      var revert;
+      function confirmCopied(message) {
+        said.textContent = message;
+        while (copy.firstChild) copy.removeChild(copy.firstChild);
+        copy.appendChild(icon(ICON_TICK));
+        clearTimeout(revert);
+        revert = setTimeout(function () {
+          said.textContent = '';
+          while (copy.firstChild) copy.removeChild(copy.firstChild);
+          copy.appendChild(icon(ICON_COPY));
+        }, 2500);
+      }
+
+      /**
+       * When the clipboard is not ours to write to.
+       *
+       * `navigator.clipboard` is absent outside a secure context and can be
+       * refused by permissions policy even inside one. Losing the key is losing
+       * the purchase, so the fallback is not an error message: the key is
+       * selected, and the customer is told to press copy themselves. That works
+       * everywhere and needs no permission.
+       */
+      function selectInstead() {
+        try {
+          var range = document.createRange();
+          range.selectNodeContents(code);
+          var selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } catch (e) { /* selection is a courtesy, not the message */ }
+        said.textContent = cfg.copyManual || '';
+      }
+
+      copy.addEventListener('click', function () {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(key).then(
+            function () { confirmCopied(cfg.copied || ''); },
+            selectInstead,
+          );
+          return;
+        }
+        selectInstead();
+      });
+
+      var row = document.createElement('div');
+      row.className = 'wpdc__done-key-row';
+      row.appendChild(code);
+      row.appendChild(copy);
+
+      /*
+       * Label, field and status as ONE block, not three siblings.
+       *
+       * As siblings they inherited the goods container's own spacing, and it
+       * measured wrong in the obvious way: the label sat 26px from the field it
+       * names and 18px from the download button above it. A label closer to a
+       * different control than to its own is a label pointing at the wrong
+       * thing. Grouping them lets the outer gap separate the two ANSWERS -- the
+       * file and the key -- while the inner gap keeps each answer together.
+       */
+      var block = document.createElement('div');
+      block.className = 'wpdc__done-key-block';
+      block.appendChild(label);
+      block.appendChild(row);
+      block.appendChild(said);
+
+      box.appendChild(block);
     });
   }
 

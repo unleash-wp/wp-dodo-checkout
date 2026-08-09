@@ -164,3 +164,12 @@ msgstr "Wir konnten deine Bestellung nicht rechtzeitig bestätigen. Falls abgebu
 
 msgid "Download now"
 msgstr "Jetzt herunterladen"
+
+msgid "Copy licence key"
+msgstr "Lizenzschlüssel kopieren"
+
+msgid "Copied."
+msgstr "Kopiert."
+
+msgid "Selected — press Ctrl/Cmd + C to copy."
+msgstr "Markiert — mit Strg/Cmd + C kopieren."

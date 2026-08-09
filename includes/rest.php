@@ -187,13 +187,17 @@ function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
 	 *
 	 * A session id is minted by Dodo and belongs to exactly one checkout, so a
 	 * ceiling on it bounds the thing actually worth bounding -- one customer's
-	 * own polling -- and no customer can spend another's allowance. Forty over
-	 * a minute against the thirty a real poll asks for.
+	 * own polling -- and no customer can spend another's allowance.
+	 *
+	 * The number lives in config.php beside the reason it has to exceed the
+	 * browser's own budget. It is not a per-minute figure in practice: writing
+	 * the transient renews its life, and a checkout polls far more often than
+	 * once a minute, so the counter stands for one whole checkout.
 	 */
 	$session = (string) $request->get_param( 'session' );
 	$bucket  = 'wpdc_poll_' . md5( $session );
 	$spent   = (int) get_transient( $bucket );
-	if ( $spent >= 40 ) {
+	if ( $spent >= WPDC_POLL_CEILING ) {
 		return new WP_REST_Response( array( 'finished' => false ), 200 );
 	}
 	set_transient( $bucket, $spent + 1, MINUTE_IN_SECONDS );
@@ -202,11 +206,15 @@ function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
 	 * And a second ceiling for the thing the first one no longer covers.
 	 *
 	 * Per-session counting is right for customers and useless against somebody
-	 * looping invented ids, because every new id brings its own forty. This one
-	 * is deliberately site-wide: what is being protected is the shop's single
-	 * API key, which is site-wide too. Six hundred a minute is fifteen
-	 * simultaneous checkouts, far past anything this shop sees and far below
-	 * anything that would cost us Dodo's own rate limit.
+	 * looping invented ids, because every new id brings its own allowance. This
+	 * one is deliberately site-wide: what is being protected is the shop's
+	 * single API key, which is site-wide too. Six hundred a minute is well past
+	 * anything this shop sees and well below anything that would cost us Dodo's
+	 * own rate limit.
+	 *
+	 * Unlike the per-session bucket this one does self-heal: once it latches,
+	 * nothing writes it any more, so it expires a minute after the last request
+	 * that got through.
 	 */
 	$all = (int) get_transient( 'wpdc_poll_all' );
 	if ( $all >= 600 ) {

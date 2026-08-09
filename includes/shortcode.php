@@ -432,8 +432,20 @@ function wpdc_enqueue(): void {
 			// same sentence is rendered server-side into the waiting panel, so
 			// this was a translated string nobody could ever see -- payload for
 			// every visitor and a trap for the next translator.
-			'doneFiles'       => __( 'Your download', 'wp-dodo-checkout' ),
+			// 'doneFiles' -- "Your download" -- was removed with the filename it
+			// used to introduce. The button now says what it does and nothing
+			// else, so the string had no reader left, and a translated string
+			// nobody can see is payload for every visitor and a trap for the
+			// next translator. Same reason 'finishing' went.
 			'doneKey'         => __( 'Your licence key', 'wp-dodo-checkout' ),
+			'copyKey'         => __( 'Copy licence key', 'wp-dodo-checkout' ),
+			'copied'          => __( 'Copied.', 'wp-dodo-checkout' ),
+			// Shown when the browser will not let us write to the clipboard: no
+			// secure context, or a permissions policy saying no. The key gets
+			// selected instead, so the customer finishes the job by hand rather
+			// than reading an error about one. Losing this string would leave
+			// somebody staring at a selected key with no idea why.
+			'copyManual'      => __( 'Selected — press Ctrl/Cmd + C to copy.', 'wp-dodo-checkout' ),
 			// Where a key is redeemed for the file. Empty unless the shop has
 			// configured a download host, and the panel then shows the key
 			// alone rather than a button that leads nowhere.

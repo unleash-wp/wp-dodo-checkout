@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.6.3' );
+define( 'WPDC_VERSION', '0.6.6' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1482,8 +1482,9 @@ check(
 	// header instead of a button sitting on it.
 	'BELL: every corner uses the one radius, and only the ring and the button are round',
 	1 === substr_count( $css, '--wpdc-radius: 5px' )
-		// Eight: plus the download button and the key, both in the completion.
-		&& 8 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
+		// Nine: the download button, the key field, and the copy button beside
+		// it -- all three in the completion panel.
+		&& 9 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
 		// Four circles: the frame's spinner ring, the close button, the done
 		// mark, and the spinner that waits inside the done panel.
 		&& 4 === substr_count( $css, 'border-radius: 50%' )
@@ -1694,6 +1695,96 @@ check(
 		&& ! str_contains( $js, "cfg.status + '?'" )
 );
 
+/**
+ * The rule that ends in this class and carries the most classes in front of it.
+ *
+ * Returns [ class count, declarations ]. Zero when no rule targets it at all.
+ */
+function wpdc_armour_rule( string $css, string $class ): array {
+	$best = array( 0, '' );
+
+	/*
+	 * Comments out FIRST, and this line is the whole reason the check works.
+	 *
+	 * `source()` returns the file verbatim. A rule's selector is captured as
+	 * "everything since the last brace", so the comment ABOVE a rule lands
+	 * inside it -- and the comment above the armour names `.w-btn`, `.button`
+	 * and the control itself while explaining the theme that broke us. Counting
+	 * classes over that text found four in a three-class rule, so the first
+	 * version of this check passed while the selector was too weak. It was
+	 * counting my own explanation.
+	 *
+	 * That is the fourth check in this codebase to pass by reading prose. The
+	 * mutation probe is what caught it: the assertion did not fall when the
+	 * chain was shortened, which is the only reason anyone looked.
+	 */
+	$css = (string) preg_replace( '!/\*.*?\*/!s', '', $css );
+
+	if ( 0 === preg_match_all( '/([^{}]+)\{([^}]*)\}/', $css, $all, PREG_SET_ORDER ) ) {
+		return $best;
+	}
+	foreach ( $all as $rule ) {
+		$selector = trim( $rule[1] );
+		// The rule must END in this control, not merely mention it: a rule for
+		// a descendant or a sibling proves nothing about the control itself.
+		if ( 1 !== preg_match( '/' . preg_quote( $class, '/' ) . '$/', $selector ) ) {
+			continue;
+		}
+		$classes = preg_match_all( '/\.[A-Za-z_][-\w]*/', $selector );
+		if ( $classes > $best[0] ) {
+			$best = array( $classes, $rule[2] );
+		}
+	}
+	return $best;
+}
+
+$panel_controls = array( '.wpdc__discount-input', '.wpdc__discount-apply' );
+$armoured       = true;
+foreach ( $panel_controls as $selector ) {
+	list( $classes, $block ) = wpdc_armour_rule( $css, $selector );
+
+	// Four, because the theme that broke this reaches 0,3,0 -- and three would
+	// only tie, leaving the outcome to whichever stylesheet WordPress happens
+	// to enqueue second. A tie is not a fix.
+	if ( $classes < 4 ) {
+		$armoured = false;
+	}
+	foreach ( array( 'background', 'color', 'border', 'padding', 'font-size' ) as $property ) {
+		if ( 1 !== preg_match( '/(?:^|;)\s*' . $property . '\s*:[^;]*!important/m', $block ) ) {
+			$armoured = false;
+		}
+	}
+}
+check(
+	/*
+	 * THE defect this exists for, measured on the live shop the hour it opened.
+	 *
+	 * Impreza paints `[type="submit"]:not(.w-btn):not(.button)` -- specificity
+	 * 0,3,0 -- with the site's navy. Our `.wpdc__discount-apply` is 0,1,0. So
+	 * the apply button rendered navy on the panel's own navy: present, full
+	 * size, clickable, invisible. Beside it the input arrived white and 54px
+	 * tall, because `input[type="text"]` is 0,1,1 and also wins. The operator
+	 * clicked a button he could not see and got "enter a code first" from a
+	 * field he could not read.
+	 *
+	 * Important alone did not fix it, and that was measured on the live page
+	 * rather than assumed: the theme's rule is important too, so specificity
+	 * decided again and 0,3,0 beat 0,1,0 exactly as before. Both halves are
+	 * needed, so both halves are checked -- the class count AND the priority.
+	 *
+	 * No number is safe forever; `#main .a .b .c .d` would still win, and only
+	 * a shadow root or an iframe forecloses that. What this covers is every
+	 * theme that styles form controls the ordinary way, which is the one that
+	 * broke us.
+	 *
+	 * Read from the stylesheet with its comments stripped, so the paragraph
+	 * above cannot satisfy the check it describes. This repo has shipped three
+	 * checks that passed by reading prose.
+	 */
+	'BELL: the controls on the dark panel outrank whatever theme they land in',
+	$armoured
+);
+
 // ─── The status route, exercised rather than read ────────────────────────────
 //
 // Everything below used to be str_contains() over rest.php. The check above
@@ -1751,15 +1842,76 @@ check(
 
 $GLOBALS['wpdc_test_transients'] = array();
 $GLOBALS['wpdc_test_requests']   = array();
-for ( $i = 0; $i < 45; $i++ ) {
+for ( $i = 0; $i < WPDC_POLL_CEILING + 5; $i++ ) {
 	$GLOBALS['wpdc_test_queue'] = array();
 	respond( 200, array( 'session_id' => 'cks_x', 'status' => 'open' ) );
 	poll();
 }
 check(
-	// Forty per session against the thirty a real poll asks for.
 	'BELL: one session cannot poll for ever',
-	count( $GLOBALS['wpdc_test_requests'] ) <= 40
+	count( $GLOBALS['wpdc_test_requests'] ) <= WPDC_POLL_CEILING
+);
+
+/** The three numbers the browser schedules its wait from. */
+function wpdc_js_number( string $js, string $name ): int {
+	return 1 === preg_match( '/var ' . preg_quote( $name, '/' ) . ' = (\d+)/', $js, $m )
+		? (int) $m[1]
+		: -1;
+}
+
+$poll_tries      = wpdc_js_number( $js, 'POLL_TRIES' );
+$poll_fast_tries = wpdc_js_number( $js, 'POLL_FAST_TRIES' );
+$poll_fast_ms    = wpdc_js_number( $js, 'POLL_FAST_MS' );
+$poll_slow_ms    = wpdc_js_number( $js, 'POLL_SLOW_MS' );
+
+check(
+	/*
+	 * The pair, checked against each other rather than restated in two files.
+	 *
+	 * The browser must run out of tries BEFORE the server starts refusing.
+	 * Cross them and the throttle -- which exists to protect the shop's API key
+	 * from invented session ids -- starts firing at real customers instead, and
+	 * what a paying customer then reads is "we could not confirm your order".
+	 * The ceiling would be causing the exact failure it was built to prevent.
+	 *
+	 * A margin rather than "not equal": a dropped connection costs a retry, and
+	 * a budget that only just fits leaves nothing for one.
+	 */
+	'BELL: the browser gives up well before the server throttles it',
+	$poll_tries > 0 && $poll_tries + 10 <= WPDC_POLL_CEILING
+);
+
+check(
+	/*
+	 * THE defect this replaced, and the reason it survived so long.
+	 *
+	 * The wait was one minute flat. Every successful purchase on this shop went
+	 * through a hundred-percent discount code, and a zero-total order has no
+	 * payment step -- so the branch that meets a real card was the one branch no
+	 * test purchase ever entered. On a real card, 3-D Secure sends the buyer to
+	 * their bank's app, and coming back inside sixty seconds is not something to
+	 * count on. Somebody who had just paid was told we could not confirm it.
+	 *
+	 * Four minutes is the floor, not the target: the schedule allows five.
+	 * Measured as the schedule the browser will actually follow, so shortening
+	 * either phase fails here rather than in front of a customer.
+	 */
+	'BELL: the confirmation window outlasts a 3-D Secure approval',
+	$poll_fast_tries > 0 && $poll_slow_ms >= $poll_fast_ms
+		&& ( $poll_fast_tries * $poll_fast_ms )
+			+ ( ( $poll_tries - $poll_fast_tries ) * $poll_slow_ms ) >= 240000
+);
+
+check(
+	/*
+	 * And it stays fast for the ordinary order.
+	 *
+	 * A five-minute window bought by polling every fifteen seconds would fix the
+	 * card payment and make every other purchase feel broken -- the tick would
+	 * arrive long after the money left. The first stretch keeps the old cadence.
+	 */
+	'SILENCE: an order that confirms at once is not made to wait for it',
+	$poll_fast_ms <= 2000 && $poll_fast_tries * $poll_fast_ms >= 30000
 );
 
 $GLOBALS['wpdc_test_requests'] = array();
@@ -2113,11 +2265,24 @@ check(
 	// Filenames and keys come out of an API response and go onto the page.
 	// textContent and createElement throughout: no response of theirs becomes
 	// markup here, and a download href must be theirs and must be https.
+	//
+	// Read from $jsCode rather than $js, and that changed the day the rule was
+	// written down beside the code obeying it: a comment saying "no innerHTML
+	// anywhere in this file" made this assertion FAIL, because it searched the
+	// prose along with the program. A ban a paragraph can trip is not a ban.
+	// $jsCode is the same file with its comments gone, and it exists for
+	// exactly this -- two earlier mutations walked through checks that their
+	// own explanations had satisfied.
 	'BELL: the goods are built as nodes, never as markup',
-	str_contains( $js, 'function paintGoods' )
-		&& str_contains( $js, "file.url.indexOf('https://') !== 0" )
-		&& str_contains( $js, 'code.textContent = key' )
-		&& ! preg_match( '/innerHTML|insertAdjacentHTML/', $js )
+	str_contains( $jsCode, 'function paintGoods' )
+		// The https gate moved from an early `return` into the filter that
+		// decides how many files there are -- the label depends on the count,
+		// and counting entries we would refuse to render would put "· PDF" on a
+		// lone button. Same property, one place: nothing but https becomes an
+		// href, and nothing but a rendered file is counted.
+		&& str_contains( $jsCode, "file.url.indexOf('https://') === 0" )
+		&& str_contains( $jsCode, 'code.textContent = key' )
+		&& ! preg_match( '/innerHTML|insertAdjacentHTML/', $jsCode )
 		&& str_contains( $client, "str_starts_with( \$url, 'https://' )" )
 );
 check(

@@ -36,6 +36,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 const WPDC_TIMEOUT = 15;
 
 /**
+ * How often one checkout may ask whether it finished.
+ *
+ * Named here rather than written into the route because it is half of a pair:
+ * the browser's own budget (POLL_TRIES in assets/checkout.js) must stay BELOW
+ * it, and tests/run.php reads both and fails when they cross. Cross them and a
+ * paying customer is throttled into the give-up panel and told their order
+ * could not be confirmed -- for an order that succeeded. That is the sentence
+ * this whole ceiling exists to avoid causing, so it must not be the thing the
+ * ceiling produces.
+ *
+ * The browser asks 78 times across five minutes. The margin above that absorbs
+ * a retry after a dropped connection without touching the ceiling.
+ */
+const WPDC_POLL_CEILING = 120;
+
+/**
  * How long the product list is reused.
  *
  * The list IS the allow-list, and it changes when the shop owner edits Dodo --
