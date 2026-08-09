@@ -289,6 +289,23 @@ function wpdc_render( $atts ): string {
 					<?php // Filled by the browser when the purchase delivered files or a key. ?>
 					<div class="wpdc__done-goods"></div>
 					<p class="wpdc__done-text"><?php echo esc_html__( 'Your confirmation is on its way to your inbox.', 'wp-dodo-checkout' ); ?></p>
+					<?php
+					// A way out that says what it does.
+					//
+					// There is an X in the corner and Escape works, and neither
+					// helps somebody who has just paid, has their file, and is
+					// looking for the end. Operator's words: "für dumme die es
+					// nicht verstanden haben" -- which is not stupidity, it is a
+					// person finished with a task looking for the door.
+					//
+					// Only in the completed panel. While a payment is running,
+					// the corner X is the deliberate way out: a big friendly
+					// button beside a card form invites the click that abandons
+					// a purchase halfway.
+					?>
+					<button type="button" class="wpdc__done-dismiss">
+						<?php echo esc_html__( 'Close window', 'wp-dodo-checkout' ); ?>
+					</button>
 				</div>
 			</div>
 			</div>

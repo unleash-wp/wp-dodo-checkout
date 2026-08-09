@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.1' );
+define( 'WPDC_VERSION', '0.7.2' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1279,7 +1279,8 @@ check(
 	// attempts. Presence alone would drop us out of the top layer for the rest
 	// of the checkout after the first try -- and never put us back.
 	'BELL: presence is not enough; the sheet has to be visible',
-	str_contains( $jsCode, "indexOf('visibility: hidden')" )
+	1 === preg_match( '/getComputedStyle\(sheet\)/', $jsCode )
+		&& 1 === preg_match( '/seen\.visibility === .hidden./', $jsCode )
 );
 
 check(
@@ -1574,9 +1575,9 @@ check(
 	// header instead of a button sitting on it.
 	'BELL: every corner uses the one radius, and only the ring and the button are round',
 	1 === substr_count( $css, '--wpdc-radius: 5px' )
-		// Nine: the download button, the key field, and the copy button beside
-		// it -- all three in the completion panel.
-		&& 9 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
+		// Ten: the download button, the key field, the copy button beside it, and
+		// the labelled way out -- all four in the completion panel.
+		&& 10 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
 		// Four circles: the frame's spinner ring, the close button, the done
 		// mark, and the spinner that waits inside the done panel.
 		&& 4 === substr_count( $css, 'border-radius: 50%' )
@@ -2627,6 +2628,26 @@ check(
 		&& ! str_contains( $settings, 'WPDC_SECRET' ) && ! str_contains( $shortcode, 'WPDC_SECRET' )
 );
 
+check(
+	/*
+	 * A way out that says what it does.
+	 *
+	 * There is an X in the corner and Escape works, and neither helps somebody
+	 * who has just paid, has their file, and is looking for the end. The
+	 * operator's words: "für dumme die es nicht verstanden haben" -- which is
+	 * not stupidity, it is a person finished with a task looking for the door.
+	 *
+	 * ONLY in the completed panel, and that is the rule worth pinning: a big
+	 * friendly close button beside a card form invites the click that abandons
+	 * a purchase halfway. While a payment is running, the corner X is the
+	 * deliberate way out.
+	 */
+	'BELL: the completion panel offers a labelled way out, and only it does',
+	1 === preg_match( '/wpdc__done-ok[\s\S]{0,1600}wpdc__done-dismiss/', $shortcode )
+		&& 1 === substr_count( $shortcode, 'wpdc__done-dismiss' )
+		&& str_contains( $jsCode, "closest('.wpdc__done-dismiss')" )
+);
+
 if ( $failures ) {
 	echo count( $failures ) . " of $checks checks FAILED\n";
 	foreach ( $failures as $name ) {
@@ -2636,3 +2657,4 @@ if ( $failures ) {
 }
 
 echo "all $checks checks passed\n";
+

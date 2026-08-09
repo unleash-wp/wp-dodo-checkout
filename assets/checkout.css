@@ -596,6 +596,34 @@
   color: #3d4a6e;
 }
 
+/* Quiet on purpose: the download is what somebody came for, and two loud
+   buttons side by side make a person choose before they have their file. This
+   one is the door, not the offer. Armoured like the rest of the panel, because
+   a theme that restyles buttons would otherwise decide which of the two shouts
+   louder. */
+.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-dismiss {
+  margin: 18px 0 0 !important;
+  padding: 10px 18px !important;
+  border: 1px solid #d7deec !important;
+  border-radius: var(--wpdc-radius, 5px);
+  background: #fff !important;
+  color: #3d4a6e !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.4 !important;
+  text-transform: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-dismiss:hover {
+  background: #f4f6fb !important;
+  color: #1a1e3c !important;
+}
+.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-dismiss:focus-visible {
+  outline: 2px solid #1a1e3c !important;
+  outline-offset: 2px !important;
+}
+
 /* Flex above owes the platform its hidden case back -- fifth time. */
 .wpdc__done[hidden],
 .wpdc__frame[hidden] {

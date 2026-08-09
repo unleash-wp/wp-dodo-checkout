@@ -173,3 +173,6 @@ msgstr "Kopiert."
 
 msgid "Selected — press Ctrl/Cmd + C to copy."
 msgstr "Markiert — mit Strg/Cmd + C kopieren."
+
+msgid "Close window"
+msgstr "Fenster schließen"

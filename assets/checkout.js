@@ -1057,6 +1057,13 @@
       closeFrame(sdk());
     }
   });
+  // The labelled way out of the completion panel. Same handler as the corner X,
+  // because there is one way to close this window and two things that ask for it.
+  document.addEventListener('click', function (event) {
+    var dismiss = event.target.closest && event.target.closest('.wpdc__done-dismiss');
+    if (dismiss) closeFrame(sdk());
+  });
+
   document.addEventListener('close', function (event) {
     // A close we did ourselves, to step out of the top layer for a wallet
     // sheet. Tearing the checkout down here would end the purchase the customer
@@ -1092,8 +1099,22 @@
   function walletSheetIsUp() {
     var sheet = document.querySelector('apple-pay-modal');
     if (!sheet) return false;
-    var hiddenInline = (sheet.getAttribute('style') || '').indexOf('visibility: hidden') !== -1;
-    return !hiddenInline;
+    /*
+     * Asked of the browser, not of the attribute.
+     *
+     * The first version read `style="visibility: hidden"` off the element,
+     * which is guessing at how Apple writes it: a class, a stylesheet or a
+     * property set from script all produce the same rendering and none of them
+     * touch that attribute. `getComputedStyle` is the answer the browser itself
+     * uses to decide whether to paint, so it cannot disagree with the screen.
+     *
+     * `offsetParent` is the second half: `display: none` reports its own
+     * visibility as `visible`, so a sheet that is not in the layout at all
+     * would otherwise read as up.
+     */
+    var seen = window.getComputedStyle(sheet);
+    if (seen.visibility === 'hidden' || seen.display === 'none') return false;
+    return sheet.offsetParent !== null || seen.position === 'fixed';
   }
 
   function matchWallet() {
