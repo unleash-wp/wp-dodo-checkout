@@ -1,6 +1,63 @@
-/* Deliberately minimal. A checkout button belongs to the theme it sits in;
-   anything opinionated here would fight Impreza rather than fit it. Only
-   layout and states the theme cannot know about. */
+/* The buy button, the window it opens, and the panel beside Dodo's frame.
+
+   Nothing here styles a payment control. Everything a customer acts on to pay
+   lives inside Dodo's iframe, which this stylesheet cannot reach and must not
+   try to. What is ours: the button, the window, the summary column.
+
+   ── The rule this file kept breaking ────────────────────────────────────────
+
+   Three times in one day an author `display` here defeated the platform's own
+   way of hiding something, because author rules beat the user agent's
+   regardless of specificity:
+
+     .wpdc__button   display: inline-block  beat  [hidden]
+     .wpdc__row      display: flex          beat  [hidden]
+     .wpdc__dialog   display: grid          beat  dialog:not([open])
+
+   The last put the whole checkout on the page before anyone clicked. So: any
+   rule here that sets a display owes the platform its hidden case back, and a
+   test walks this file to check that it was paid. */
+
+/* ── The button ──────────────────────────────────────────────────────────── */
+
+.wpdc__button {
+  --wpdc-bg: #fcbe00;
+  --wpdc-bg-hover: #e6ab00;
+  --wpdc-fg: #203159;
+  --wpdc-radius: 5px;
+  --wpdc-padding: 1rem 2.5rem;
+
+  display: inline-block;
+  border: 0;
+  cursor: pointer;
+  background: var(--wpdc-bg);
+  color: var(--wpdc-fg);
+  border-radius: var(--wpdc-radius);
+  padding: var(--wpdc-padding);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  transition: background-color .15s ease;
+}
+.wpdc__button:hover:not([disabled]) {
+  background: var(--wpdc-bg-hover);
+}
+/* Not `outline: none`. A keyboard user who cannot see where they are cannot
+   buy, and the button that takes money is the worst place to learn that. */
+.wpdc__button:focus-visible {
+  outline: 2px solid var(--wpdc-fg);
+  outline-offset: 2px;
+}
+.wpdc__button[disabled] {
+  opacity: .6;
+  cursor: default;
+}
+.wpdc__button[hidden] {
+  display: none;
+}
+
 .wpdc__bump {
   display: flex;
   gap: .5rem;
@@ -8,10 +65,674 @@
   margin-bottom: .75rem;
   cursor: pointer;
 }
-.wpdc__button[disabled] {
-  opacity: .6;
-  cursor: default;
+.wpdc__bump[hidden] {
+  display: none;
 }
+
 .wpdc__message:empty {
   display: none;
+}
+
+/* ── The window ──────────────────────────────────────────────────────────── */
+
+.wpdc__dialog {
+  /* Fixed, not the browser's default absolute. The UA stylesheet centres an
+     open dialog in the DOCUMENT, so on a scrolled page the checkout lands
+     wherever the reader happens to be -- photographed half over the site
+     footer. A modal belongs to the viewport. */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+
+  /* showModal() focuses the dialog, and a focused element draws the focus ring:
+     a blue box around the whole checkout that reads as a rendering fault.
+     Removed here only -- every control inside keeps its own. */
+  outline: none;
+
+  /* 640 for the frame is measured, not chosen: below it Dodo's checkout breaks
+     its own layout and leaves a band of white above the content. The panel
+     takes what is left of 1040. */
+  --wpdc-dialog-width: 1040px;
+
+  width: min(var(--wpdc-dialog-width), calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 0;
+  border: 0;
+  border-radius: var(--wpdc-radius, 5px);
+  background: #fff;
+  overflow: hidden;
+
+  /* The dialog holds ONE child that can shrink, and the scrolling happens
+     inside it. The close button hangs off the dialog itself, so it never
+     scrolls away. */
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.wpdc__scroll {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 640px;
+  /* minmax(0, 1fr), not 1fr: a `1fr` track has an automatic minimum of its
+     content, so the frame -- an iframe the SDK gives a fixed pixel height --
+     pushed the row past the dialog and the column would not scroll. The
+     customer reached the form and not the pay button. */
+  grid-template-rows: minmax(0, 1fr);
+}
+/* The platform's hidden case, paid back. Without it `display: grid` above lays
+   a CLOSED dialog out on the page: no backdrop, no top layer, a focus ring, and
+   a checkout nobody asked for. */
+.wpdc__dialog:not([open]) {
+  display: none;
+}
+.wpdc__dialog[open] {
+  animation: wpdc-pop .3s cubic-bezier(.16, 1, .3, 1) both;
+}
+.wpdc__dialog::backdrop {
+  background: rgb(0 0 0 / .55);
+}
+.wpdc__dialog[open]::backdrop {
+  animation: wpdc-fade .3s ease both;
+}
+
+/* Present, not polite. It was a transparent glyph that read as decoration, and
+   on a phone it was the thing customers could not find. A solid disc with a
+   border reads as a control at any size, and 2.5rem is a target a thumb hits. */
+.wpdc__close {
+  position: absolute;
+  top: .75rem;
+  inset-inline-end: .75rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid rgb(0 0 0 / .12);
+  /* The one shape that is not 5px, and the reason is what it is rather than
+     taste: a control is not a panel. At 5px it read as a white tile pasted on
+     the header -- competing with it instead of sitting on it. Round says
+     "press me" at any size, which is the whole job of the only way out. */
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 10px rgb(0 0 0 / .12);
+  color: #111;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform .15s ease, background-color .15s ease;
+}
+.wpdc__close:hover {
+  background: #f3f3f3;
+  transform: scale(1.06);
+}
+.wpdc__close:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* ── The summary column ──────────────────────────────────────────────────── */
+
+.wpdc__panel {
+  --wpdc-panel-bg: #203159;
+  --wpdc-panel-fg: #ffffff;
+  --wpdc-panel-accent: #fcbe00;
+
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2.25rem 2rem;
+  background: var(--wpdc-panel-bg);
+  color: var(--wpdc-panel-fg);
+  overflow-y: auto;
+}
+
+.wpdc__item {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.wpdc__item-img {
+  flex: 0 0 auto;
+  width: 4.5rem;
+  height: auto;
+  border-radius: var(--wpdc-radius, 5px);
+  /* A white mat, so artwork with a light edge does not dissolve into the navy
+     behind it. */
+  padding: 4px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / .15), 0 6px 18px rgb(0 0 0 / .35);
+}
+.wpdc__item-name {
+  margin: 0 0 .25rem;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.wpdc__item-desc {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgb(255 255 255 / .72);
+}
+
+/* Dodo's own discount field lives in their order summary, which inline mode
+   does not render -- so it is here, in the summary we were asked to build. */
+.wpdc__discount {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: .5rem;
+  margin-top: 1.25rem;
+}
+.wpdc__discount-input {
+  min-width: 0;
+  padding: .5rem .625rem;
+  border: 1px solid rgb(255 255 255 / .25);
+  border-radius: var(--wpdc-radius, 5px);
+  background: rgb(255 255 255 / .08);
+  color: var(--wpdc-panel-fg);
+  font: inherit;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.wpdc__discount-input::placeholder {
+  color: rgb(255 255 255 / .45);
+  text-transform: none;
+}
+.wpdc__discount-input:focus-visible {
+  outline: 2px solid var(--wpdc-panel-accent);
+  outline-offset: 1px;
+}
+.wpdc__discount-input[readonly] {
+  opacity: .7;
+}
+.wpdc__discount-apply {
+  padding: .5rem .875rem;
+  border: 1px solid rgb(255 255 255 / .25);
+  border-radius: var(--wpdc-radius, 5px);
+  background: transparent;
+  color: var(--wpdc-panel-fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+/* The browser's own ring is blue, and blue on navy is a ring nobody sees. The
+   accent is the same colour the rest of this panel uses to point at things. */
+.wpdc__discount-apply:focus-visible {
+  outline: 2px solid var(--wpdc-panel-accent);
+  outline-offset: 1px;
+}
+.wpdc__discount-apply:hover:not([disabled]) {
+  background: rgb(255 255 255 / .1);
+}
+.wpdc__discount-apply[disabled] {
+  opacity: .5;
+  cursor: default;
+}
+/* Spans both columns, and only exists when it has something to say.
+
+   Green and red, with a mark drawn in CSS rather than fetched: a customer who
+   has just typed a code is looking for one bit of information, and colour alone
+   is not enough for anyone who cannot separate those two -- so the shape
+   differs too, a tick against a cross. */
+.wpdc__discount-note {
+  grid-column: 1 / -1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin: .125rem 0 0;
+  font-size: 11px;
+  color: #4ade80;
+}
+.wpdc__discount-note:empty {
+  display: none;
+}
+.wpdc__discount-note::before {
+  content: "";
+  flex: 0 0 auto;
+  width: .375rem;
+  height: .625rem;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.wpdc__discount-note.is-error {
+  color: #ff8080;
+}
+
+/* The completion, in place of the frame. Same grid cell, so nothing moves. */
+.wpdc__done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 20rem;
+  text-align: center;
+  padding: 24px;
+}
+.wpdc__done-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #4ade80;
+  color: #0c2716;
+  font-size: 28px;
+}
+.wpdc__done-title {
+  margin: 0;
+  font-size: 20px;
+  color: #1a1e3c;
+}
+.wpdc__done-text {
+  margin: 0;
+  font-size: 14px;
+  color: #3d4a6e;
+}
+/* The wait and the completion share the panel's cell, so the swap does not
+   move anything a customer was looking at. */
+.wpdc__done-wait,
+.wpdc__done-ok {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.wpdc__done-wait[hidden],
+.wpdc__done-ok[hidden] {
+  display: none;
+}
+.wpdc__done-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgb(26 30 60 / .12);
+  border-top-color: var(--wpdc-panel-accent, #fcbe00);
+  border-radius: 50%;
+  animation: wpdc-spin .8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wpdc__done-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+.wpdc__done-goods {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.wpdc__done-goods:empty {
+  display: none;
+}
+/* The one button-shaped thing in the panel: the file is what was bought. */
+.wpdc__done-file {
+  display: inline-block;
+  padding: 12px 22px;
+  border-radius: var(--wpdc-radius, 5px);
+  background: #f5c518;
+  color: #1a1e3c;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+}
+.wpdc__done-file:hover {
+  background: #eab810;
+}
+.wpdc__done-key-label {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #7c8db5;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.wpdc__done-key {
+  display: inline-block;
+  padding: 10px 14px;
+  border-radius: var(--wpdc-radius, 5px);
+  background: #1a1e3c;
+  color: #f5c518;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* Flex above owes the platform its hidden case back -- fifth time. */
+.wpdc__done[hidden],
+.wpdc__frame[hidden] {
+  display: none;
+}
+
+/* Under the note, quiet: removing a code is a correction, not an action the
+   panel is inviting. Underlined rather than boxed so it does not read as a
+   second Apply. */
+.wpdc__discount-clear {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgb(255 255 255 / .6);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.wpdc__discount-clear:hover:not([disabled]) {
+  color: var(--wpdc-panel-fg);
+}
+.wpdc__discount-clear[disabled] {
+  opacity: .5;
+  cursor: default;
+}
+/* `justify-self` above gives this element a layout, which means the platform's
+   own way of hiding it needs writing back -- the fourth time this file has had
+   to learn that. */
+.wpdc__discount-clear[hidden] {
+  display: none;
+}
+/* A cross, from the same two borders: rotated the other way and squared off, so
+   the two states differ in shape and not only in colour. */
+.wpdc__discount-note.is-error::before {
+  width: .625rem;
+  height: .625rem;
+  border-width: 0;
+  transform: none;
+  background:
+    linear-gradient(currentColor, currentColor) center / 100% 1.5px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 1.5px 100% no-repeat;
+  rotate: 45deg;
+}
+
+.wpdc__totals {
+  margin: 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgb(255 255 255 / .18);
+}
+.wpdc__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .5rem;
+  font-size: 12px;
+  color: rgb(255 255 255 / .8);
+}
+/* The platform's hidden case again: `display: flex` above defeated [hidden],
+   and "Discount" stood with nothing beside it. */
+.wpdc__row[hidden] {
+  display: none;
+}
+.wpdc__row dt,
+.wpdc__row dd {
+  margin: 0;
+}
+/* The rate and the percentage off, beside their labels and quieter than them:
+   they explain a number, they are not a second number. */
+.wpdc__rate,
+.wpdc__off {
+  opacity: .7;
+}
+/* Money coming off reads as money coming off. */
+.wpdc__row--discount dd {
+  color: #4ade80;
+}
+.wpdc__row dd {
+  /* Tabular figures: the total changes as a customer types their postcode, and
+     a number that shifts sideways while it updates reads as instability on the
+     one screen where nobody wants any. */
+  font-variant-numeric: tabular-nums;
+}
+/* Two classes: .wpdc__row now carries its own size, and a single class would
+   tie on specificity and lose to source order -- the total would come out at
+   12px with nothing saying why. */
+.wpdc__row.wpdc__row--total {
+  margin: 1rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid rgb(255 255 255 / .18);
+  color: var(--wpdc-panel-fg);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* ── Dodo's frame, and the wait before it ────────────────────────────────── */
+
+.wpdc__dialog .wpdc__frame {
+  min-height: 0;
+  overflow-y: auto;
+  /* Small, and the size is the whole argument.
+
+     It was 2.5rem, because Dodo's PAYMENT step brings no top spacing of its
+     own. Their contact step does, so on the first screen the two stacked into a
+     band of empty white. Then it was zero, and the payment step went flush
+     against the edge under the close button.
+
+     .75rem is enough that nothing touches an edge and small enough that the
+     doubling on the contact step reads as spacing rather than as a gap. The
+     sides get air too: their frame's own inset is a few pixels on a narrow
+     screen, and content against the glass looks like a rendering fault. */
+  /* Small by default, because Dodo's CONTACT step brings its own spacing and
+     the two stack into a band of white. Their PAYMENT step brings none, and
+     that screen gets more -- see .is-payment below. Three rounds of moving one
+     number went by before it was obvious that two screens want two values. */
+  padding: .5rem 1.75rem 1.25rem;
+}
+.wpdc__dialog .wpdc__frame iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+}
+
+.wpdc__frame.is-loading {
+  position: relative;
+  min-height: 22rem;
+}
+.wpdc__frame.is-loading::after {
+  content: "";
+  position: absolute;
+  top: 40%;
+  inset-inline-start: 50%;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: -1.125rem 0 0 -1.125rem;
+  border: 3px solid rgb(0 0 0 / .12);
+  border-top-color: var(--wpdc-panel-accent, #fcbe00);
+  border-radius: 50%; /* the spinner is a ring; a 5px ring is a square */
+  animation: wpdc-spin .8s linear infinite;
+}
+/* The payment step brings no top spacing of its own. Set when Dodo says the
+   contact details went in, which is the moment the screen changes. */
+.wpdc__frame.is-payment {
+  padding-top: 1.5rem;
+}
+
+/* Held back rather than shown half-built: Dodo paints its own skeleton for a
+   moment, and two loading states at once look like a fault. */
+.wpdc__frame.is-loading iframe {
+  opacity: 0;
+}
+/* Once, and only on the transition out of waiting. Dodo's frame reflows on
+   every address change, and replaying this under somebody mid-postcode is
+   worse than not having it at all. */
+.wpdc__frame.is-ready iframe {
+  animation: wpdc-rise .42s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes wpdc-spin { to { transform: rotate(360deg); } }
+@keyframes wpdc-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes wpdc-pop {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes wpdc-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Phones ──────────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  /* One column, one scroller. Stacked, the panel and the frame each kept their
+     own overflow, so the panel clipped mid-sentence with nothing to scroll it.
+
+     NOT full screen: a margin down both sides and a strip of backdrop above and
+     below say "a layer over the shop". Edge to edge reads as a new page, and
+     somebody who thinks they navigated away behaves differently about closing
+     it. */
+  /* One scroller, and the header scrolls with it.
+
+     A pinned header was tried and is wrong here, on the operator's word and on
+     the arithmetic: it costs 3.4rem of a phone screen permanently, on the one
+     surface where the pay button needs to come into view. The window scrolls as
+     one document, the way a page does.
+
+     Which puts the close button back in play -- an absolutely positioned button
+     scrolls away with the content. It is the FIRST thing in the dialog and the
+     strip is at the top, so it is on screen exactly when the header is, and the
+     header is where it belongs. */
+  .wpdc__dialog {
+    width: min(30rem, calc(100vw - 2.5rem));
+    max-height: calc(100dvh - 5rem);
+    border-radius: var(--wpdc-radius, 5px);
+  }
+  /* One scroller, and the header rides in it -- the operator's call, and right
+     for a phone: a pinned header costs 3.4rem permanently on the surface where
+     the pay button has to come into view. The close button is NOT in here, so
+     it stays put while everything else moves. */
+  .wpdc__scroll {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    overflow-y: auto;
+  }
+  .wpdc__panel,
+  .wpdc__dialog .wpdc__frame {
+    overflow: visible;
+    max-height: none;
+  }
+
+  /* A STRIP, not a block. The full panel filled half a phone before a single
+     payment method was visible -- a scroll between deciding to buy and being
+     able to. Cover, name, total, one line; Dodo's frame carries the rest. */
+  /* Two rows, placed explicitly rather than left to source order.
+
+     The strip was three columns filled in document order, and the discount form
+     arrived as a fourth box -- so it took the third column, the product name
+     was squeezed to a few characters and an ellipsis, and the price dropped to
+     a second row.
+     Every child says where it goes now, and adding another one cannot rearrange
+     the two that matter. */
+  .wpdc__panel {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: .75rem;
+    row-gap: .875rem;
+    /* The end padding is the close button's width plus its offset. The button
+       is absolutely positioned in that corner, so without room reserved for it
+       it sat ON the total. */
+    padding: 1rem 4rem 1rem 1.25rem;
+  }
+  .wpdc__item-img {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .wpdc__item > div {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .wpdc__totals {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  /* Full width on its own row: a code field beside a price is two things
+     competing for the same glance. */
+  .wpdc__discount {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin: 0;
+  }
+  .wpdc__item {
+    display: contents;
+  }
+  .wpdc__item-img {
+    width: 2.5rem;
+  }
+  .wpdc__item-name {
+    margin: 0;
+    font-size: 14px;
+    /* Two lines at most: a long product name must not push the payment methods
+       down the screen this strip exists to save. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .wpdc__item-desc,
+  .wpdc__row:not(.wpdc__row--total) {
+    display: none;
+  }
+  .wpdc__totals {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    white-space: nowrap;
+  }
+  .wpdc__row.wpdc__row--total {
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    white-space: nowrap;
+  }
+  .wpdc__row--total dt {
+    display: none;
+  }
+
+  /* Room down both sides. Dodo's own inset is a few pixels on a narrow screen,
+     so their fields ran to the glass and the window read as unfinished. */
+  .wpdc__dialog .wpdc__frame {
+    padding: .5rem 1.5rem 1.5rem;
+  }
+  .wpdc__frame.is-payment {
+    padding-top: 1.25rem;
+  }
+
+  .wpdc__close {
+    /* Offset from the top, NOT centred. `top: 50%` centres against the
+       positioning context, and that is the dialog -- not the strip -- so the
+       button floated halfway down the whole window, over the form and half
+       outside the rounded edge. The strip is 3.4rem tall and the button 2.25,
+       so .55rem from the top sits it in the middle of the strip. */
+    top: .55rem;
+    inset-inline-end: .625rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 1.25rem;
+  }
+}
+
+/* Someone who asked for less motion is not asking for less information: the
+   spinner keeps turning, because a still ring says "broken" where a moving one
+   says "wait". Only the decoration goes. */
+@media (prefers-reduced-motion: reduce) {
+  .wpdc__frame.is-ready iframe,
+  .wpdc__dialog[open],
+  .wpdc__dialog[open]::backdrop {
+    animation: none;
+  }
+  .wpdc__frame.is-loading::after {
+    animation-duration: 1.6s;
+  }
 }

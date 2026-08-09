@@ -1,0 +1,163 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: WP Dodo Checkout\n"
+"Language: de_DE\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Buy now"
+msgstr "Jetzt kaufen"
+
+msgid "Add the companion product"
+msgstr "Passendes Produkt hinzufügen"
+
+msgid "Checkout"
+msgstr "Kasse"
+
+msgid "Close checkout"
+msgstr "Kasse schließen"
+
+msgid "Subtotal"
+msgstr "Zwischensumme"
+
+msgid "Discount"
+msgstr "Rabatt"
+
+msgid "VAT"
+msgstr "MwSt."
+
+msgid "Total"
+msgstr "Gesamt"
+
+
+
+msgid "Opening checkout…"
+msgstr "Kasse wird geöffnet …"
+
+msgid "The checkout could not be opened. Please try again in a moment."
+msgstr "Die Kasse konnte nicht geöffnet werden. Bitte versuchen Sie es gleich noch einmal."
+
+msgid "The checkout could not be opened. Please try again."
+msgstr "Die Kasse konnte nicht geöffnet werden. Bitte versuchen Sie es noch einmal."
+
+msgid "Please reload the page and try again."
+msgstr "Bitte laden Sie die Seite neu und versuchen Sie es noch einmal."
+
+msgid "Checkout is not available right now. This is a fault on our side."
+msgstr "Die Kasse ist gerade nicht verfügbar. Der Fehler liegt bei uns."
+
+msgid "Checkout is not configured on this site."
+msgstr "Auf dieser Website ist keine Kasse eingerichtet."
+
+msgid "That product is not available."
+msgstr "Dieses Produkt ist nicht verfügbar."
+
+msgid "That extra is not available."
+msgstr "Diese Ergänzung ist nicht verfügbar."
+
+msgid "The payment provider could not be reached. Please try again in a moment."
+msgstr "Der Zahlungsanbieter war nicht erreichbar. Bitte versuchen Sie es gleich noch einmal."
+
+msgid "The payment provider could not complete this. Please try again in a moment."
+msgstr "Der Zahlungsanbieter konnte das nicht abschließen. Bitte versuchen Sie es gleich noch einmal."
+
+msgid "The payment provider sent something unexpected. Please try again."
+msgstr "Der Zahlungsanbieter hat etwas Unerwartetes gesendet. Bitte versuchen Sie es noch einmal."
+
+msgid "Dodo Checkout"
+msgstr "Dodo Checkout"
+
+msgid "Dodo API key"
+msgstr "Dodo API-Schlüssel"
+
+msgid "Mode"
+msgstr "Modus"
+
+msgid "Test — no real money moves"
+msgstr "Test – es fließt kein echtes Geld"
+
+msgid "Live — real cards are charged"
+msgstr "Live – echte Karten werden belastet"
+
+msgid "What this site can sell"
+msgstr "Was diese Website verkaufen kann"
+
+msgid "Product"
+msgstr "Produkt"
+
+msgid "Price"
+msgstr "Preis"
+
+msgid "Shortcode"
+msgstr "Shortcode"
+
+msgid "no price set"
+msgstr "kein Preis hinterlegt"
+
+msgid "Set in wp-config.php as WPDC_MODE."
+msgstr "In der wp-config.php als WPDC_MODE gesetzt."
+
+msgid "Archiving a product in Dodo stops it selling here within ten minutes. Nothing on this site needs changing."
+msgstr "Ein in Dodo archiviertes Produkt wird hier binnen zehn Minuten unverkäuflich. An dieser Website ist nichts zu ändern."
+
+msgid "No API key yet, so nothing was checked. This does not mean there is nothing to sell."
+msgstr "Noch kein API-Schlüssel, es wurde also nichts geprüft. Das heißt nicht, dass es nichts zu verkaufen gibt."
+
+msgid "Dodo answered, and this account has no live products. Create one in the Dodo dashboard and it becomes sellable here, with no changes to this site."
+msgstr "Dodo hat geantwortet, und dieses Konto hat keine aktiven Produkte. Legen Sie eines im Dodo-Dashboard an, dann ist es hier verkäuflich – ohne Änderung an dieser Website."
+
+msgid "Dodo has no restricted API keys, so this one can issue refunds and read every customer. Prefer WPDC_API_KEY in wp-config.php, which keeps it out of the database and out of every backup."
+msgstr "Dodo kennt keine eingeschränkten API-Schlüssel: dieser kann Erstattungen auslösen und jeden Kunden lesen. Besser WPDC_API_KEY in der wp-config.php – dann steht er nicht in der Datenbank und in keiner Sicherung."
+
+msgid "Set in wp-config.php as WPDC_API_KEY, which is why this field is disabled: saving here would copy the key into the database, and keeping it out is the whole point of the constant."
+msgstr "In der wp-config.php als WPDC_API_KEY gesetzt – deshalb ist dieses Feld gesperrt: Speichern würde den Schlüssel in die Datenbank kopieren, und genau das soll die Konstante verhindern."
+
+msgid "wpdc_checkout: a product attribute holding a Dodo product id (pdt_...) is required."
+msgstr "wpdc_checkout: Es wird ein Attribut product mit einer Dodo-Produkt-ID (pdt_…) benötigt."
+
+msgid "wpdc_checkout: set WPDC_API_KEY in wp-config.php."
+msgstr "wpdc_checkout: WPDC_API_KEY in der wp-config.php setzen."
+
+msgid "Discount code"
+msgstr "Rabattcode"
+
+msgid "Apply"
+msgstr "Einlösen"
+
+msgid "Code applied."
+msgstr "Code eingelöst."
+
+msgid "That code was not accepted."
+msgstr "Dieser Code wurde nicht akzeptiert."
+
+msgid "Enter a code first."
+msgstr "Bitte zuerst einen Code eingeben."
+
+msgid "A code has letters, digits, dashes and underscores only."
+msgstr "Ein Code besteht nur aus Buchstaben, Ziffern, Binde- und Unterstrichen."
+
+msgid "Remove code"
+msgstr "Code entfernen"
+
+msgid "Completing your order…"
+msgstr "Bestellung wird abgeschlossen …"
+
+msgid "That checkout could not be found."
+msgstr "Dieser Checkout wurde nicht gefunden."
+
+msgid "Order complete"
+msgstr "Bestellung abgeschlossen"
+
+msgid "Your confirmation is on its way to your inbox."
+msgstr "Deine Bestätigung ist auf dem Weg in dein Postfach."
+
+msgid "Your download"
+msgstr "Dein Download"
+
+msgid "Your licence key"
+msgstr "Dein Lizenzschlüssel"
+
+msgid "We could not confirm your order in time. If you were charged it is on its way — check your inbox, or contact us and we will sort it out."
+msgstr "Wir konnten deine Bestellung nicht rechtzeitig bestätigen. Falls abgebucht wurde, ist sie unterwegs — sieh in dein Postfach oder melde dich bei uns, wir klären das."

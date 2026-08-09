@@ -1,68 +1,274 @@
 # WP Dodo Checkout
 
-A WordPress shortcode that opens a Dodo Payments checkout. The payment API key
-never reaches the site.
+A WordPress shortcode that opens a Dodo Payments checkout in a modal on your
+own page, with the wallet buttons on top and an optional order bump.
 
-## What it does and does not hold
+## What it is
 
-It renders a button and asks one endpoint for a checkout URL. It holds no
-payment credential, knows no prices, and has no list of products: a page names
-a **plan key** (`pro`, `ebook`) and the server decides what that maps to and
-what it costs.
+It renders a button and asks Dodo for a checkout URL. A page names a Dodo
+product id; Dodo owns the price, the tax, the receipt and the delivery. Nothing
+here computes an amount and nothing here stores a customer.
 
-That split is the point. `DODO_API_KEY` is account-wide, and a WordPress
-install runs whatever plugins its owner added — any one of which can read
-`wp-config.php` and the options table. So the key stays on the licence server,
-this plugin holds a shared secret that can do exactly one thing, and prices
-live where a browser cannot reach them.
-
-Nothing here is specific to UnleashWP. No product ids, no prices, no product
-copy. Two constants point it at a different site.
+Nothing is specific to any shop. No product ids, no prices, no product copy live
+in this plugin, and a test asserts it: the products come from whichever Dodo
+account the key belongs to.
 
 ## Setup
 
+One key.
+
 ```php
-// wp-config.php — keeps both out of the database, which travels in backups,
+// wp-config.php — keeps it out of the database, which travels in backups,
 // staging copies and support exports.
-define( 'WPDC_ENDPOINT', 'https://mcp.unleash-wp.com' );
-define( 'WPDC_SECRET', '…' );
+define( 'WPDC_API_KEY', 'sk_live_…' );
+define( 'WPDC_MODE', 'live_mode' ); // optional; test_mode is the default
 ```
 
-Both fall back to options (`wpdc_endpoint`, `wpdc_secret`) if
-the constants are absent. The constant wins.
+Or paste it under **Settings > Dodo Checkout**. The constant wins, and when one
+is set the field is disabled rather than pre-filled: a filled field would be
+submitted on the next Save and copy the key into the database, which is the one
+thing the constant exists to prevent.
 
-The server needs the matching `LUMO_CHECKOUT_SECRET`.
+**Dodo has no scoped API keys.** Owner, Editor and Viewer are dashboard *user*
+roles, not key permissions, so this key can create payments, issue refunds and
+read every customer on the account. That is the same trade any payment plugin
+makes, and it is the reason for the wp-config route.
 
-A `plan` is not a Dodo product id and never travels as one: the server holds
-that mapping, or anybody who obtained the secret could mint a checkout for any
-product in the account at any price. The plan key comes from the product's own
-`lumo_plan` metadata in Dodo, so making something buyable from a page is one
-field on the product, with no server configuration and no deploy.
+The mode defaults to `test_mode`. Defaulting to live would mean a half-finished
+setup charges a real card.
 
 ## Usage
 
+The settings screen lists every product the account can sell, each with its
+shortcode ready to copy.
+
 ```
-[wpdc_checkout plan="pro"]
-[wpdc_checkout plan="team" quantity="20" label="Get Team 20"]
-[wpdc_checkout plan="pro" bump="ebook" bump_label="Add the eBook for 9 EUR"]
-[wpdc_checkout plan="pro" display="overlay"]
+[wpdc_checkout product="pdt_…"]
+[wpdc_checkout product="pdt_…" label="Jetzt kaufen"]
+[wpdc_checkout product="pdt_…" quantity="20" label="Get Team 20"]
+[wpdc_checkout product="pdt_…" bump="pdt_…" bump_label="Add the eBook for 9 EUR"]
 ```
 
 | Attribute | Default | Notes |
 |---|---|---|
-| `plan` | — | Required. Lowercase, digits, underscores. |
-| `display` | `inline` | `inline` navigates to Dodo; `overlay` opens their SDK. |
-| `bump` | — | A second plan key. Always one copy, never one per seat. |
+| `product` | — | Required. A Dodo product id (`pdt_…`). |
+| `label` | Buy now | Button text. Set it — the default is English. |
+| `bump` | — | A second product id. Always one copy, never one per seat. |
 | `bump_label` | generic | What the checkbox says. Write the price here if you want one shown. |
-| `label` | Buy now | Button text. |
-| `quantity` | `1` | Seats, 1–50. |
+| `quantity` | `1` | 1 to 50. |
+| `lang` | site locale | Two letters. Forces the language of Dodo's own frame, which otherwise follows the browser rather than the page. |
 
-### Why inline is the default
+### What the customer sees when they finish
 
-Dodo's documentation states Apple Pay is **not available for overlay
-checkout**. On mobile that is the difference between a two-tap purchase and a
-form. Inline also navigates to Dodo's own page, which keeps card fields off
-this origin.
+The popup shows the completion itself: the download link, the licence key if the
+product issues one, and a line saying the mail is on its way. It does not wait
+to be told — Dodo's frame reports nothing on a cart discounted to zero, and its
+payment step 404s on a payment link that does not exist for a zero total — so
+the shop asks its own server instead, which asks Dodo once and answers.
+
+A **discount field** sits above the frame. Dodo accepts codes in a summary panel
+it does not render in an embedded checkout, so without it a code printed on a
+newsletter has nowhere to be typed.
+
+Define **`WPDC_RETURN_URL`** only if there is a real thank-you page. It must be
+on this site — a return URL a visitor could choose would be an open redirect on
+the shop's own domain, so it is checked rather than trusted. Without one the
+completion is shown in the popup, which is the better ending anyway: leaving for
+the front page reads as the checkout breaking.
+
+The button is styled through custom properties, so a theme restyles it without
+touching this plugin:
+
+```css
+.wpdc__button { --wpdc-bg: #fcbe00; --wpdc-fg: #203159; --wpdc-radius: 8px; }
+```
+
+### Why the id and not a nickname
+
+An earlier version required each product to carry a `uwp_plan` metadata key and
+the shortcode named that key. It bought a shortcode that survives a product
+being recreated under a new id, and a friendlier name in the editor. It cost a
+step in the dashboard per product and a layer of indirection that read as a
+mistake every time somebody looked at it. The id is not a secret either way:
+Dodo's own static payment link is `checkout.dodopayments.com/buy/<product id>`.
+
+### What stops a crafted request selling anything
+
+The REST route is public, because buying does not require an account. So the id
+in a request is not trusted on its own: **Dodo's live product list is the
+allow-list**, cached ten minutes. An archived, deleted or never-listed id is
+refused before any checkout session exists.
+
+It does not stop a request naming a different *live* product than the page
+shows. They still pay that product's listed price for that product, so the
+exposure is "a live product can be bought". The case where that matters is a
+cheap test product left live, which anybody who finds its id can buy. Archive
+test products.
+
+Archiving in Dodo is also the off switch: nothing on the site needs changing.
+
+## The checkout is a modal on your page
+
+Clicking the button does not navigate anywhere. The page stays exactly as it
+was, dimmed behind a `<dialog>` this plugin renders, and Dodo's checkout lives
+in a frame inside it. Escape, a click on the backdrop and the X all close it.
+
+The wallet buttons sit above the form: a customer with Apple Pay or Google Pay
+types nothing at all, because name, email and address come from the wallet. The
+form is the path beside that one, not in front of it.
+
+### Why the window is ours and the frame is Dodo's
+
+Dodo's *overlay* and *inline* modes do not differ in how they look. They differ
+in who owns the window — and Dodo's Overlay Checkout page says Apple Pay is not
+supported in theirs. So the SDK runs in `inline` mode, injecting its iframe into
+an element inside our own dialog. A popup, on the surface that carries Apple Pay.
+
+A native `<dialog>` rather than a div with a z-index: `showModal()` brings the
+focus trap, Escape, the backdrop and the top layer. Those are individually easy
+and collectively where hand-rolled modals fail, on the one page a customer must
+not get stuck.
+
+Card fields still never touch this origin. The frame is an iframe from Dodo's
+origin, so the PCI surface is the same as a redirect: this page cannot read what
+is typed into it, and neither can anything else running here.
+
+### Apple Pay, and what was actually measured
+
+Dodo's documentation contradicts itself:
+
+| Page | Says |
+|---|---|
+| Overlay Checkout | "Apple Pay is not yet supported in overlay checkout." |
+| Inline Checkout | "Apple Pay is not available for overlay checkout." |
+| Digital Wallets | "All digital wallets are fully supported in: Overlay Checkout, …" |
+
+Two specific pages against one general list, so their overlay is not a surface
+to bet Apple Pay on. What settles the technical half is the frame itself, read
+out of a real browser:
+
+```
+iframe allow = "payment keyboard-map *"
+```
+
+The payment permission **is** delegated to Dodo's frame, so a wallet is not
+blocked by permissions policy in an embed. Whether a wallet button *appears* is
+then a dashboard matter:
+
+- **Google Pay** — enable it on the account, nothing else.
+- **Apple Pay** — register the domain under **Settings > Payment Methods > Apple
+  Pay > Manage domains**, download the association file Apple gives you, and
+  drop it in this plugin's directory as
+  `apple-developer-merchantid-domain-association` — no extension.
+
+  The plugin then serves it from `init` at
+  `/.well-known/apple-developer-merchantid-domain-association`, which is the
+  part worth having: a dot-directory in the web root is what rewrite rules and
+  hardening plugins reach for first.
+
+  **The file is not in this repo and cannot be** — it is issued per domain. Until
+  you place it, `includes/apple-pay.php` falls through to WordPress and the path
+  404s, deliberately: an empty 200 passes Apple's fetch and fails its
+  verification, which is a far worse place to debug from.
+
+Without those two steps the customer sees the form and no wallets, whatever this
+plugin sends.
+
+### Three things in the browser console belong to Dodo
+
+Recorded because somebody will meet them and wonder whose they are:
+
+- The `allow` attribute is malformed — `"payment keyboard-map *"` where the
+  syntax is `"payment *; keyboard-map *"` — hence a `Unrecognized origin:
+  'keyboard-map'` warning.
+- The SDK posts messages to its own origin instead of the parent window, and
+  logs a `postMessage` error for each. The events themselves DO arrive —
+  `checkout.breakdown` fills the summary panel on every open, measured on a live
+  checkout. An earlier draft of this line said they do not, which was wrong and
+  worth correcting here rather than quietly: the totals, the VAT line and the
+  whole zero-total completion path all read that event.
+- Their fraud SDK asks for accelerometer and bluetooth, which the frame does not
+  grant.
+
+None of the three stops a purchase, and none originates here.
+
+### The form is as short as Dodo lets it be
+
+Every field before the pay button is a place to give up, so two are removed at
+the source:
+
+| | |
+|---|---|
+| `minimal_address: true` | Country, plus a postcode only where a tax authority needs one. Street, city and state are skipped. |
+| `allow_phone_number_collection: false` | The phone field is gone. Dodo shows it by default and nothing here reads it. |
+
+What is left is name, email and country. The address cannot go entirely: it is
+there for VAT, not for a courier. **A shop selling physical goods would have to
+turn `minimal_address` off** — there is nothing to ship here.
+
+The "buy as a business" checkbox stays. A WordPress audience contains people who
+need a VAT invoice, and it is one collapsed line.
+
+### Two customers see two different checkouts
+
+Measured in a browser, not read out of a document. The SDK injects **two**
+elements into the container, in this order:
+
+```
+[ express wallet element ]   <- collapses to 0px when no wallet is available
+[ checkout iframe        ]
+```
+
+So what a customer meets depends on their device:
+
+| | What opens |
+|---|---|
+| **Has Apple Pay or Google Pay** | The wallet button, at the very top, above every field. Two taps, nothing typed. |
+| **Has neither** | Contact step — name, email, country, ZIP — then **Continue to Payment**, then Card, Klarna, SEPA. |
+
+An earlier version of this file said the wallet button sits *behind* the form.
+That was wrong, and the way it was wrong is worth keeping: the wallet element was
+measured at 0px in a headless browser with no wallet configured, and that was
+read as "it is not there" rather than "this browser cannot offer one". The DOM
+order settles it — the wallet element precedes the checkout iframe.
+
+What remains true is narrower: **a customer with no wallet pays a step** that
+checkouts leading with a combined method-and-fields screen do not charge. That
+step is Dodo's, `minimal_address` and the phone flag already make it as short as
+it goes, and no setting removes it.
+
+### Dodo's checkout is left exactly as Dodo ships it
+
+Operator decision, and it reversed a day of work: **nothing is built beside
+their surface.** An order summary above the frame, a fold that hid the form
+behind the express wallet, a description pulled from the product -- all removed.
+
+The reason is not that it looked bad, though it did until it was fixed. It is
+that every one of those pieces was a seam against somebody else's UI: matched to
+their left inset, their spacing, their loading order, none of which is a
+contract. Their next release moves one of them and the seam opens on a page
+where money changes hands, silently, on a site nobody is watching that day.
+
+What stays is the window and the plumbing:
+
+| Kept | Why it is not "building beside" |
+|---|---|
+| The `<dialog>` | A container. It holds their frame, it does not imitate it. |
+| Width, padding, scroll correction | Fixes for our own bugs, not additions to theirs. |
+| `minimal_address`, no phone, discount code, saved cards | API flags. Dodo renders the result. |
+
+Branding belongs on Dodo's **Design page**, which styles the checkout, the
+customer portal and the storefront together, test and live apart. That is one
+place instead of three, and it survives their updates because it is theirs.
+
+### What is NOT done here, and where it belongs instead
+### Payment methods are never restricted
+
+`allowed_payment_method_types` is deliberately not sent. Dodo's own note: adding
+a method there does not make it available, and if everything listed is
+unavailable the session fails outright. Sending nothing is what leaves the wallet
+buttons on. A test pins this, because a future well-meant allow-list is exactly
+how express checkout disappears.
 
 ### Why no price is written in the shortcode
 
@@ -85,8 +291,10 @@ a 404.
 
 ## What is deliberately not here
 
-- **No prices, product ids or amounts.** All server-side.
-- **No `@latest` from a CDN.** The overlay SDK is pinned to a major version.
+- **No prices or amounts.** Dodo settles what is charged.
+- **No product catalogue in the code.** It comes from the account, so a new
+  product sells within ten minutes of being created, with no deploy.
+- **No `@latest` from a CDN.** The checkout SDK is pinned to a major version.
   `@latest` lets a third party change what executes on a checkout page with no
   deploy here, and makes a subresource integrity hash impossible because the
   file behind the URL is allowed to change.
@@ -98,8 +306,7 @@ a 404.
 php tests/run.php
 ```
 
-No PHPUnit, no Composer, no WordPress bootstrap — the same convention as
-`lumo-wp/tests/run.php`, for the same reason: a guard nobody can run is a guard
-nobody runs. The handful of WordPress functions the client touches are stubbed,
-which is enough to exercise the two things worth exercising: the failure
-vocabulary, and what does and does not reach the outbound request.
+No PHPUnit, no Composer, no WordPress bootstrap, for one reason: a guard
+nobody can run is a guard nobody runs. The handful of WordPress functions the client touches are stubbed,
+which is enough to exercise the things worth exercising: the failure vocabulary,
+the allow-list, and what does and does not reach the outbound request.
