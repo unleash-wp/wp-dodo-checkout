@@ -196,8 +196,11 @@
   background: #fff;
   box-shadow: 0 2px 10px rgb(0 0 0 / .12);
   color: #111;
-  font-size: 1.5rem;
-  line-height: 1;
+  /* No font-size any more: the mark is drawn, not typed, so nothing about it
+     depends on which font a theme happened to load. It takes `color` from here,
+     which is why the hover still works. */
+  padding: 0;
+  line-height: 0;
   cursor: pointer;
   transition: transform .15s ease, background-color .15s ease;
 }

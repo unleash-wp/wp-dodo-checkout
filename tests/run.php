@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.6.7' );
+define( 'WPDC_VERSION', '0.6.8' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1344,6 +1344,50 @@ check(
 	'BELL: the close control looks like a control',
 	1 === preg_match( '/\.wpdc__close \{[^}]*background: #fff/', $css )
 		&& 1 === preg_match( '/\.wpdc__close \{[^}]*border: 1px solid/', $css )
+);
+check(
+	/*
+	 * The mark is DRAWN, not typed.
+	 *
+	 * `&times;` is a mathematical operator borrowed to look like a cross, and it
+	 * behaves like one: its weight, its size and how far it sits off centre are
+	 * decided by whichever font the visitor's theme loaded. The same button is a
+	 * hairline on one site and a blob on the next, and on this shop it came out
+	 * light and sitting high in its circle.
+	 *
+	 * Two lines of SVG are the same shape in every theme, scale with the button
+	 * and inherit its colour -- which is why the hover still works.
+	 */
+	'BELL: the close mark is drawn, not borrowed from a font',
+	( static function ( string $source ): bool {
+		/*
+		 * The BUTTON, not the file, and that distinction IS this test.
+		 *
+		 * The first version asserted the character was absent from the whole
+		 * file, and failed on a green tree -- because the paragraph above the
+		 * button, the one explaining why we stopped using that character,
+		 * contains it. A check a comment can break is a check a comment can
+		 * also satisfy.
+		 *
+		 * Sixth time in this codebase, and this one was written ten minutes
+		 * after the last. So the element is cut out and only that is read.
+		 */
+		$start = strpos( $source, '<button type="button" class="wpdc__close"' );
+		if ( false === $start ) {
+			return false;
+		}
+		$end = strpos( $source, '</button>', $start );
+		if ( false === $end ) {
+			return false;
+		}
+		$button = substr( $source, $start, $end - $start );
+
+		return 1 === preg_match( '/<svg[\s\S]*<path/', $button )
+			&& ! str_contains( $button, '&times;' )
+			// Decorative: the button carries the label, so announcing the
+			// drawing as well would say the action twice.
+			&& str_contains( $button, 'aria-hidden="true"' );
+	} )( $shortcode )
 );
 check(
 	// Full bleed reads as a new page, and a customer who thinks they navigated

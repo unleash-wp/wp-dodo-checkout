@@ -168,7 +168,27 @@ function wpdc_render( $atts ): string {
 		// not where it appears. Ours is the window; Dodo's is the frame.
 		?>
 		<dialog class="wpdc__dialog" aria-label="<?php echo esc_attr__( 'Checkout', 'wp-dodo-checkout' ); ?>">
-			<button type="button" class="wpdc__close" aria-label="<?php echo esc_attr__( 'Close checkout', 'wp-dodo-checkout' ); ?>">&times;</button>
+			<?php
+			// A drawn X, not the multiplication sign.
+			//
+			// `&times;` is a MATHEMATICAL character borrowed to look like a
+			// cross, and it behaves like one: its weight, its size and how far
+			// it sits from the middle are decided by whatever font the visitor's
+			// theme loaded, so the same button is a thin hairline on one site
+			// and a fat blob on the next. On this shop it came out light and
+			// slightly high in a 40px circle.
+			//
+			// Two lines of SVG are the same shape everywhere, scale with the
+			// button, and take their colour from it. `aria-hidden` because the
+			// button already carries the label -- a screen reader that announced
+			// the drawing as well would say the action twice.
+			?>
+			<button type="button" class="wpdc__close" aria-label="<?php echo esc_attr__( 'Close checkout', 'wp-dodo-checkout' ); ?>">
+				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+					stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+					<path d="M6 6l12 12M18 6L6 18"></path>
+				</svg>
+			</button>
 
 			<?php
 			// Dodo's inline documentation lists what a compliant embed must show:
