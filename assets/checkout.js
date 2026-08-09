@@ -1058,10 +1058,77 @@
     }
   });
   document.addEventListener('close', function (event) {
+    // A close we did ourselves, to step out of the top layer for a wallet
+    // sheet. Tearing the checkout down here would end the purchase the customer
+    // is in the middle of paying for.
+    if (event.target.dataset && event.target.dataset.wpdcReopening === '1') return;
     if (event.target.classList && event.target.classList.contains('wpdc__dialog')) {
       closeFrame(sdk());
     }
   }, true);
+
+  /**
+   * Apple Pay on the desktop, and why our own window has to get out of its way.
+   *
+   * `showModal()` puts this dialog in the browser's TOP LAYER, which is not a
+   * z-index -- it is a plane above the whole document. Apple's sheet is an
+   * ordinary `<apple-pay-modal>` appended to <body> with `z-index: 99998`, so it
+   * renders underneath ours no matter what number it picks. Two billion would
+   * not help.
+   *
+   * And painting is only half of it: a modal dialog makes the rest of the
+   * document INERT. Even hidden, our dialog would leave Apple's QR sheet
+   * unclickable -- a customer looking at a code that does nothing.
+   *
+   * So while a wallet sheet is up, the dialog steps down to non-modal. It stays
+   * exactly where it is and keeps its contents; it simply stops owning the top
+   * layer and stops making the page inert. When the sheet goes, it steps back
+   * up.
+   *
+   * Watched by presence AND visibility, because Apple leaves the element in the
+   * DOM with `visibility: hidden` between attempts -- presence alone would drop
+   * us out of the top layer for the rest of the checkout after the first try.
+   */
+  function walletSheetIsUp() {
+    var sheet = document.querySelector('apple-pay-modal');
+    if (!sheet) return false;
+    var hiddenInline = (sheet.getAttribute('style') || '').indexOf('visibility: hidden') !== -1;
+    return !hiddenInline;
+  }
+
+  function matchWallet() {
+    var up = walletSheetIsUp();
+    var dialogs = document.querySelectorAll('.wpdc__dialog');
+    for (var i = 0; i < dialogs.length; i += 1) {
+      var dialog = dialogs[i];
+      if (!dialog.open) continue;
+      var steppedDown = dialog.dataset.wpdcWallet === '1';
+      if (up === steppedDown) continue;
+
+      // close() fires `close` synchronously, and the listener above tears the
+      // checkout down. The flag is what tells it this one is ours.
+      dialog.dataset.wpdcReopening = '1';
+      dialog.close();
+      delete dialog.dataset.wpdcReopening;
+
+      if (up) {
+        dialog.dataset.wpdcWallet = '1';
+        dialog.show();
+      } else {
+        delete dialog.dataset.wpdcWallet;
+        dialog.showModal();
+      }
+    }
+  }
+
+  if (window.MutationObserver) {
+    new MutationObserver(matchWallet).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style'],
+    });
+  }
 
   /**
    * A discount code, applied by minting the session again.

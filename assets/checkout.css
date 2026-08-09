@@ -170,6 +170,20 @@
 .wpdc__dialog::backdrop {
   background: rgb(0 0 0 / .55);
 }
+
+/* While a wallet sheet is up, the dialog is NON-modal -- and `::backdrop` only
+   exists for a modal one, so the dimming would vanish and the page behind it
+   snap bright at the worst possible moment.
+
+   A spread shadow instead of a new element: it paints the same darkness, costs
+   no markup, and captures no clicks -- which matters, because the whole point
+   of stepping down is that Apple's sheet must be reachable.
+
+   No z-index. Apple's element carries 99998, ours takes the default, and being
+   underneath is now the goal rather than the bug. */
+.wpdc__dialog[data-wpdc-wallet] {
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / .55);
+}
 .wpdc__dialog[open]::backdrop {
   animation: wpdc-fade .3s ease both;
 }

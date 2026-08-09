@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.0' );
+define( 'WPDC_VERSION', '0.7.1' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1249,6 +1249,54 @@ check(
 		// closeFrame. A third would mean the marker is cleared somewhere else
 		// too, which is how re-entrancy came back.
 		&& 2 === substr_count( $js, 'openRoot = null;' )
+);
+
+check(
+	/*
+	 * Apple Pay on the desktop, reported from a live checkout.
+	 *
+	 * `showModal()` puts our dialog in the browser's TOP LAYER, which is not a
+	 * z-index but a plane above the whole document. Apple's sheet is an ordinary
+	 * `<apple-pay-modal>` on <body> with z-index 99998, so it renders
+	 * underneath whatever number it picks -- two billion would not help.
+	 *
+	 * Painting is only half. A modal dialog makes the rest of the document
+	 * INERT, so even hidden, ours would leave Apple's QR code unclickable: a
+	 * customer staring at a code that does nothing.
+	 *
+	 * So the dialog steps down to non-modal while a sheet is up, and back
+	 * afterwards.
+	 */
+	'BELL: our window steps out of the top layer while a wallet sheet is up',
+	str_contains( $jsCode, 'function walletSheetIsUp' )
+		&& str_contains( $jsCode, "querySelector('apple-pay-modal')" )
+		&& 1 === preg_match( '/wpdcWallet = .1.;[\s\S]{0,80}dialog\.show\(\);/', $jsCode )
+		&& 1 === preg_match( '/delete dialog\.dataset\.wpdcWallet;[\s\S]{0,80}dialog\.showModal\(\);/', $jsCode )
+);
+
+check(
+	// Apple leaves the element in the DOM with `visibility: hidden` between
+	// attempts. Presence alone would drop us out of the top layer for the rest
+	// of the checkout after the first try -- and never put us back.
+	'BELL: presence is not enough; the sheet has to be visible',
+	str_contains( $jsCode, "indexOf('visibility: hidden')" )
+);
+
+check(
+	// `close()` fires `close` synchronously and the listener tears the checkout
+	// down. Stepping out of the top layer must not end the purchase somebody is
+	// in the middle of paying for.
+	'BELL: a close we did ourselves does not cancel the checkout',
+	1 === preg_match( '/wpdcReopening === .1.\)\s*return;/', $jsCode )
+		&& 1 === preg_match( '/wpdcReopening = .1.;[\s\S]{0,120}dialog\.close\(\)/', $jsCode )
+);
+
+check(
+	// `::backdrop` exists only for a modal dialog, so stepping down would snap
+	// the page bright at the worst possible moment. A spread shadow paints the
+	// same darkness, captures no clicks, and needs no markup.
+	'SILENCE: the page stays dimmed while the dialog is non-modal',
+	1 === preg_match( '/\.wpdc__dialog\[data-wpdc-wallet\][^}]*box-shadow[^}]*100vmax/', $css )
 );
 
 check(
