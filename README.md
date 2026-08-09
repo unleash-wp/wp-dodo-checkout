@@ -70,6 +70,17 @@ A **discount field** sits above the frame. Dodo accepts codes in a summary panel
 it does not render in an embedded checkout, so without it a code printed on a
 newsletter has nowhere to be typed.
 
+**`WPDC_DOWNLOAD_URL`** is where a licence key is redeemed for the file it
+bought — the shop's download host, `https://` only. Set it when the product's
+files live on your own storage rather than being uploaded to Dodo: those
+products issue a key and no link, because one static URL cannot be personal to
+a buyer, so the panel builds the button itself.
+
+The key travels after the `#`, which is the one part of an address a browser
+never sends to a server — no access log, no proxy log, no `Referer` — and the
+download page clears it from the address bar before doing anything else. Unset,
+the panel shows the key alone.
+
 Define **`WPDC_RETURN_URL`** only if there is a real thank-you page. It must be
 on this site — a return URL a visitor could choose would be an open redirect on
 the shop's own domain, so it is checked rather than trusted. Without one the

@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.6.2' );
+define( 'WPDC_VERSION', '0.6.3' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -2119,6 +2119,38 @@ check(
 		&& str_contains( $js, 'code.textContent = key' )
 		&& ! preg_match( '/innerHTML|insertAdjacentHTML/', $js )
 		&& str_contains( $client, "str_starts_with( \$url, 'https://' )" )
+);
+check(
+	// When the key IS the delivery.
+	//
+	// A product whose files live on the shop's own host has no link in the
+	// grant: the entitlement issues a key and nothing more, because one static
+	// URL cannot be personal to a buyer. Without this the customer left the
+	// checkout holding a code and no address for it.
+	//
+	// The key goes after the '#', the one part of an address a browser never
+	// sends to a server -- no access log, no proxy log, no Referer. A query
+	// parameter would be written down by every hop between the buyer and the
+	// file, which is the thing the download page was built to avoid.
+	'BELL: a key with no file link becomes a download button, and the key rides in the fragment',
+	1 === preg_match( "/get\.href = cfg\.downloadUrl \+ '#k=' \+ encodeURIComponent\(key\)/", $js )
+		// Never a query parameter, on any of the three spellings that would
+		// reintroduce the logging problem.
+		&& ! preg_match( "/downloadUrl \+ '\?/", $js )
+		&& ! preg_match( "/[?&]k=' \+ encodeURIComponent/", $js )
+		// Only when Dodo delivered nothing itself: two buttons would be two
+		// answers to one question, and one of them the wrong file.
+		&& str_contains( $js, 'cfg.downloadUrl && files.length === 0' )
+);
+check(
+	// It is an href a buyer clicks seconds after paying, carrying their key.
+	// Plain http would put that on the wire in the clear, and the value is
+	// never taken from a request -- same rule as the return URL beside it.
+	'BELL: the download host is configured, https, and never comes from the caller',
+	str_contains( $client, 'function wpdc_download_url' )
+		&& 1 === preg_match( "/function wpdc_download_url[\s\S]{0,700}str_starts_with\( \\\$configured, 'https:\/\/' \)/", $client )
+		&& str_contains( $shortcode, "'downloadUrl'     => wpdc_download_url()" )
+		&& '' === wpdc_download_url()
 );
 check(
 	// A product with no entitlement attached delivers nothing, and a grants

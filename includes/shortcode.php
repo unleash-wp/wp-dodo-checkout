@@ -434,6 +434,11 @@ function wpdc_enqueue(): void {
 			// every visitor and a trap for the next translator.
 			'doneFiles'       => __( 'Your download', 'wp-dodo-checkout' ),
 			'doneKey'         => __( 'Your licence key', 'wp-dodo-checkout' ),
+			// Where a key is redeemed for the file. Empty unless the shop has
+			// configured a download host, and the panel then shows the key
+			// alone rather than a button that leads nowhere.
+			'downloadUrl'     => wpdc_download_url(),
+			'downloadCta'     => __( 'Download now', 'wp-dodo-checkout' ),
 			'unconfirmed'     => __( 'We could not confirm your order in time. If you were charged it is on its way — check your inbox, or contact us and we will sort it out.', 'wp-dodo-checkout' ),
 		)
 	);

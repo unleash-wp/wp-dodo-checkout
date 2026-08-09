@@ -776,6 +776,32 @@
 
     keys.forEach(function (key) {
       if (typeof key !== 'string' || !key) return;
+
+      // The download, when the key IS the delivery.
+      //
+      // A product whose files live on the shop's own host has no link in the
+      // grant -- the entitlement issues a key and nothing else, because one
+      // static URL cannot be personal to a buyer. So the button is built here
+      // from the two things this panel already has: the host, and the key.
+      //
+      // The key goes after the '#'. That is the one part of an address a
+      // browser never sends to a server, so it reaches no access log, no proxy
+      // log and no Referer; the download page reads it and clears the address
+      // bar before doing anything else. A query parameter would be written
+      // down by every hop.
+      //
+      // Only when Dodo delivered nothing itself. If it did, that link is the
+      // buyer's file and a second button beside it would be two answers to one
+      // question.
+      if (cfg.downloadUrl && files.length === 0) {
+        var get = document.createElement('a');
+        get.className = 'wpdc__done-file';
+        get.href = cfg.downloadUrl + '#k=' + encodeURIComponent(key);
+        get.textContent = cfg.downloadCta || '';
+        get.rel = 'noopener';
+        box.appendChild(get);
+      }
+
       var label = document.createElement('p');
       label.className = 'wpdc__done-key-label';
       label.textContent = cfg.doneKey || '';

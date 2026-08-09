@@ -647,6 +647,32 @@ function wpdc_payment_goods( string $payment ): array {
  * Never taken from the request. A return_url a visitor can choose turns this
  * into an open redirect on the shop's own domain.
  */
+/**
+ * Where a licence key can be redeemed for the file it bought.
+ *
+ * A different origin on purpose, and the one place in this plugin where that
+ * is right: the download host is the shop's delivery surface, this is its sales
+ * surface, and the two are separate so that a public page serving files holds
+ * none of the credentials a checkout needs.
+ *
+ * Unset means the completion panel shows the key and no button. That is a
+ * shop that has not finished setting up, not a broken one -- the key is still
+ * correct and Dodo's own mail still names it.
+ *
+ * https only. This ends up as an href a buyer clicks straight after paying,
+ * and it carries their key in the fragment; plain http would put that on the
+ * wire in the clear.
+ */
+function wpdc_download_url(): string {
+	if ( defined( 'WPDC_DOWNLOAD_URL' ) && is_string( WPDC_DOWNLOAD_URL ) ) {
+		$configured = trim( WPDC_DOWNLOAD_URL );
+		if ( str_starts_with( $configured, 'https://' ) ) {
+			return $configured;
+		}
+	}
+	return '';
+}
+
 function wpdc_return_url(): string {
 	if ( defined( 'WPDC_RETURN_URL' ) && is_string( WPDC_RETURN_URL ) ) {
 		$configured = trim( WPDC_RETURN_URL );
