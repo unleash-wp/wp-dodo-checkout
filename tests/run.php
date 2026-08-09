@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.5.0' );
+define( 'WPDC_VERSION', '0.6.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1062,7 +1062,9 @@ $visible = ( static function ( string ...$files ): array {
 		$out = array_merge( $out, $m[1] );
 	}
 	return array_values( array_unique( $out ) );
-} )( $shortcode, $client );
+	// rest.php too: it renders a sentence to a visitor when a session cannot be
+	// created, and it sat outside this check while doing so.
+} )( $shortcode, $client, $rest );
 
 check(
 	'SILENCE: there are visitor-facing strings, so the check below is not vacuous',
@@ -1699,6 +1701,117 @@ check(
 		&& 0 === preg_match( '/lumo/i', source( $root . '/README.md' ) )
 		&& 0 === preg_match( '/lumo/i', source( $root . '/.github/workflows/ci.yml' ) )
 );
+// ─── What a finished purchase delivers ───────────────────────────────────────
+//
+// The largest block added to the client -- session status, payment to customer,
+// customer to grants, grants filtered back to this payment -- was covered by
+// grepping its own source for a `return` statement. That is the failure this
+// file exists to prevent, so it is exercised here against scripted responses.
+
+/**
+ * Script one grant row.
+ *
+ * @param array<string, mixed> $over Fields to override on the default row.
+ */
+function grant( array $over = array() ): array {
+	return array_merge(
+		array(
+			'payment_id' => 'pay_1',
+			'status'     => 'Delivered',
+		),
+		$over
+	);
+}
+
+/** Script the three calls wpdc_session_finished makes for a succeeded order. */
+function finished_with( array $grants, string $status = 'succeeded' ): void {
+	respond( 200, array( 'payment_status' => $status, 'payment_id' => 'pay_1' ) );
+	respond( 200, array( 'customer' => array( 'customer_id' => 'cus_1' ) ) );
+	respond( 200, array( 'items' => $grants ) );
+}
+
+configure();
+respond( 200, array( 'payment_status' => 'requires_payment_method', 'payment_id' => 'pay_1' ) );
+$pending = wpdc_session_finished( 'cks_1' );
+check(
+	// The one wrong answer available here: a thank-you page for a payment that
+	// has not succeeded. And it must not spend two more API calls asking what a
+	// payment that did not happen delivered.
+	'BELL: a payment that has not succeeded is not finished, and costs one call',
+	false === $pending['finished'] && 1 === count( $GLOBALS['wpdc_test_requests'] )
+);
+
+configure();
+finished_with( array(
+	grant( array( 'digital_product_delivery' => array(
+		'external_url' => 'https://downloads.example/latest.zip',
+		'instructions' => 'Plugin ZIP',
+		'files'        => array( array( 'download_url' => 'https://dodo.example/frozen.zip', 'filename' => 'frozen.zip' ) ),
+	) ) ),
+) );
+$hosted = wpdc_session_finished( 'cks_1' );
+check(
+	// The hosted link REPLACES the upload. Both would hand the buyer a second
+	// link pointing at the build that was current the day it was uploaded.
+	'BELL: a hosted link is delivered and the frozen copy beside it is not',
+	1 === count( $hosted['files'] )
+		&& 'https://downloads.example/latest.zip' === $hosted['files'][0]['url']
+		&& 'Plugin ZIP' === $hosted['files'][0]['name']
+);
+
+configure();
+finished_with( array(
+	grant( array( 'digital_product_delivery' => array( 'files' => array(
+		array( 'download_url' => 'https://dodo.example/book.pdf', 'filename' => 'book.pdf' ),
+		array( 'download_url' => 'http://dodo.example/insecure.pdf', 'filename' => 'insecure.pdf' ),
+		array( 'download_url' => 'https://dodo.example/unnamed.pdf', 'filename' => '' ),
+	) ) ) ),
+) );
+$uploaded = wpdc_session_finished( 'cks_1' );
+check(
+	// These become an href in somebody's browser. Plain http and a nameless file
+	// are dropped rather than rendered.
+	'BELL: only a named https file is handed to the browser',
+	1 === count( $uploaded['files'] ) && 'book.pdf' === $uploaded['files'][0]['name']
+);
+
+configure();
+finished_with( array(
+	grant( array( 'license_key' => array( 'key' => 'AAAA-BBBB' ) ) ),
+	grant( array( 'payment_id' => 'pay_OTHER', 'license_key' => array( 'key' => 'SOMEBODY-ELSE' ) ) ),
+	grant( array( 'status' => 'Pending', 'license_key' => array( 'key' => 'NOT-YET' ) ) ),
+) );
+$keys = wpdc_session_finished( 'cks_1' );
+check(
+	// The customer's other purchases arrive in the same list. The session in
+	// hand proves THIS payment, not their history -- and a pending grant is not
+	// a delivered one.
+	'BELL: another payment and an undelivered grant are both dropped',
+	array( 'AAAA-BBBB' ) === $keys['keys']
+);
+
+configure();
+finished_with( array( grant( array( 'status' => 'delivered', 'license_key' => array( 'key' => 'LOWER-CASE' ) ) ) ) );
+$case = wpdc_session_finished( 'cks_1' );
+check(
+	// Their documentation spells this status two ways on neighbouring endpoints.
+	// Guessing wrong is invisible: an empty panel for ever.
+	'BELL: a lower-case delivered status still counts as delivered',
+	array( 'LOWER-CASE' ) === $case['keys']
+);
+
+configure();
+respond( 200, array( 'payment_status' => 'succeeded', 'payment_id' => 'pay_1' ) );
+respond( 500, array( 'error' => 'boom' ) );
+$broke = wpdc_session_finished( 'cks_1' );
+check(
+	// The order finished. "Finished, but the goods list could not be read" must
+	// not reach a poll as "not finished" -- it would never stop asking, and the
+	// customer would be told their purchase could not be confirmed.
+	'BELL: an unreadable goods list still reports the order as finished',
+	true === $broke['finished'] && array() === $broke['files'] && array() === $broke['keys']
+);
+
 check(
 	// The panel with the download, the key and the word about the mail was
 	// built for the ONE case that pays nothing: the poll only ever started on a
@@ -1742,8 +1855,10 @@ check(
 	// as the files -- dropped, a purchase set up this way would deliver by mail
 	// and show nothing at all in the popup.
 	'BELL: a hosted link counts as delivery, not only an uploaded file',
-	str_contains( $client, "digital_product_delivery'\]\['external_url" )
-		|| str_contains( $client, "['digital_product_delivery']['external_url']" )
+	// One operand, not two. The first of the pair that stood here was false for
+	// every possible input -- `\]` is literal inside double quotes -- so half the
+	// assertion could never fail and the `||` hid that.
+	str_contains( $client, "['digital_product_delivery']['external_url']" )
 );
 check(
 	// Filenames and keys come out of an API response and go onto the page.

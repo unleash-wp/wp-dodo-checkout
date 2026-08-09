@@ -138,9 +138,19 @@ then a dashboard matter:
 
 - **Google Pay** — enable it on the account, nothing else.
 - **Apple Pay** — register the domain under **Settings > Payment Methods > Apple
-  Pay > Manage domains**. Apple's association file is already served by this
-  plugin, from `init`, at
-  `/.well-known/apple-developer-merchantid-domain-association`.
+  Pay > Manage domains**, download the association file Apple gives you, and
+  drop it in this plugin's directory as
+  `apple-developer-merchantid-domain-association` — no extension.
+
+  The plugin then serves it from `init` at
+  `/.well-known/apple-developer-merchantid-domain-association`, which is the
+  part worth having: a dot-directory in the web root is what rewrite rules and
+  hardening plugins reach for first.
+
+  **The file is not in this repo and cannot be** — it is issued per domain. Until
+  you place it, `includes/apple-pay.php` falls through to WordPress and the path
+  404s, deliberately: an empty 200 passes Apple's fetch and fails its
+  verification, which is a far worse place to debug from.
 
 Without those two steps the customer sees the form and no wallets, whatever this
 plugin sends.
@@ -152,8 +162,12 @@ Recorded because somebody will meet them and wonder whose they are:
 - The `allow` attribute is malformed — `"payment keyboard-map *"` where the
   syntax is `"payment *; keyboard-map *"` — hence a `Unrecognized origin:
   'keyboard-map'` warning.
-- The SDK posts messages to its own origin instead of the parent window, so
-  `checkout.breakdown` events do not arrive.
+- The SDK posts messages to its own origin instead of the parent window, and
+  logs a `postMessage` error for each. The events themselves DO arrive —
+  `checkout.breakdown` fills the summary panel on every open, measured on a live
+  checkout. An earlier draft of this line said they do not, which was wrong and
+  worth correcting here rather than quietly: the totals, the VAT line and the
+  whole zero-total completion path all read that event.
 - Their fraud SDK asks for accelerometer and bluetooth, which the frame does not
   grant.
 

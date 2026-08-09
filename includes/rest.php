@@ -141,16 +141,22 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 }
 
 /**
- * Did the checkout the caller is looking at finish?
- *
- * Exists for one case, and is deliberately not more general than that: a cart
- * discounted to zero completes on Dodo's side while their frame sits on a
- * payment step it cannot draw. Nothing tells the browser, so the browser asks.
+ * Did the checkout the caller is looking at finish, and what did it deliver?
  *
  * Public like the session route, and for the same reason -- buying needs no
- * account. It answers `{ finished: bool, redirect: string }` and nothing more,
- * so a guessed session id buys a boolean about somebody else's order and no
- * detail of it.
+ * account, so confirming a purchase cannot need one either.
+ *
+ * WHAT THE SESSION ID IS WORTH, stated plainly because an earlier version of
+ * this comment claimed it was worth a boolean and that stopped being true the
+ * moment the download links and the licence key were added below: the id is a
+ * CAPABILITY. Presenting it returns this order's signed download URLs and its
+ * key -- the same things Dodo puts in the mail. It is minted by Dodo, random,
+ * never guessed in practice, and it goes back in a POST body rather than a URL
+ * so it stays out of every log on the way. What still never leaves is the
+ * customer's name and email, which ride along on every upstream response this
+ * route reads.
+ *
+ * The API key is spent per call, so the ceiling below is not optional.
  */
 function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
 	if ( ! wpdc_is_configured() ) {
