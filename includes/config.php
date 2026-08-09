@@ -90,18 +90,6 @@ function wpdc_format_price( ?int $minor, string $currency ): string {
 	return number_format_i18n( $minor / 100, 2 ) . ( '' !== $currency ? ' ' . $currency : '' );
 }
 
-/**
- * The site's language as a two-letter code, for Dodo.
- *
- * WordPress locales look like `de_DE` or `pt_BR`; Dodo wants the language part.
- * An unrecognisable locale yields an empty string, and an empty string is left
- * OUT of the request rather than sent -- forcing a language we are not sure of
- * is worse than letting Dodo choose, which is what it does without the field.
- */
-function wpdc_language(): string {
-	$locale = function_exists( 'determine_locale' ) ? determine_locale() : get_locale();
-	return 1 === preg_match( '/^([a-z]{2})(?:[_-]|$)/i', (string) $locale, $m ) ? strtolower( $m[1] ) : '';
-}
 
 /**
  * Two languages, and everyone lands in one of them.
@@ -167,6 +155,18 @@ function wpdc_is_discount_code( $value ): bool {
  */
 function wpdc_is_session_id( $value ): bool {
 	return is_string( $value ) && 1 === preg_match( '/^cks_[A-Za-z0-9]{1,64}$/', $value );
+}
+
+/**
+ * Is this an error rather than a result?
+ *
+ * Every function in the client answers either a result or `wpdc_error()`, and
+ * ten call sites across five files spelled the same test by hand. The failure
+ * is a TYPE in everything but name, and a hand-written test is a place to get
+ * the strict comparison wrong once and read a failure as a success.
+ */
+function wpdc_is_error( $value ): bool {
+	return is_array( $value ) && isset( $value['ok'] ) && false === $value['ok'];
 }
 
 function wpdc_api_key_is_constant(): bool {

@@ -180,7 +180,7 @@ function wpdc_catalog( bool $fresh = false ) {
 	}
 
 	$result = wpdc_dodo_request( 'GET', '/products?page_size=100' );
-	if ( isset( $result['ok'] ) && false === $result['ok'] ) {
+	if ( wpdc_is_error( $result ) ) {
 		return $result;
 	}
 
@@ -228,7 +228,7 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	}
 
 	$catalog = wpdc_catalog();
-	if ( isset( $catalog['ok'] ) && false === $catalog['ok'] ) {
+	if ( wpdc_is_error( $catalog ) ) {
 		return $catalog;
 	}
 
@@ -237,7 +237,7 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	// ago, and making them wait out a cache reads as the plugin being broken.
 	if ( ! isset( $catalog[ $product ] ) ) {
 		$catalog = wpdc_catalog( true );
-		if ( isset( $catalog['ok'] ) && false === $catalog['ok'] ) {
+		if ( wpdc_is_error( $catalog ) ) {
 			return $catalog;
 		}
 	}
@@ -346,15 +346,15 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	 * anonymous visitor is, and guessing is how somebody's checkout gets filled
 	 * with somebody else's name.
 	 *
-	 * It exists because the answer is coming. UnleashWP's account service --
-	 * magic link, no password, edit your details once -- issues a session on
-	 * `.unleash-wp.com`, and a site that can read it knows the email and name
-	 * before the customer types anything. Handed to Dodo here, the contact step
-	 * arrives filled in, which is the step this checkout has been fighting all
-	 * day.
+	 * It exists because a site that already knows its visitor -- a membership
+	 * plugin, a logged-in user, any session it can read -- has the email and the
+	 * name before the customer types anything. Handed to Dodo here, the contact
+	 * step arrives filled in, and that step is the longest thing between a
+	 * decision to buy and the money.
 	 *
 	 * A filter rather than a setting, so the identity source stays outside this
-	 * plugin. It sells things; it should not also be an account system.
+	 * plugin entirely. This plugin sells things; it is not an account system and
+	 * has no opinion about which one you run.
 	 *
 	 *   add_filter( 'wpdc_customer', fn() => array(
 	 *       'email' => $session->email,
@@ -431,7 +431,7 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	$body['cancel_url'] = '' !== $return ? $return : home_url();
 
 	$result = wpdc_dodo_request( 'POST', '/checkouts', $body );
-	if ( isset( $result['ok'] ) && false === $result['ok'] ) {
+	if ( wpdc_is_error( $result ) ) {
 		// A refused code is the customer's typo, not our outage, and it must not
 		// be reported as one. Anything that failed WITH a code and would have
 		// worked without is theirs to correct -- the generic "try again in a
@@ -486,7 +486,7 @@ function wpdc_session_finished( string $session ): array {
 	}
 
 	$result = wpdc_dodo_request( 'GET', '/checkouts/' . rawurlencode( $session ), null );
-	if ( isset( $result['ok'] ) && false === $result['ok'] ) {
+	if ( wpdc_is_error( $result ) ) {
 		return $result;
 	}
 
@@ -530,7 +530,7 @@ function wpdc_payment_goods( string $payment ): array {
 	}
 
 	$paid = wpdc_dodo_request( 'GET', '/payments/' . rawurlencode( $payment ), null );
-	if ( isset( $paid['ok'] ) && false === $paid['ok'] ) {
+	if ( wpdc_is_error( $paid ) ) {
 		return $none;
 	}
 	$customer = $paid['customer']['customer_id'] ?? null;
@@ -547,7 +547,7 @@ function wpdc_payment_goods( string $payment ): array {
 		'/customers/' . rawurlencode( $customer ) . '/entitlement-grants?page_size=100',
 		null
 	);
-	if ( isset( $grants['ok'] ) && false === $grants['ok'] ) {
+	if ( wpdc_is_error( $grants ) ) {
 		return $none;
 	}
 

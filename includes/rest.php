@@ -186,7 +186,7 @@ function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
 	set_transient( $bucket, $spent + 1, MINUTE_IN_SECONDS );
 
 	$result = wpdc_session_finished( (string) $request->get_param( 'session' ) );
-	if ( isset( $result['ok'] ) && false === $result['ok'] ) {
+	if ( wpdc_is_error( $result ) ) {
 		// A checkout that cannot be asked about is not a finished one. Reported
 		// as "not yet" rather than as an error, because the caller is polling
 		// and there is nothing for a customer to do about a failed poll.

@@ -173,7 +173,7 @@ function wpdc_render_catalogue(): void {
 	// reading after a change is always fresh.
 	$catalog = wpdc_catalog();
 
-	if ( isset( $catalog['ok'] ) && false === $catalog['ok'] ) {
+	if ( wpdc_is_error( $catalog ) ) {
 		printf(
 			'<div class="notice notice-error inline"><p>%s</p></div>',
 			esc_html( $catalog['message'] )

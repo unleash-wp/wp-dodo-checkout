@@ -68,7 +68,7 @@
         // client.php takes care never to pass one on -- this is the other
         // end of the same rule.
         const err = new Error(typeof data?.message === 'string' ? data.message : cfg.failed);
-        err.uwpFromServer = typeof data?.message === 'string';
+        err.wpdcFromServer = typeof data?.message === 'string';
         throw err;
       });
     });
@@ -356,12 +356,20 @@
 
     var rate = (b.tax / base) * 100;
     if (!isFinite(rate) || rate <= 0 || rate > 40) return;
+    el.textContent = percent(rate);
+  }
 
-    // One decimal at most, and none when it is whole: "7 %" reads as a rate,
-    // "7,0 %" reads as a calculation.
-    var rounded = Math.round(rate * 10) / 10;
+  /**
+   * A percentage in brackets, the way both lines that show one want it.
+   *
+   * One decimal at most, and none when it is whole: "7 %" reads as a rate,
+   * "7,0 %" reads as a calculation. This was written out twice, identically,
+   * which is two places to get the comma wrong.
+   */
+  function percent(value) {
+    var rounded = Math.round(value * 10) / 10;
     var shown = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace('.', ',');
-    el.textContent = ' (' + shown + ' %)';
+    return ' (' + shown + ' %)';
   }
 
   /**
@@ -379,10 +387,7 @@
     if (!b.subTotal || !b.discount || b.discount <= 0) return;
     var off = (b.discount / b.subTotal) * 100;
     if (!isFinite(off) || off <= 0 || off > 100) return;
-
-    var rounded = Math.round(off * 10) / 10;
-    var shown = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace('.', ',');
-    el.textContent = ' (' + shown + ' %)';
+    el.textContent = percent(off);
   }
 
   /** One place for a refusal, so every one of them looks the same. */
@@ -824,8 +829,7 @@
         clear.hidden = true;
       })
       .catch(function (err) {
-        note.textContent = err && err.uwpFromServer ? err.message : cfg.failed;
-        note.classList.add('is-error');
+        fail(note, err && err.wpdcFromServer ? err.message : cfg.failed);
       });
   });
 
@@ -869,8 +873,7 @@
         if (clear) clear.hidden = false;
       })
       .catch(function (err) {
-        note.textContent = err && err.uwpFromServer ? err.message : cfg.failed;
-        note.classList.add('is-error');
+        fail(note, err && err.wpdcFromServer ? err.message : cfg.failed);
       });
   });
 
@@ -897,7 +900,7 @@
       .catch(function (err) {
         // err.message is only ever a server sentence (see above) or a browser
         // failure. Anything not recognised falls back to our own wording.
-        say(root, err && err.uwpFromServer ? err.message : cfg.failed);
+        say(root, err && err.wpdcFromServer ? err.message : cfg.failed);
       })
       .finally(function () {
         // Re-enabled even on success: the modal can be dismissed, and a button

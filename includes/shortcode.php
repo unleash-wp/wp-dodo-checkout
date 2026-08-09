@@ -287,13 +287,6 @@ function wpdc_render( $atts ): string {
 }
 
 /**
- * A two-letter language to the locale WordPress names its catalogues with.
- *
- * `de` is `de_DE` and `en` is `en_US`; anything else is passed through and
- * WordPress falls back on its own if it has nothing. Deliberately a short list
- * rather than a guess like `xx_XX`, which names catalogues that do not exist.
- */
-/**
  * Load our own catalogue for one render.
  *
  * `load_textdomain` takes a path, so nothing here depends on WordPress having
@@ -317,6 +310,16 @@ function wpdc_restore_catalogue(): void {
 	}
 }
 
+/**
+ * A two-letter language to the locale WordPress names its catalogues with.
+ *
+ * `de` is `de_DE`, everything else is `en_US`. Deliberately a short list rather
+ * than a guess like `xx_XX`, which names a catalogue that does not exist and
+ * leaves the labels English beside a checkout that is not.
+ *
+ * This block spent a while stranded above the wrong function, which is how a
+ * comment stops being documentation and starts being noise.
+ */
 function wpdc_locale_for( string $lang ): string {
 	// Two, because the shop speaks two. A longer list would name catalogues
 	// that do not exist and leave the labels English beside a checkout that is
@@ -348,7 +351,7 @@ function wpdc_plain_text( string $markdown ): string {
  */
 function wpdc_render_item( string $product ): void {
 	$catalog = wpdc_catalog();
-	if ( isset( $catalog['ok'] ) && false === $catalog['ok'] ) {
+	if ( wpdc_is_error( $catalog ) ) {
 		return; // the checkout itself will say what is wrong
 	}
 	$item = $catalog[ $product ] ?? null;

@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.6.0' );
+define( 'WPDC_VERSION', '0.6.1' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -519,8 +519,14 @@ check(
 	str_contains( $rest, "null !== \$request->get_param( 'bump' )" )
 );
 check(
+	// Renamed to the house prefix: every other symbol in this plugin carries
+	// `wpdc`, and this one carried a different one.
 	'BELL: only a server-written sentence is shown to the visitor',
-	str_contains( $js, 'uwpFromServer' ) && ! str_contains( $js, 'say(root, err.message' )
+	str_contains( $js, 'wpdcFromServer' )
+		&& ! str_contains( $js, 'say(root, err.message' )
+		// One refusal path. Two catch bodies used to rebuild `fail()` by hand,
+		// which is two places for a refusal to stop looking like a refusal.
+		&& 1 === substr_count( $js, "note.classList.add('is-error')" )
 );
 check(
 	// The rename shipped docs that named a shortcode the plugin did not
@@ -1701,6 +1707,19 @@ check(
 		&& 0 === preg_match( '/lumo/i', source( $root . '/README.md' ) )
 		&& 0 === preg_match( '/lumo/i', source( $root . '/.github/workflows/ci.yml' ) )
 );
+configure();
+check(
+	// The failure is a TYPE in everything but name, and ten call sites across
+	// five files spelled its test out by hand -- ten places to get the strict
+	// comparison wrong once and read a failure as a success.
+	'BELL: an error is recognised by one predicate, not by ten hand-written tests',
+	true === wpdc_is_error( wpdc_error( 'x', false, 'y' ) )
+		&& false === wpdc_is_error( array( 'ok' => true, 'checkout_url' => 'u' ) )
+		&& false === wpdc_is_error( array( 'finished' => false ) )
+		&& false === wpdc_is_error( null )
+		&& 0 === preg_match( "/isset\( \\\$\w+\['ok'\] \) && false ===/", $client . $rest . $shortcode )
+);
+
 // ─── What a finished purchase delivers ───────────────────────────────────────
 //
 // The largest block added to the client -- session status, payment to customer,
