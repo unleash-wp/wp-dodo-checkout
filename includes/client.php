@@ -102,7 +102,16 @@ function wpdc_dodo_request( string $method, string $path, ?array $body = null ) 
 		// Ours, not the visitor's. Said plainly in the log and vaguely on the
 		// page: a visitor cannot act on it and should not be shown our
 		// configuration problems.
-		error_log( 'wp-dodo-checkout: the Dodo API key was refused (' . $status . ')' );
+		//
+		// Once a minute, not once a call. This used to be reached only by a
+		// click; the status route made it reachable from a polling loop, and a
+		// shop whose key has been rotated would write thirty identical lines
+		// per attempted checkout, from any caller. The thirtieth says nothing
+		// the first did not, and a log that fills up is a log nobody reads.
+		if ( false === get_transient( 'wpdc_logged_refusal' ) ) {
+			set_transient( 'wpdc_logged_refusal', 1, MINUTE_IN_SECONDS );
+			error_log( 'wp-dodo-checkout: the Dodo API key was refused (' . $status . ')' );
+		}
 		return wpdc_error(
 			'unauthorised',
 			false,
@@ -476,9 +485,16 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
  * So the shop asks instead of waiting to be told. One call, one question:
  * `GET /checkouts/{id}` answers `payment_status`.
  *
- * What comes back to the browser is a boolean and nothing else. The same
- * response also carries the customer's name and email, and this route is public
- * -- so the name and the email stay here.
+ * WHAT COMES BACK TO THE BROWSER. This paragraph used to say "a boolean and
+ * nothing else", and that stopped being true the moment the download links and
+ * the licence key were added below. It now returns `finished`, `files` and
+ * `keys` -- the same things Dodo puts in its mail -- which makes the session id
+ * a capability rather than a lookup, and is why the route that reads this one
+ * takes it in a POST body instead of a URL.
+ *
+ * What still never leaves is the customer's NAME and EMAIL. They ride along on
+ * every upstream response read here, the route is public, and nothing about
+ * confirming a purchase needs them.
  */
 function wpdc_session_finished( string $session ): array {
 	if ( ! wpdc_is_session_id( $session ) ) {
@@ -580,7 +596,8 @@ function wpdc_payment_goods( string $payment ): array {
 		 * correctly by mail and show nothing at all in the popup.
 		 */
 		$external = $grant['digital_product_delivery']['external_url'] ?? '';
-		if ( is_string( $external ) && str_starts_with( $external, 'https://' ) ) {
+		$hosted   = is_string( $external ) && str_starts_with( $external, 'https://' );
+		if ( $hosted ) {
 			$files[] = array(
 				'name' => (string) ( $grant['digital_product_delivery']['instructions'] ?? '' ),
 				'url'  => $external,
@@ -592,7 +609,13 @@ function wpdc_payment_goods( string $payment ): array {
 		// upload BESIDE the link would hand the buyer two, one of which is the
 		// build that was current the day it was uploaded: the exact staleness
 		// the hosted link exists to avoid.
-		$uploaded = '' === $external ? ( $grant['digital_product_delivery']['files'] ?? array() ) : array();
+		//
+		// "Wins" means a link we ACCEPTED, not merely one that was present.
+		// Testing `'' === $external` gave an http:// entitlement the power to
+		// suppress the uploads while being rejected itself two lines above, so
+		// the grant delivered nothing at all. A link that did not pass is not a
+		// better link, it is no link.
+		$uploaded = $hosted ? array() : ( $grant['digital_product_delivery']['files'] ?? array() );
 
 		foreach ( $uploaded as $file ) {
 			$url  = $file['download_url'] ?? '';

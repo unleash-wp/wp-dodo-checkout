@@ -56,6 +56,25 @@ shortcode ready to copy.
 | `bump` | — | A second product id. Always one copy, never one per seat. |
 | `bump_label` | generic | What the checkbox says. Write the price here if you want one shown. |
 | `quantity` | `1` | 1 to 50. |
+| `lang` | site locale | Two letters. Forces the language of Dodo's own frame, which otherwise follows the browser rather than the page. |
+
+### What the customer sees when they finish
+
+The popup shows the completion itself: the download link, the licence key if the
+product issues one, and a line saying the mail is on its way. It does not wait
+to be told — Dodo's frame reports nothing on a cart discounted to zero, and its
+payment step 404s on a payment link that does not exist for a zero total — so
+the shop asks its own server instead, which asks Dodo once and answers.
+
+A **discount field** sits above the frame. Dodo accepts codes in a summary panel
+it does not render in an embedded checkout, so without it a code printed on a
+newsletter has nowhere to be typed.
+
+Define **`WPDC_RETURN_URL`** only if there is a real thank-you page. It must be
+on this site — a return URL a visitor could choose would be an open redirect on
+the shop's own domain, so it is checked rather than trusted. Without one the
+completion is shown in the popup, which is the better ending anyway: leaving for
+the front page reads as the checkout breaking.
 
 The button is styled through custom properties, so a theme restyles it without
 touching this plugin:

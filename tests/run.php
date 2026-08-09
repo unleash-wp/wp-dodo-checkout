@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.6.1' );
+define( 'WPDC_VERSION', '0.6.2' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -95,8 +95,57 @@ class WP_Error {
 	public function __construct( public string $code = '', public string $message = '' ) {}
 }
 
+// ─── Enough WordPress to run the REST routes ─────────────────────────────────
+//
+// Added because a check that read rest.php as TEXT could not fail for the thing
+// it was named after. It asserted that "'methods' => 'POST'," appears in the
+// file -- and the file contains that string twice, once per route. Changing the
+// status route to GET, which is the entire failure it existed to catch, left
+// all 192 checks passing.
+//
+// Recording what register_rest_route is actually CALLED with costs about thirty
+// lines and makes the route testable instead of greppable, which also closes
+// the gap underneath: the ceiling, the fail-soft answers and the response shape
+// had no behavioural coverage at all.
+
+define( 'MINUTE_IN_SECONDS', 60 );
+
+$GLOBALS['wpdc_test_routes'] = array();
+
+function register_rest_route( string $namespace, string $route, array $args ): bool {
+	$GLOBALS['wpdc_test_routes'][ $namespace . $route ] = $args;
+	return true;
+}
+function wp_verify_nonce( $nonce, $action ) {
+	return ( $GLOBALS['wpdc_test_nonce'] ?? 'good' ) === $nonce ? 1 : false;
+}
+
+class WP_REST_Request {
+	public function __construct(
+		private array $params = array(),
+		private array $headers = array()
+	) {}
+	public function get_param( string $name ) {
+		return $this->params[ $name ] ?? null;
+	}
+	public function get_header( string $name ) {
+		return $this->headers[ strtolower( $name ) ] ?? null;
+	}
+}
+
+class WP_REST_Response {
+	public function __construct( public $data = null, public int $status = 200 ) {}
+	public function get_data() {
+		return $this->data;
+	}
+	public function get_status(): int {
+		return $this->status;
+	}
+}
+
 require_once $root . '/includes/config.php';
 require_once $root . '/includes/client.php';
+require_once $root . '/includes/rest.php';
 
 // ─── Runner ──────────────────────────────────────────────────────────────────
 
@@ -834,6 +883,12 @@ check(
 	'BELL: the version the tests stand in for is the version the plugin declares',
 	1 === preg_match( "/define\( 'WPDC_VERSION', '([^']+)' \);/", source( $root . '/wp-dodo-checkout.php' ), $m )
 		&& WPDC_VERSION === $m[1]
+		// And the plugin HEADER, the third place the number lives and the only
+		// one WordPress itself reads. A constant bumped without it ships a site
+		// that reports the old version to the updater while serving asset URLs
+		// from the new one.
+		&& 1 === preg_match( '/^ \* Version: (.+)$/m', source( $root . '/wp-dodo-checkout.php' ), $h )
+		&& WPDC_VERSION === trim( $h[1] )
 );
 // ─── A cache from an older shape is discarded, not trusted ──────────────────
 //
@@ -1103,9 +1158,17 @@ check(
 	'BELL: a language from the caller reaches Dodo',
 	'de' === ( $withLang['customization']['force_language'] ?? '' )
 );
+// Minted here rather than read off `$sent`, which was last assigned about nine
+// hundred lines earlier in an unrelated block. The check LOOKED like it
+// inspected the request just made and did not -- and `isset()` on an undefined
+// variable is false, so `!isset(...)` was true no matter what: it passed even
+// with the variable removed entirely. Probed.
+respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_n' ) );
+wpdc_create_session( 'pdt_pro', 1, null, null );
+$withoutLang = json_decode( last_request()['args']['body'], true );
 check(
 	'BELL: and no language means no customization block at all',
-	! isset( $sent['customization'] )
+	is_array( $withoutLang ) && ! isset( $withoutLang['customization'] )
 );
 
 check(
@@ -1181,7 +1244,7 @@ check(
 	// included, on an SDK already told once. Claiming it first makes re-entry a
 	// no-op.
 	'BELL: closing claims the open marker before it closes anything',
-	1 === preg_match( '/function closeFrame[\s\S]{0,600}openRoot = null;[\s\S]{0,400}dialog\.close\(\)/', $js )
+	1 === preg_match( '/function closeFrame[\s\S]{0,600}openRoot = null;[\s\S]{0,1200}dialog\.close\(\)/', $js )
 		// Two occurrences: the declaration at the top and the one claim inside
 		// closeFrame. A third would mean the marker is cleared somewhere else
 		// too, which is how re-entrancy came back.
@@ -1545,10 +1608,10 @@ check(
 
 check(
 	// The strip was three columns filled in DOCUMENT ORDER, so the discount form
-	// arrived as a fourth box, took the third column, squeezed the name to
-	// "UnleashWP Learn |…" and pushed the price to a second row. Every child
-	// says where it goes now, and the next one added cannot rearrange the two
-	// that matter.
+	// arrived as a fourth box, took the third column, squeezed the product name
+	// down to a few characters and an ellipsis, and pushed the price to a
+	// second row. Every child says where it goes now, and the next one added
+	// cannot rearrange the two that matter.
 	'BELL: on a phone every part of the strip is placed, not left to source order',
 	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,3600}\.wpdc__item-img \{[^}]*grid-column: 1/', $css )
 		&& 1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,3600}\.wpdc__totals \{[^}]*grid-column: 3/', $css )
@@ -1629,18 +1692,103 @@ check(
 	str_contains( $js, "body: JSON.stringify({ session: session })" )
 		&& ! str_contains( $js, "cfg.status + join" )
 		&& ! str_contains( $js, "cfg.status + '?'" )
-		&& str_contains( $rest, "'methods'             => 'POST'," )
+);
+
+// ─── The status route, exercised rather than read ────────────────────────────
+//
+// Everything below used to be str_contains() over rest.php. The check above
+// carried a fourth operand, `str_contains( $rest, "'methods' => 'POST'," )`,
+// which could not fail for its own subject: rest.php contains that string
+// twice, once per route, so changing the STATUS route to GET -- the entire
+// thing it guards -- left all 192 checks green. Measured, not suspected.
+
+wpdc_register_rest();
+$routes = $GLOBALS['wpdc_test_routes'];
+
+check(
+	// The session id is a capability: whoever presents it is handed this
+	// order's download links and licence key. In a query string that capability
+	// is in every access log, proxy log and Referer header on the way.
+	'BELL: the status route is POST, and it is THIS route that is asserted',
+	'POST' === ( $routes['wp-dodo-checkout/v1/status']['methods'] ?? '' )
 );
 check(
-	// The route is public, and every call it serves becomes one to three
-	// outbound calls carrying the shop's own API key. Left open, a loop of
-	// well-shaped invented session ids burns the shop's rate limit at Dodo, and
-	// the first symptom is real customers unable to check out.
-	'BELL: the poll route has a ceiling per address',
-	str_contains( $rest, "\$spent >= 60" )
-		&& str_contains( $rest, "set_transient( \$bucket, \$spent + 1, MINUTE_IN_SECONDS )" )
-		&& str_contains( $rest, "REMOTE_ADDR" )
+	'SILENCE: the session route is POST too, so the check above is about the right one',
+	'POST' === ( $routes['wp-dodo-checkout/v1/session']['methods'] ?? '' )
 );
+check(
+	// Without it the route accepts any string and spends the shop's API key
+	// finding out that it was not a session id.
+	'BELL: the status route validates the session id before doing anything',
+	'wpdc_is_session_id' === ( $routes['wp-dodo-checkout/v1/status']['args']['session']['validate_callback'] ?? '' )
+		&& true === ( $routes['wp-dodo-checkout/v1/status']['args']['session']['required'] ?? false )
+);
+
+/** One poll, scripted end to end. */
+function poll( string $session = 'cks_abcdefghijklmnopqrstuvwx' ): WP_REST_Response {
+	return wpdc_rest_status( new WP_REST_Request( array( 'session' => $session ) ) );
+}
+
+configure();
+$GLOBALS['wpdc_test_transients'] = array();
+respond( 200, array( 'session_id' => 'cks_x', 'status' => 'open' ) );
+$open = poll();
+check(
+	'SILENCE: a checkout still open answers "not yet", with a 200',
+	200 === $open->get_status() && false === $open->get_data()['finished']
+);
+
+$GLOBALS['wpdc_test_transients'] = array();
+$GLOBALS['wpdc_test_queue']      = array();
+respond( 500, array() );
+$broken = poll();
+check(
+	// A poll that fails is not a finished order. The customer is watching a
+	// spinner; an error status here would be read by the browser as "give up".
+	'BELL: an upstream failure is reported as "not yet", never as finished',
+	200 === $broken->get_status() && false === $broken->get_data()['finished']
+);
+
+$GLOBALS['wpdc_test_transients'] = array();
+$GLOBALS['wpdc_test_requests']   = array();
+for ( $i = 0; $i < 45; $i++ ) {
+	$GLOBALS['wpdc_test_queue'] = array();
+	respond( 200, array( 'session_id' => 'cks_x', 'status' => 'open' ) );
+	poll();
+}
+check(
+	// Forty per session against the thirty a real poll asks for.
+	'BELL: one session cannot poll for ever',
+	count( $GLOBALS['wpdc_test_requests'] ) <= 40
+);
+
+$GLOBALS['wpdc_test_requests'] = array();
+$GLOBALS['wpdc_test_queue']    = array();
+respond( 200, array( 'session_id' => 'cks_y', 'status' => 'open' ) );
+poll( 'cks_zyxwvutsrqponmlkjihgfedc' );
+check(
+	// THE defect this replaced. Keyed on REMOTE_ADDR, which is the proxy on most
+	// production WordPress, all visitors shared one bucket of sixty -- so the
+	// third concurrent checkout was throttled and its customer told "we could
+	// not confirm your order", for an order that had succeeded. Ordinary
+	// traffic, not abuse. A session id belongs to exactly one checkout, so no
+	// customer can spend another's allowance.
+	'BELL: a second customer is not throttled by the first one having polled',
+	1 === count( $GLOBALS['wpdc_test_requests'] )
+);
+
+$GLOBALS['wpdc_test_transients']['wpdc_poll_all'] = 600;
+$GLOBALS['wpdc_test_requests']                    = array();
+$GLOBALS['wpdc_test_queue']                       = array();
+poll( 'cks_freshfreshfreshfreshfresh' );
+check(
+	// Per-session counting is useless against a loop of invented ids, because
+	// every new id brings its own forty. What is protected here is the shop's
+	// one API key, which is site-wide, so this ceiling is too.
+	'BELL: and a site-wide ceiling still guards the shop API key',
+	0 === count( $GLOBALS['wpdc_test_requests'] )
+);
+$GLOBALS['wpdc_test_transients'] = array();
 check(
 	'BELL: a zero-total checkout is finished by asking, not by waiting',
 	1 === preg_match( "/customer_details_submitted' && '0' === root\.dataset\.due/", $js )
@@ -1669,8 +1817,10 @@ check(
 	// the panel carries both states in one cell.
 	'BELL: the dead payment step goes the moment the wait begins',
 	str_contains( $js, 'function showDone' )
-		// Three: the definition and its two call sites, the wait and the finish.
-		&& 3 === substr_count( $js, 'showDone(root,' )
+		// Four: the definition, the zero-total wait, the finish, and the
+		// give-up -- the last one added because the paying customer's failure
+		// message had no panel to be written into.
+		&& 4 === substr_count( $js, 'showDone(root,' )
 		&& str_contains( $js, 'showDone(root, false)' )
 		&& str_contains( $js, 'showDone(root, true)' )
 		&& str_contains( $shortcode, 'class="wpdc__done-wait"' )
@@ -1690,11 +1840,63 @@ check(
 	'BELL: an unconfirmed order is never reported as a finished one',
 	str_contains( $js, 'function giveUp' )
 		&& 2 === substr_count( $js, 'giveUp();' )
-		// Two: the definition, and the single confirmed-success call site.
-		&& 2 === substr_count( $js, 'leave(' )
+		// One definition, one call site, and counted as CODE. This used to count
+		// bare `leave(`, which a comment mentioning the function satisfied just
+		// as well -- it went red on a comment and would have gone green on a
+		// second real call site hidden behind one.
+		&& 1 === substr_count( $js, 'function leave(' )
+		&& 1 === substr_count( $js, 'return leave(' )
 		&& str_contains( $js, 'if (data && data.finished) return leave(data.redirect, data);' )
 		&& ! str_contains( $js, 'tries >= POLL_TRIES) return leave(' )
 		&& str_contains( $js, 'cfg.unconfirmed' )
+);
+check(
+	// And it has to be SAID somewhere the customer can read it.
+	//
+	// giveUp reached straight for `.wpdc__done-wait`, which only exists once
+	// showDone has built the panel -- the zero-total path does that on its way
+	// in, the paying path never did. The fallback, say(), writes to
+	// `.wpdc__message`, which sits outside the <dialog>; showModal() makes the
+	// rest of the document inert, so that sentence rendered behind the
+	// backdrop. A paying customer whose poll ran out saw NOTHING change.
+	'BELL: the give-up sentence is put where a paying customer can see it',
+	1 === preg_match( '/function giveUp\(\)[\s\S]{0,1200}showDone\(\s*root,\s*false\s*\)[\s\S]{0,900}wpdc__done-wait/', $js )
+);
+check(
+	// Set once and deleted in exactly one branch, the flag survived every
+	// completion and every give-up. The customer closed the dialog, bought
+	// again, and the second wait returned on the guard: no poll, no panel, no
+	// message, for an order that went through.
+	'BELL: the wait flag is released on every exit, not just the missing-session one',
+	// The BODY, not just the name. Counting call sites alone passed against a
+	// release() that had been gutted to do nothing -- probed, and it survived.
+	1 === preg_match( '/function release\(\)\s*\{[^}]*delete root\.dataset\.awaiting;[^}]*\}/', $js )
+		// The definition plus all three exits: success, give-up, no session.
+		&& 4 === substr_count( $js, 'release()' )
+		&& ! str_contains( $js, "if (!session) {\n      delete root.dataset.awaiting;" )
+);
+check(
+	// The loading deadline was cancelled on close from the start; the poll was
+	// not. A customer who paid and dismissed the dialog kept a timer chain
+	// alive for a minute -- and on success leave() calls location.assign(),
+	// navigating somebody who is now reading something else on the page.
+	'BELL: closing the popup ends the wait it belonged to',
+	str_contains( $js, 'var stale = function' )
+		&& 1 === preg_match( '/function closeFrame\([\s\S]{0,1500}pollGen/', $js )
+		// Three: the next timer, the reply, and the failed reply. A fired
+		// timeout must not spend a request against a ceiling that is finite,
+		// and neither branch of the promise may act on a closed dialog.
+		&& 3 === substr_count( $js, 'if (stale()) return;' )
+);
+check(
+	// Hiding the frame left the panel's Apply button live, so a code typed
+	// after paying re-minted a SECOND cart into a hidden frame: a real session
+	// at Dodo the customer would never see. And nothing ever put the panel,
+	// the frame or the completion back, so a second purchase on the same page
+	// opened onto the previous order's completion screen.
+	'BELL: the discount form closes with the checkout, and a new one opens clean',
+	1 === preg_match( '/function showDone\([\s\S]{0,1500}wpdc__panel[\s\S]{0,400}disabled = true/', $js )
+		&& 1 === preg_match( '/function openFrame\([\s\S]{0,2500}frame\.hidden = false[\s\S]{0,500}disabled = false/', $js )
 );
 check(
 	// This plugin sells for a shop. It has no server of ours in the middle, no
@@ -1780,6 +1982,24 @@ check(
 
 configure();
 finished_with( array(
+	grant( array( 'digital_product_delivery' => array(
+		'external_url' => 'http://downloads.example/latest.zip',
+		'files'        => array( array( 'download_url' => 'https://dodo.example/book.pdf', 'filename' => 'book.pdf' ) ),
+	) ) ),
+) );
+$insecureLink = wpdc_session_finished( 'cks_1' );
+check(
+	// A link that did not pass is not a better link, it is no link. The rule was
+	// written as "was an external_url present" rather than "did we accept one",
+	// so an http:// entitlement suppressed the uploads while being rejected
+	// itself -- and the grant delivered nothing at all to a paying customer.
+	'BELL: a rejected hosted link does not take the uploads down with it',
+	1 === count( $insecureLink['files'] )
+		&& 'https://dodo.example/book.pdf' === $insecureLink['files'][0]['url']
+);
+
+configure();
+finished_with( array(
 	grant( array( 'digital_product_delivery' => array( 'files' => array(
 		array( 'download_url' => 'https://dodo.example/book.pdf', 'filename' => 'book.pdf' ),
 		array( 'download_url' => 'http://dodo.example/insecure.pdf', 'filename' => 'insecure.pdf' ),
@@ -1853,9 +2073,19 @@ check(
 	// links, one of them the build that was current the day it was uploaded --
 	// the staleness the hosted link exists to avoid. Scoped to the files: a
 	// `continue` would have taken this grant's licence key with it.
-	'BELL: a hosted link replaces the uploaded copy rather than joining it',
-	str_contains( $client, "\$uploaded = '' === \$external ?" )
-		&& str_contains( $client, 'foreach ( $uploaded as $file )' )
+	// Was a source-text pin on the exact expression `'' === $external ?`, which
+	// is the expression that turned out to be WRONG -- it let a rejected
+	// http:// link suppress the uploads. A check that nails a defect in place
+	// is worse than no check. The rule is now asserted by running it, twice,
+	// under "a hosted link is delivered" and "a rejected hosted link does not
+	// take the uploads down with it"; what is left here is the structure those
+	// two cannot see.
+	'BELL: the uploads are still walked, and the choice is made once',
+	str_contains( $client, 'foreach ( $uploaded as $file )' )
+		&& 1 === substr_count( $client, '$uploaded = ' )
+		// No `continue` on a delivery decision: it would skip the licence key
+		// further down, which belongs to the same grant.
+		&& 1 === preg_match( '/\$uploaded = \$hosted \? array\(\) :/', $client )
 );
 check(
 	// Attribute defaults are evaluated before the catalogue is loaded, so a
@@ -1926,6 +2156,26 @@ check(
 		&& str_contains( $shortcode, 'class="wpdc__done" hidden' )
 		&& str_contains( $js, "done.hidden = false" )
 		&& 1 === preg_match( '/\.wpdc__done\[hidden\],\s*\.wpdc__frame\[hidden\] \{[^}]*display: none/', $css )
+);
+check(
+	// Two docblocks call this the open-redirect defence, and nothing tested it:
+	// removing the host comparison left all 192 checks green. It is exactly the
+	// kind of guard a well-meant tidy-up deletes, because from the inside it
+	// looks like a redundant string compare.
+	//
+	// Run, not read: constants cannot be redefined, so the harness cannot script
+	// WPDC_RETURN_URL twice -- the same-origin rule is asserted against the
+	// comparison the function actually performs.
+	'BELL: a return URL on somebody else\'s host is refused',
+	wp_parse_url( 'https://evil.example/thanks', PHP_URL_HOST ) !== wp_parse_url( home_url(), PHP_URL_HOST )
+		&& wp_parse_url( 'https://shop.example/thanks', PHP_URL_HOST ) === wp_parse_url( home_url(), PHP_URL_HOST )
+		&& 1 === preg_match(
+			'/function wpdc_return_url\(\)[\s\S]{0,600}wp_parse_url\(\s*\$configured,\s*PHP_URL_HOST\s*\)\s*===\s*wp_parse_url\(\s*home_url\(\),\s*PHP_URL_HOST\s*\)/',
+			file_get_contents( $root . '/includes/client.php' )
+		)
+		// Undefined in this harness, so the function must answer with the empty
+		// string that means "no thank-you page" rather than inventing one.
+		&& '' === wpdc_return_url()
 );
 check(
 	// A deadline that outlives the window it belonged to would redirect somebody

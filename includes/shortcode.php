@@ -428,7 +428,10 @@ function wpdc_enqueue(): void {
 			'discountApplied' => __( 'Code applied.', 'wp-dodo-checkout' ),
 			'discountEmpty'   => __( 'Enter a code first.', 'wp-dodo-checkout' ),
 			'discountShape'   => __( 'A code has letters, digits, dashes and underscores only.', 'wp-dodo-checkout' ),
-			'finishing'       => __( 'Completing your order…', 'wp-dodo-checkout' ),
+			// 'finishing' was here and no line of JavaScript ever read it. The
+			// same sentence is rendered server-side into the waiting panel, so
+			// this was a translated string nobody could ever see -- payload for
+			// every visitor and a trap for the next translator.
 			'doneFiles'       => __( 'Your download', 'wp-dodo-checkout' ),
 			'doneKey'         => __( 'Your licence key', 'wp-dodo-checkout' ),
 			'unconfirmed'     => __( 'We could not confirm your order in time. If you were charged it is on its way — check your inbox, or contact us and we will sort it out.', 'wp-dodo-checkout' ),

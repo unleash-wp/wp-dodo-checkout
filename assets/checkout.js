@@ -437,6 +437,25 @@
     // still be a second cart.
     if (openRoot && openRoot !== root) closeFrame(dodo);
 
+    // A second purchase starts from the start.
+    //
+    // `showDone` hides the frame, reveals the completion and disables the
+    // discount controls, and nothing ever put any of that back. So a customer
+    // who bought, closed the dialog and clicked Buy again got their previous
+    // order's completion panel over a frame that stayed hidden -- the SDK was
+    // rendering into a box nobody could see. Opening is the one moment where
+    // "this is a fresh checkout" is unambiguously true, so the reset belongs
+    // here rather than spread across the three exits.
+    var done = root.querySelector('.wpdc__done');
+    if (done) done.hidden = true;
+    frame.hidden = false;
+    var panel = root.querySelector('.wpdc__panel');
+    if (panel) {
+      panel.querySelectorAll('input, button, select').forEach(function (el) {
+        el.disabled = false;
+      });
+    }
+
     // Shown BEFORE the SDK is told to render: a dialog that is not open has no
     // layout, and an iframe measured inside a zero-height box comes back zero.
     dialog.showModal();
@@ -520,6 +539,15 @@
     // A deadline that outlives the window it belonged to would redirect
     // somebody who deliberately closed the checkout.
     settleLoading(root);
+    // The same reasoning, applied to the thing it was never applied to. The
+    // loading deadline was cancelled here from the start; the completion POLL
+    // was not, so a customer who paid and then dismissed the dialog kept a
+    // timer chain running for up to a minute -- and on success `leave()` calls
+    // location.assign() and navigates somebody who is now reading something
+    // else on the page. Bumping the generation makes every reply from the old
+    // wait a no-op.
+    root.dataset.pollGen = String((parseInt(root.dataset.pollGen || '0', 10) || 0) + 1);
+    delete root.dataset.awaiting;
     var dialog = root.querySelector('.wpdc__dialog');
     if (dialog && dialog.open) dialog.close();
     try { if (dodo) dodo.Checkout.close(); } catch (e) { /* already closed */ }
@@ -547,12 +575,24 @@
   function awaitCompletion(root) {
     var session = root.dataset.session || '';
     var tries = 0;
+    // The wait this call owns. `closeFrame` bumps the counter on the element,
+    // so a reply that arrives after the customer closed the dialog -- or after
+    // they re-minted and started a second checkout -- finds itself stale and
+    // stops, instead of navigating a page somebody is now reading.
+    var gen = root.dataset.pollGen || '0';
+    var stale = function () { return (root.dataset.pollGen || '0') !== gen; };
+
+    /** Every exit runs through here, so the flag cannot survive one of them. */
+    function release() {
+      if (root.dataset.awaiting === '1') delete root.dataset.awaiting;
+    }
 
     // Reached ONLY on a confirmed success. A configured thank-you page wins;
     // without one the completion is shown right here, because leaving for the
     // front page reads as the popup breaking -- the purchase would end on a
     // page that says nothing about it.
     function leave(where, goods) {
+      release();
       if (where) {
         window.location.assign(where);
         return;
@@ -577,9 +617,23 @@
      * screen that says what actually happened.
      */
     function giveUp() {
+      release();
       settleLoading(root);
-      // Into the panel the customer is already looking at, not under the
-      // dialog where it would need scrolling to.
+      // The panel FIRST, and this is the fix rather than an ordering detail.
+      //
+      // This used to reach straight for `.wpdc__done-wait`, which only exists
+      // once `showDone` has built the panel. The zero-total path calls that on
+      // its way in; the paying path never did. So for every paying customer
+      // there was no node to write into, and the fallback -- `say()` -- writes
+      // to `.wpdc__message`, which sits OUTSIDE the <dialog>. `showModal()`
+      // puts the dialog in the top layer and makes the rest of the document
+      // inert, so that sentence rendered behind the backdrop.
+      //
+      // Net effect: a paying customer whose poll ran out saw nothing change at
+      // all. They sat on the payment step with no word either way -- exactly
+      // the state the "never report an order we could not confirm" work set
+      // out to end, fixed for one branch and not the other.
+      showDone(root, false);
       var wait = root.querySelector('.wpdc__done-wait');
       if (wait) {
         var spinner = wait.querySelector('.wpdc__done-spinner');
@@ -587,16 +641,29 @@
         var text = wait.querySelector('.wpdc__done-text');
         if (text) text.textContent = cfg.unconfirmed;
       }
+      // Kept for the case where the panel is not there to be built. It is a
+      // fallback now, not the message.
       say(root, cfg.unconfirmed);
     }
 
-    // One wait per checkout. `payment_page_opened` can arrive again when a
-    // customer goes back and forward, and two polls would race to swap the
-    // panel underneath each other.
+    // One wait per checkout. Two events can start one -- a zero-total cart on
+    // `customer_details_submitted`, everybody else on `pay_button_clicked` --
+    // and either can arrive twice when a customer goes back and forward. Two
+    // polls would race to swap the panel underneath each other.
+    //
+    // Released on every exit, not only on the missing-session one. It used to
+    // be set here and deleted in exactly one branch, so after a give-up or a
+    // completion the flag stayed set for the life of the element: the customer
+    // closed the dialog, bought again, and the second wait returned on this
+    // line. No poll, no panel, no message.
     if (root.dataset.awaiting === '1') return;
     root.dataset.awaiting = '1';
 
     function ask() {
+      // Checked here too, not only on the reply: a timer that fires after the
+      // dialog closed would otherwise still spend a request, and the ceiling
+      // on that route is finite.
+      if (stale()) return;
       tries += 1;
       // POST, so the session id travels in a body rather than in a URL. It is
       // the capability that unlocks this order's downloads and licence key, and
@@ -612,6 +679,7 @@
       })
         .then(function (res) { return res.json(); })
         .then(function (data) {
+          if (stale()) return;
           if (data && data.finished) return leave(data.redirect, data);
           if (tries >= POLL_TRIES) return giveUp();
           setTimeout(ask, POLL_EVERY_MS);
@@ -621,6 +689,7 @@
           // customer could do about a single one. Keep asking until the tries
           // run out -- and then say so, rather than leaving somebody in front
           // of a sentence that never changes.
+          if (stale()) return;
           if (tries < POLL_TRIES) {
             setTimeout(ask, POLL_EVERY_MS);
             return;
@@ -630,7 +699,7 @@
     }
 
     if (!session) {
-      delete root.dataset.awaiting;
+      release();
       return;
     }
     ask();
@@ -665,6 +734,19 @@
     if (wait) wait.hidden = settled;
     if (ok) ok.hidden = !settled;
     if (done) done.hidden = false;
+
+    // The discount form outlives the frame, and it must not outlive the
+    // checkout. Hiding the frame left the panel's Apply button live, so a
+    // customer typing a code after paying would re-mint -- a SECOND cart,
+    // opened into a frame that is now hidden. They would never see it and it
+    // would be a real session at Dodo. Disabled once there is nothing left to
+    // decide, in both states: during the wait the cart is already at Dodo.
+    var panel = root.querySelector('.wpdc__panel');
+    if (panel) {
+      panel.querySelectorAll('input, button, select').forEach(function (el) {
+        el.disabled = true;
+      });
+    }
     return done;
   }
 
@@ -767,6 +849,11 @@
    */
   function remintWith(root, code, note, controls) {
     var previous = root.dataset.discount || '';
+    // A re-mint is a different checkout, so any wait belonging to the old one
+    // stops here. Without this a reply about the abandoned session could show
+    // its completion over the new cart the customer is still deciding on.
+    root.dataset.pollGen = String((parseInt(root.dataset.pollGen || '0', 10) || 0) + 1);
+    delete root.dataset.awaiting;
     if (code) {
       root.dataset.discount = code;
     } else {

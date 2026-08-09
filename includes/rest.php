@@ -173,19 +173,48 @@ function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
 	 * rate limit, and the first symptom would be real customers unable to check
 	 * out.
 	 *
-	 * Sixty a minute per address. A real poll asks thirty over that minute and
-	 * then stops; a browser behind a shared address has room for two checkouts
-	 * at once. Over the ceiling the answer is "not yet", not an error: it is a
-	 * poll, and there is nothing a customer could do with an error anyway.
+	 * KEYED ON THE SESSION, NOT ON THE ADDRESS, and that is the whole point.
+	 *
+	 * The first version of this counted per `REMOTE_ADDR`. On most production
+	 * WordPress that is the proxy -- Cloudflare, a load balancer, the host's own
+	 * front end -- so every visitor on the site shared ONE bucket of sixty. A
+	 * checkout polls thirty times, so the third concurrent customer was
+	 * throttled and told "we could not confirm your order", for an order that
+	 * had succeeded. Ordinary traffic, not abuse, producing the worst sentence
+	 * this system can say. Trusting a forwarded header instead would have moved
+	 * the problem rather than fixed it: whoever can set that header sets their
+	 * own bucket.
+	 *
+	 * A session id is minted by Dodo and belongs to exactly one checkout, so a
+	 * ceiling on it bounds the thing actually worth bounding -- one customer's
+	 * own polling -- and no customer can spend another's allowance. Forty over
+	 * a minute against the thirty a real poll asks for.
 	 */
-	$bucket = 'wpdc_poll_' . md5( (string) ( $_SERVER['REMOTE_ADDR'] ?? '' ) );
-	$spent  = (int) get_transient( $bucket );
-	if ( $spent >= 60 ) {
+	$session = (string) $request->get_param( 'session' );
+	$bucket  = 'wpdc_poll_' . md5( $session );
+	$spent   = (int) get_transient( $bucket );
+	if ( $spent >= 40 ) {
 		return new WP_REST_Response( array( 'finished' => false ), 200 );
 	}
 	set_transient( $bucket, $spent + 1, MINUTE_IN_SECONDS );
 
-	$result = wpdc_session_finished( (string) $request->get_param( 'session' ) );
+	/**
+	 * And a second ceiling for the thing the first one no longer covers.
+	 *
+	 * Per-session counting is right for customers and useless against somebody
+	 * looping invented ids, because every new id brings its own forty. This one
+	 * is deliberately site-wide: what is being protected is the shop's single
+	 * API key, which is site-wide too. Six hundred a minute is fifteen
+	 * simultaneous checkouts, far past anything this shop sees and far below
+	 * anything that would cost us Dodo's own rate limit.
+	 */
+	$all = (int) get_transient( 'wpdc_poll_all' );
+	if ( $all >= 600 ) {
+		return new WP_REST_Response( array( 'finished' => false ), 200 );
+	}
+	set_transient( 'wpdc_poll_all', $all + 1, MINUTE_IN_SECONDS );
+
+	$result = wpdc_session_finished( $session );
 	if ( wpdc_is_error( $result ) ) {
 		// A checkout that cannot be asked about is not a finished one. Reported
 		// as "not yet" rather than as an error, because the caller is polling

@@ -626,8 +626,9 @@
   /* Two rows, placed explicitly rather than left to source order.
 
      The strip was three columns filled in document order, and the discount form
-     arrived as a fourth box -- so it took the third column, the name was
-     squeezed to "UnleashWP Learn |…" and the price dropped to a second row.
+     arrived as a fourth box -- so it took the third column, the product name
+     was squeezed to a few characters and an ellipsis, and the price dropped to
+     a second row.
      Every child says where it goes now, and adding another one cannot rearrange
      the two that matter. */
   .wpdc__panel {
