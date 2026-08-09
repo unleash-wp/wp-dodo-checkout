@@ -273,8 +273,7 @@ a 404.
 php tests/run.php
 ```
 
-No PHPUnit, no Composer, no WordPress bootstrap — the same convention as
-`lumo-wp/tests/run.php`, for the same reason: a guard nobody can run is a guard
-nobody runs. The handful of WordPress functions the client touches are stubbed,
+No PHPUnit, no Composer, no WordPress bootstrap, for one reason: a guard
+nobody can run is a guard nobody runs. The handful of WordPress functions the client touches are stubbed,
 which is enough to exercise the things worth exercising: the failure vocabulary,
 the allow-list, and what does and does not reach the outbound request.

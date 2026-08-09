@@ -5,8 +5,8 @@
 # that matched no element in the page shipped and stayed shipped: thirty-three
 # checks were green and none of them ever ran.
 #
-# Same shape as lumo-wp/.github/workflows/ci.yml, minus the jobs that do not
-# apply -- there is no build, no bundle to compare, no release archive.
+# No build, no bundle to compare, no release archive -- so no jobs for any of
+# those.
 #
 # Deliberately NOT here, and each omission is a decision:
 #
@@ -15,10 +15,10 @@
 #   is a guard nobody runs. A WP harness on a 545-line no-build plugin buys
 #   brittleness and a six-minute CI.
 #
-#   No live call to mcp.unleash-wp.com/api/checkout-session. It answers 401 to
-#   anything unsigned, so proving more would mean putting LUMO_CHECKOUT_SECRET
-#   -- a credential that mints real checkout sessions -- into a runner, to
-#   demonstrate something lumo-pro's own tests already demonstrate.
+#   No live call to Dodo. Reaching them for real would mean putting an API
+#   key -- a credential that mints real checkout sessions and can issue refunds
+#   -- into a runner, to prove something the stubbed request already proves:
+#   what this plugin puts in the body, and what it refuses to.
 #
 #   No PHPCS / WordPress-Coding-Standards. It would produce hundreds of
 #   findings on day one and end up behind enough --ignore flags to be

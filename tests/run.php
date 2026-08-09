@@ -2,8 +2,7 @@
 /**
  * Plain-PHP checks. No PHPUnit, no Composer, no WordPress bootstrap.
  *
- * Same convention as lumo-wp/tests/run.php, for the same reason: a guard
- * nobody can run is a guard nobody runs. The WordPress functions this plugin
+ * One reason: a guard nobody can run is a guard nobody runs. The WordPress functions this plugin
  * touches are stubbed at the top, which is enough to exercise the two things
  * worth exercising -- the failure vocabulary, and what does and does not reach
  * the outbound request.
@@ -1687,6 +1686,17 @@ check(
 		&& str_contains( $js, 'if (data && data.finished) return leave(data.redirect, data);' )
 		&& ! str_contains( $js, 'tries >= POLL_TRIES) return leave(' )
 		&& str_contains( $js, 'cfg.unconfirmed' )
+);
+check(
+	// This plugin sells for a shop. It has no server of ours in the middle, no
+	// licence server, no account system -- a shortcode names a Dodo product id
+	// and Dodo takes the money. Comments naming a neighbouring product line kept
+	// implying otherwise, and a reader who believes that reaches for the wrong
+	// mechanism; it happened, twice, to the author of this line.
+	'BELL: no neighbouring product line is named anywhere in this repo',
+	0 === preg_match( '/lumo/i', $client . $rest . $shortcode . $config . $js . $css )
+		&& 0 === preg_match( '/lumo/i', source( $root . '/README.md' ) )
+		&& 0 === preg_match( '/lumo/i', source( $root . '/.github/workflows/ci.yml' ) )
 );
 check(
 	// The shop hosts the ZIP behind Cloudflare so a buyer's link resolves to the
