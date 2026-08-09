@@ -855,13 +855,48 @@
       return file && typeof file.url === 'string' && file.url.indexOf('https://') === 0;
     });
 
+    /**
+     * The key the hosted page needs, if there is one.
+     *
+     * Read before the files are rendered rather than after, because a hosted
+     * link is not a file: it is the shop's download page, and without the key
+     * it is an empty form.
+     */
+    var firstKey = keys.find(function (k) {
+      return typeof k === 'string' && k !== '';
+    });
+
     deliverable.forEach(function (file) {
       var a = document.createElement('a');
       a.className = 'wpdc__done-file';
-      a.href = file.url;
+
+      /*
+       * THE defect this replaces, seen on a live order.
+       *
+       * Dodo delivers two shapes through the same field. An uploaded file
+       * arrives as a SIGNED url -- personal, complete, clickable. A hosted
+       * `external_url` is the opposite: every buyer gets the same static
+       * address, so it proves nothing about who is asking. It is a page, and
+       * that page asks for the licence key.
+       *
+       * The popup rendered it bare: `href="https://downloads.unleash-wp.com/"`.
+       * Somebody who had just paid landed on an empty form and was asked to
+       * type in a key the popup was displaying two lines below the button.
+       *
+       * After the '#', which is the one part of an address a browser never
+       * sends to a server -- no access log, no proxy log, no Referer. The page
+       * reads it and clears the address bar before doing anything else.
+       */
+      if (file.needs_key && firstKey) {
+        a.href = file.url + (file.url.indexOf('#') === -1 ? '#' : '&') + 'k=' + encodeURIComponent(firstKey);
+      } else {
+        a.href = file.url;
+        // A polite request, and only for something that IS a file. On a page it
+        // would ask the browser to save the HTML.
+        a.setAttribute('download', '');
+      }
+
       a.textContent = fileLabel(file, deliverable.length > 1);
-      // A download attribute is a polite request; Dodo's signed URL decides.
-      a.setAttribute('download', '');
       a.rel = 'noopener';
       box.appendChild(a);
     });

@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.6.6' );
+define( 'WPDC_VERSION', '0.6.7' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -2260,6 +2260,43 @@ check(
 	// every possible input -- `\]` is literal inside double quotes -- so half the
 	// assertion could never fail and the `||` hid that.
 	str_contains( $client, "['digital_product_delivery']['external_url']" )
+);
+check(
+	/*
+	 * THE defect this replaces, seen on a live order rather than reasoned about.
+	 *
+	 * Dodo delivers two shapes through one field. An uploaded file arrives as a
+	 * SIGNED url: personal, complete, clickable. A hosted `external_url` is the
+	 * opposite -- every buyer gets the same static address, so it proves nothing
+	 * about who is asking. It is a PAGE, and that page asks for the licence key.
+	 *
+	 * The popup rendered it bare:
+	 *   href="https://downloads.unleash-wp.com/"
+	 * So a customer who had just paid landed on an empty form and was asked to
+	 * type in a key the popup was showing two lines below the button. The whole
+	 * point of the button is that nobody types anything.
+	 *
+	 * Marked on the server and attached in the browser, so the key stays out of
+	 * the REST response.
+	 */
+	'BELL: a hosted link is marked as needing the key, a signed file is not',
+	1 === preg_match( "/'url'\s*=> \\\$external,[\s\S]{0,900}'needs_key' => true/", $client )
+		&& 1 === preg_match( "/'url'\s*=> \\\$url,[\s\S]{0,400}'needs_key' => false/", $client )
+);
+check(
+	// The other half, in the browser. The fragment and not a query: it is the one
+	// part of an address a browser never sends to a server, so the key reaches no
+	// access log, no proxy log and no Referer.
+	'BELL: and the browser puts the key after the hash, never in the query',
+	str_contains( $jsCode, 'file.needs_key && firstKey' )
+		&& str_contains( $jsCode, "'k=' + encodeURIComponent(firstKey)" )
+		&& ! preg_match( '/\?k=|&key=/', $jsCode )
+);
+check(
+	// A download attribute on a PAGE asks the browser to save the HTML. It
+	// belongs on the signed file and nowhere else.
+	'SILENCE: only a real file is asked to download',
+	1 === preg_match( "/a\.href = file\.url;[\s\S]{0,300}setAttribute\('download', ''\)/", $jsCode )
 );
 check(
 	// Filenames and keys come out of an API response and go onto the page.

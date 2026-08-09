@@ -599,8 +599,29 @@ function wpdc_payment_goods( string $payment ): array {
 		$hosted   = is_string( $external ) && str_starts_with( $external, 'https://' );
 		if ( $hosted ) {
 			$files[] = array(
-				'name' => (string) ( $grant['digital_product_delivery']['instructions'] ?? '' ),
-				'url'  => $external,
+				'name'      => (string) ( $grant['digital_product_delivery']['instructions'] ?? '' ),
+				'url'       => $external,
+				/**
+				 * THE difference between the two kinds of link, and getting it
+				 * wrong shipped a button that led nowhere.
+				 *
+				 * An uploaded file arrives as a SIGNED url: personal, complete,
+				 * clickable. A hosted `external_url` is the opposite -- Dodo
+				 * hands every buyer the same static address, so it carries no
+				 * proof of purchase at all. It is a PAGE, and that page needs
+				 * the licence key.
+				 *
+				 * Measured on a live order: the popup rendered
+				 * `href="https://downloads.unleash-wp.com/"` with no key, so a
+				 * customer who had just paid landed on an empty form and was
+				 * asked to type in something the popup was holding two lines
+				 * further down.
+				 *
+				 * The browser attaches the key; it is not put here, because
+				 * this array travels through a REST response and a key belongs
+				 * in as few places as possible.
+				 */
+				'needs_key' => true,
 			);
 		}
 
@@ -624,8 +645,12 @@ function wpdc_payment_goods( string $payment ): array {
 			// travel to a browser and become an href.
 			if ( is_string( $url ) && is_string( $name ) && '' !== $name && str_starts_with( $url, 'https://' ) ) {
 				$files[] = array(
-					'name' => $name,
-					'url'  => $url,
+					'name'      => $name,
+					'url'       => $url,
+					// Signed by Dodo and already personal. Appending a key here
+					// would put it in an address belonging to somebody else's
+					// service for no gain.
+					'needs_key' => false,
 				);
 			}
 		}
