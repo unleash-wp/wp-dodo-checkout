@@ -255,20 +255,21 @@ check(
 	// that decision in a comment. Third time today a substring check matched
 	// prose instead of behaviour. The key set cannot.
 	'BELL: exactly these keys are sent, and no price among them',
-	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags', 'return_url', 'cancel_url' ) === array_keys( $sent )
+	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags', 'cancel_url' ) === array_keys( $sent )
 );
 check(
-	// The field used to be sent only when a constant was defined, and on an
-	// install where nobody defined it it never went at all. Their frame ends a
-	// finished order by posting `checkout.redirect` with a destination; with no
-	// destination there is nothing to navigate to, and the customer is left in
-	// the frame. Unconditional, so "nobody set the constant" cannot be the
-	// difference between finishing and not.
-	// WPDC_RETURN_URL is deliberately NOT defined in this harness, so this is
-	// the exact install the field used to be omitted on -- the assertion is that
-	// the omission is gone, not that a constant works.
-	'BELL: Dodo is always told where done leads',
-	isset( $sent['return_url'] ) && str_contains( $sent['return_url'], 'shop.example' )
+	// Reversed, and the reason is worth keeping. Sending home_url() as a floor
+	// was tried: their SDK navigates on `checkout.redirect`, so a PAYING
+	// customer was thrown to the front page the instant they finished -- no
+	// download, no key, no word about the mail, on a page that says nothing
+	// about the purchase. A destination is sent only when somebody named one;
+	// with none their frame stays put, and the shop finishes the order where
+	// the customer already is.
+	//
+	// WPDC_RETURN_URL is deliberately undefined in this harness, so this is the
+	// install the decision matters on.
+	'BELL: no destination is invented when nobody configured one',
+	! isset( $sent['return_url'] )
 );
 check(
 	// Their status page is a page on their domain that this shop never wrote.
@@ -1343,11 +1344,11 @@ check(
 	// displayed." Without it a customer on the payment step could not return to
 	// check the address they had typed -- only close the window and start again.
 	'BELL: a back control exists, and its target is ours not the caller\'s',
-	// Cancelling and finishing land on the same page, and both are resolved
-	// server-side -- a target a visitor could name would be an open redirect on
-	// the shop's own domain.
+	// A cancel target is a different question from a finish target: without one
+	// Dodo shows no back control at all, so the front page is a real floor here.
+	// Server-side either way -- a target a visitor could name would be an open
+	// redirect on the shop's own domain.
 	str_contains( $sent['cancel_url'] ?? '', 'shop.example' )
-		&& $sent['cancel_url'] === $sent['return_url']
 );
 check(
 	// Step one to step two swaps the frame's whole contents, and on a phone the
@@ -1697,6 +1698,41 @@ check(
 	0 === preg_match( '/lumo/i', $client . $rest . $shortcode . $config . $js . $css )
 		&& 0 === preg_match( '/lumo/i', source( $root . '/README.md' ) )
 		&& 0 === preg_match( '/lumo/i', source( $root . '/.github/workflows/ci.yml' ) )
+);
+check(
+	// The panel with the download, the key and the word about the mail was
+	// built for the ONE case that pays nothing: the poll only ever started on a
+	// zero total, so a paying customer finished and saw none of it. Both cases
+	// end the same way now -- and the paid one starts on the CLICK, because
+	// starting when the payment screen opens would spend the minute of asking
+	// while somebody is still typing a card number and then tell them
+	// mid-payment that their order could not be confirmed.
+	'BELL: a paying customer reaches the completion too',
+	str_contains( $js, "event.event_type === 'checkout.pay_button_clicked'" )
+		// Three: the definition, the zero-total start, and the paid start.
+		&& 3 === substr_count( $js, 'awaitCompletion(root)' )
+		&& ! str_contains( $js, "'checkout.payment_page_opened'" )
+		// One wait per checkout: the click can arrive twice if somebody goes
+		// back and forward, and two polls would swap the panel under each other.
+		&& str_contains( $js, "root.dataset.awaiting === '1'" )
+);
+check(
+	// Offering the upload beside the hosted link would hand the buyer two
+	// links, one of them the build that was current the day it was uploaded --
+	// the staleness the hosted link exists to avoid. Scoped to the files: a
+	// `continue` would have taken this grant's licence key with it.
+	'BELL: a hosted link replaces the uploaded copy rather than joining it',
+	str_contains( $client, "\$uploaded = '' === \$external ?" )
+		&& str_contains( $client, 'foreach ( $uploaded as $file )' )
+);
+check(
+	// Attribute defaults are evaluated before the catalogue is loaded, so a
+	// default written as __( 'Buy now' ) reached a German visitor in English
+	// above a fully German panel -- the same fault as "Code applied.", at a
+	// second site.
+	'BELL: the button label is translated after the catalogue, not before',
+	1 === preg_match( "/'label'\s*=>\s*''/", $shortcode )
+		&& 1 === preg_match( "/wpdc_load_catalogue\( \\\$lang \);[\s\S]{0,300}__\( 'Buy now'/", $shortcode )
 );
 check(
 	// The shop hosts the ZIP behind Cloudflare so a buyer's link resolves to the

@@ -403,14 +403,17 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	 * ALREADY `succeeded` on their side (total 0, `payment_method: null`).
 	 * The customer pays nothing, receives everything, and is told neither.
 	 *
-	 * home_url() is a floor, not the goal: WPDC_RETURN_URL should name a real
-	 * thank-you page. But a floor that exists beats a constant nobody set.
+	 * Sent ONLY when somebody configured one. home_url() was tried as a floor
+	 * and it is worse than nothing: their SDK navigates on `checkout.redirect`,
+	 * so a paying customer was thrown to the front page the instant they
+	 * finished -- no download, no key, no word about the mail, on a page that
+	 * says nothing about the purchase. With no destination their frame stays
+	 * put, and the shop finishes the order itself where the customer already is.
 	 */
 	$return = wpdc_return_url();
-	if ( '' === $return ) {
-		$return = home_url();
+	if ( '' !== $return ) {
+		$body['return_url'] = $return;
 	}
-	$body['return_url'] = $return;
 
 	/**
 	 * Without this Dodo shows no back control at all.
@@ -425,7 +428,7 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	 * cancel target a visitor can choose turns this into an open redirect on the
 	 * shop's own domain.
 	 */
-	$body['cancel_url'] = $return;
+	$body['cancel_url'] = '' !== $return ? $return : home_url();
 
 	$result = wpdc_dodo_request( 'POST', '/checkouts', $body );
 	if ( isset( $result['ok'] ) && false === $result['ok'] ) {
@@ -584,7 +587,14 @@ function wpdc_payment_goods( string $payment ): array {
 			);
 		}
 
-		foreach ( ( $grant['digital_product_delivery']['files'] ?? array() ) as $file ) {
+		// A hosted link wins outright, and only over the uploaded files -- a
+		// `continue` here would skip this grant's licence key too. Offering the
+		// upload BESIDE the link would hand the buyer two, one of which is the
+		// build that was current the day it was uploaded: the exact staleness
+		// the hosted link exists to avoid.
+		$uploaded = '' === $external ? ( $grant['digital_product_delivery']['files'] ?? array() ) : array();
+
+		foreach ( $uploaded as $file ) {
 			$url  = $file['download_url'] ?? '';
 			$name = $file['filename'] ?? '';
 			// Their origin and their scheme, checked rather than trusted: these

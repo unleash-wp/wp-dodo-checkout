@@ -58,7 +58,12 @@ function wpdc_render( $atts ): string {
 			'product'    => '',
 			'bump'       => '',
 			'bump_label' => '',
-			'label'      => __( 'Buy now', 'wp-dodo-checkout' ),
+			// Empty, not the translated default. Defaults here are evaluated
+			// BEFORE the catalogue is loaded further down, so a default written
+			// as __( 'Buy now' ) came out English above a fully German panel --
+			// the same fault as "Code applied." reaching a German customer in
+			// English, at a second site. Filled in after the switch instead.
+			'label'      => '',
 			'quantity'   => '1',
 			// Per shortcode, because a shop can sell a German edition and an
 			// English one from the same site. The site locale is the fallback and
@@ -115,6 +120,11 @@ function wpdc_render( $atts ): string {
 	 * rest of the page speaking something else.
 	 */
 	$switched = '' !== $lang && wpdc_load_catalogue( $lang );
+
+	// AFTER the switch, for the reason the attribute default states.
+	if ( '' === trim( (string) $atts['label'] ) ) {
+		$atts['label'] = __( 'Buy now', 'wp-dodo-checkout' );
+	}
 
 	// AFTER the catalogue, and that order is the whole point: wpdc_enqueue
 	// translates the strings it hands to JavaScript, and it used to run first --

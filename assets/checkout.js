@@ -171,17 +171,33 @@
         // Measured, not assumed: pay_..., total 0, `payment_method: null`,
         // against the same session id the stuck frame was showing.
         //
-        // So this is the one screen the shop finishes itself. Narrow on
-        // purpose: a checkout with something to pay reaches the payment step,
-        // completes there, and their SDK does the redirect. Only the zero case
-        // has nobody to tell it.
+        // So the shop finishes it: their dead step goes, and the wait takes its
+        // place where the answer will appear.
         if (event.event_type === 'checkout.customer_details_submitted' && '0' === root.dataset.due) {
           settleLoading(root);
-          // Their payment step is a skeleton it can never fill -- there is
-          // nothing to pay. Leaving it up meant watching a dead screen until
-          // the confirmation landed, which is what the operator saw: the tiles
-          // first, then the tick. The wait belongs where the answer will be.
           showDone(root, false);
+          awaitCompletion(root);
+          return;
+        }
+
+        // And a checkout with something to pay ends the same way, one screen
+        // later. Their frame reports the payment page, the customer pays, and
+        // their SDK leaves only if a return_url was configured -- which is the
+        // shop's own thank-you page and a fine place to land. Without one it
+        // stays put, and until this branch existed nobody finished the order:
+        // the panel with the download, the key and the word about the mail was
+        // built for the ONE case that pays nothing.
+        //
+        // On the CLICK, not on the payment screen appearing. Starting when the
+        // screen opens would run the minute of asking while the customer is
+        // still typing a card number, and then tell somebody mid-payment that
+        // their order could not be confirmed.
+        //
+        // Nothing is swapped here: the panel only takes over once Dodo says
+        // succeeded. Until then the customer keeps the screen they are using,
+        // and if the minute runs out they keep it too -- the honest sentence
+        // appears under the dialog rather than over their payment.
+        if (event.event_type === 'checkout.pay_button_clicked') {
           awaitCompletion(root);
           return;
         }
@@ -569,6 +585,12 @@
       say(root, cfg.unconfirmed);
     }
 
+    // One wait per checkout. `payment_page_opened` can arrive again when a
+    // customer goes back and forward, and two polls would race to swap the
+    // panel underneath each other.
+    if (root.dataset.awaiting === '1') return;
+    root.dataset.awaiting = '1';
+
     function ask() {
       tries += 1;
       // POST, so the session id travels in a body rather than in a URL. It is
@@ -602,7 +624,10 @@
         });
     }
 
-    if (!session) return;
+    if (!session) {
+      delete root.dataset.awaiting;
+      return;
+    }
     ask();
   }
 
