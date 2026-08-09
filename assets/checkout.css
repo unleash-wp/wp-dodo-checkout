@@ -114,6 +114,14 @@
 
 /* ── The window ──────────────────────────────────────────────────────────── */
 
+/* The armour below reads `.wp-dodo-checkout.wpdc__dialog`, both classes on the
+   SAME element, where it used to read them as ancestor and descendant.
+   The dialog is moved to <body> at startup (see checkout.js), so the block it
+   was rendered inside is no longer above it in the tree -- a descendant
+   selector would have quietly stopped matching and handed the panel's controls
+   back to the theme, which paints them navy on navy. Specificity is unchanged:
+   the same four classes, just no longer spread across two elements. */
+
 .wpdc__dialog {
   /* Fixed, not the browser's default absolute. The UA stylesheet centres an
      open dialog in the DOCUMENT, so on a scrolled page the checkout lands
@@ -123,9 +131,10 @@
   inset: 0;
   margin: auto;
 
-  /* showModal() focuses the dialog, and a focused element draws the focus ring:
-     a blue box around the whole checkout that reads as a rendering fault.
-     Removed here only -- every control inside keeps its own. */
+  /* A focused element draws the focus ring, and on this one that was a blue box
+     around the whole checkout that read as a rendering fault. Removed here
+     only -- every control inside keeps its own, and opening now moves focus to
+     the close button rather than to the dialog. */
   outline: none;
 
   /* 640 for the frame is measured, not chosen: below it Dodo's checkout breaks
@@ -149,6 +158,19 @@
 }
 
 .wpdc__scroll {
+  /* Opaque, and not for decoration.
+
+     The veil below is a `::before` at `z-index: -1`, and a negative z-index
+     child paints ABOVE its element's own background -- only its in-flow
+     content covers it. So the dialog's white never did, and Dodo's iframe is
+     transparent: the dimming came straight through the payment form.
+     Photographed by the operator -- card fields on a dark page with the site
+     footer visible behind them.
+
+     This is the first layer that is CONTENT rather than background, which is
+     why the opaque colour belongs here and not on the dialog. */
+  background: #fff;
+
   min-height: 0;
   display: grid;
   grid-template-columns: 1fr 640px;
@@ -159,33 +181,46 @@
   grid-template-rows: minmax(0, 1fr);
 }
 /* The platform's hidden case, paid back. Without it `display: grid` above lays
-   a CLOSED dialog out on the page: no backdrop, no top layer, a focus ring, and
-   a checkout nobody asked for. */
+   a CLOSED dialog out on the page: no veil, a focus ring, and a checkout
+   nobody asked for, sitting in the middle of the shop. */
 .wpdc__dialog:not([open]) {
   display: none;
 }
+/* 99000, and the number is the whole design.
+
+   This dialog is opened with `show()`, never `showModal()` -- see the long note
+   in checkout.js. So it stacks by ordinary rules, and the number has to clear
+   this theme (Impreza's fixed header sits at 111) while staying UNDER Apple
+   Pay's sheet, which appends itself to <body> at 99998. A wallet sheet then
+   lands on top by arithmetic, with nothing to detect. */
 .wpdc__dialog[open] {
-  animation: wpdc-pop .3s cubic-bezier(.16, 1, .3, 1) both;
-}
-.wpdc__dialog::backdrop {
-  background: rgb(0 0 0 / .55);
-}
-
-/* While a wallet sheet is up, the dialog is NON-modal -- and `::backdrop` only
-   exists for a modal one, so the dimming would vanish and the page behind it
-   snap bright at the worst possible moment.
-
-   A spread shadow instead of a new element: it paints the same darkness, costs
-   no markup, and captures no clicks -- which matters, because the whole point
-   of stepping down is that Apple's sheet must be reachable.
-
-   No z-index. Apple's element carries 99998, ours takes the default, and being
-   underneath is now the goal rather than the bug. */
-.wpdc__dialog[data-wpdc-wallet] {
-  box-shadow: 0 0 0 100vmax rgb(0 0 0 / .55);
-}
-.wpdc__dialog[open]::backdrop {
+  z-index: 99000;
+  /* Opacity only, and the missing 12px rise is the price of the veil below.
+     A `transform` on this element -- even for the 300ms of an animation --
+     makes it the containing block for its own fixed-position ::before, which
+     `overflow: hidden` up there would then clip to the panel. The dimming
+     would arrive late and wrong on every single open. */
   animation: wpdc-fade .3s ease both;
+}
+
+/* The backdrop, rebuilt by hand.
+
+   `::backdrop` exists only for a modal dialog, and this one is deliberately not
+   one. A pseudo-element rather than the spread `box-shadow` 0.7.2 used, because
+   a shadow paints the darkness and captures nothing: the shop behind stayed
+   clickable, so a customer could navigate away mid-payment through a link they
+   could barely see.
+
+   `z-index: -1` keeps it inside this dialog's stacking context -- behind the
+   panel, above the page, and still far below Apple's 99998. Clicks on it land
+   with the DIALOG as their target, which is exactly what the light-dismiss
+   handler in checkout.js already looks for. */
+.wpdc__dialog[open]::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: rgb(0 0 0 / .55);
 }
 
 /* Present, not polite. It was a transparent glyph that read as decoration, and
@@ -281,6 +316,13 @@
   gap: .5rem;
   margin-top: 1.25rem;
 }
+/* The platform's hidden case, paid back -- and the reason it is owed here now:
+   a completed order hides this whole form, and `display: grid` above would beat
+   `[hidden]` and leave "Rabattcode", "Einlösen" and "Code entfernen" standing
+   greyed-out beside the licence key. */
+.wpdc__discount[hidden] {
+  display: none;
+}
 .wpdc__discount-input {
   min-width: 0;
   border-radius: var(--wpdc-radius, 5px);
@@ -289,7 +331,7 @@
 /* Armoured: see the note at the top of this file. A theme's
    `input[type="text"]` is 0,1,1 and beat the plain class, and what arrived was
    a white 54px box with 18px dark text sitting on a navy panel. */
-.wp-dodo-checkout .wpdc__dialog .wpdc__panel .wpdc__discount-input {
+.wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-input {
   box-sizing: border-box !important;
   width: 100% !important;
   min-height: 0 !important;
@@ -308,7 +350,7 @@
    placeholder colour for its own light inputs makes ours unreadable, and an
    empty-looking box is the state that got the operator to click a button he
    could not see. */
-.wp-dodo-checkout .wpdc__dialog .wpdc__panel .wpdc__discount-input::placeholder {
+.wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-input::placeholder {
   color: rgb(255 255 255 / .45) !important;
   opacity: 1 !important;
   text-transform: none !important;
@@ -329,7 +371,7 @@
    `[type="submit"]:not(.w-btn):not(.button)` is 0,3,0, important, and painted
    it navy on a navy panel. It was there the whole time, full size, unreadable.
    Four classes because three would only tie with it. */
-.wp-dodo-checkout .wpdc__dialog .wpdc__panel .wpdc__discount-apply {
+.wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-apply {
   box-sizing: border-box !important;
   width: auto !important;
   min-height: 0 !important;
@@ -355,7 +397,7 @@
    armour is important, so a plain hover rule loses to it no matter how specific
    the selector. Without this the button would have lost its hover to its own
    stylesheet -- a self-inflicted version of the bug being fixed. */
-.wp-dodo-checkout .wpdc__dialog .wpdc__panel .wpdc__discount-apply:hover:not([disabled]) {
+.wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-apply:hover:not([disabled]) {
   background: rgb(255 255 255 / .1) !important;
 }
 .wpdc__discount-apply[disabled] {
@@ -480,7 +522,7 @@
    Dark navy on #f5c518 is about 8:1, well past the 4.5:1 that WCAG asks for
    body text and past the 3:1 for large. That ratio is the point of pinning it:
    whatever a theme prefers, this one control stays legible. */
-.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-file {
+.wp-dodo-checkout.wpdc__dialog .wpdc__done .wpdc__done-file {
   display: inline-block !important;
   padding: 12px 22px !important;
   background: #f5c518 !important;
@@ -497,15 +539,15 @@
 /* Hover and focus carry the chain too: an armoured declaration outranks a plain
    one whatever the selector says, so without this the button would have lost
    its own states to its own stylesheet. */
-.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-file:hover,
-.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-file:focus {
+.wp-dodo-checkout.wpdc__dialog .wpdc__done .wpdc__done-file:hover,
+.wp-dodo-checkout.wpdc__dialog .wpdc__done .wpdc__done-file:focus {
   background: #eab810 !important;
   color: #1a1e3c !important;
   text-decoration: none !important;
 }
 /* Keyboard users get a ring the theme cannot take away. The browser default is
    blue, and blue on yellow is a ring nobody sees. */
-.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-file:focus-visible {
+.wp-dodo-checkout.wpdc__dialog .wpdc__done .wpdc__done-file:focus-visible {
   outline: 3px solid #1a1e3c !important;
   outline-offset: 2px !important;
 }
@@ -601,7 +643,7 @@
    one is the door, not the offer. Armoured like the rest of the panel, because
    a theme that restyles buttons would otherwise decide which of the two shouts
    louder. */
-.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-dismiss {
+.wp-dodo-checkout.wpdc__dialog .wpdc__done .wpdc__done-dismiss {
   margin: 18px 0 0 !important;
   padding: 10px 18px !important;
   border: 1px solid #d7deec !important;
@@ -615,11 +657,11 @@
   box-shadow: none !important;
   cursor: pointer;
 }
-.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-dismiss:hover {
+.wp-dodo-checkout.wpdc__dialog .wpdc__done .wpdc__done-dismiss:hover {
   background: #f4f6fb !important;
   color: #1a1e3c !important;
 }
-.wp-dodo-checkout .wpdc__dialog .wpdc__done .wpdc__done-dismiss:focus-visible {
+.wp-dodo-checkout.wpdc__dialog .wpdc__done .wpdc__done-dismiss:focus-visible {
   outline: 2px solid #1a1e3c !important;
   outline-offset: 2px !important;
 }
@@ -791,10 +833,6 @@
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: none; }
 }
-@keyframes wpdc-pop {
-  from { opacity: 0; transform: translateY(12px) scale(.985); }
-  to   { opacity: 1; transform: none; }
-}
 @keyframes wpdc-fade {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -950,7 +988,7 @@
 @media (prefers-reduced-motion: reduce) {
   .wpdc__frame.is-ready iframe,
   .wpdc__dialog[open],
-  .wpdc__dialog[open]::backdrop {
+  .wpdc__dialog[open]::before {
     animation: none;
   }
   .wpdc__frame.is-loading::after {

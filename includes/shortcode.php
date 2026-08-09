@@ -158,16 +158,20 @@ function wpdc_render( $atts ): string {
 		</button>
 
 		<?php
-		// A native <dialog>, not a div pretending to be one. showModal() brings
-		// the focus trap, Escape, the backdrop and the top layer with it -- four
-		// things that are individually easy and collectively where hand-rolled
-		// modals go wrong, on the one page where a customer must not get stuck.
+		// A native <dialog>, not a div pretending to be one -- but opened with
+		// `show()` rather than `showModal()`, because the top layer is the one
+		// place Apple Pay's sheet cannot be reached from. See the long note in
+		// checkout.js.
+		//
+		// `aria-modal` therefore has to be written by hand: a modal dialog gets
+		// it implicitly, and without it assistive technology reads the whole
+		// shop behind the checkout as still available.
 		//
 		// Inside it sits the element Dodo's SDK injects its iframe into. This is
 		// still `displayType: inline`: "inline" describes who owns the window,
 		// not where it appears. Ours is the window; Dodo's is the frame.
 		?>
-		<dialog class="wpdc__dialog" aria-label="<?php echo esc_attr__( 'Checkout', 'wp-dodo-checkout' ); ?>">
+		<dialog class="wpdc__dialog" aria-modal="true" aria-label="<?php echo esc_attr__( 'Checkout', 'wp-dodo-checkout' ); ?>">
 			<?php
 			// A drawn X, not the multiplication sign.
 			//

@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.2' );
+define( 'WPDC_VERSION', '0.7.10' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -515,7 +515,11 @@ check(
 	// shape of defect as the class selector that swallowed every click.
 	'BELL: the container the shortcode renders is the one the SDK is given',
 	str_contains( $shortcode, 'class="wpdc__frame" id="<?php echo esc_attr( $id ); ?>-frame"' )
-		&& str_contains( $js, "root.querySelector('.wpdc__frame')" )
+		// Through `part`, because the frame lives in the dialog and the dialog
+		// no longer lives in the block. This exact lookup returning null is
+		// what sent a paying customer to Dodo's hosted page instead of the
+		// window: `openFrame` bailed, and the SDK-missing fallback fired.
+		&& str_contains( $js, "part(root, '.wpdc__frame')" )
 		&& str_contains( $js, 'elementId: frame.id' )
 );
 check(
@@ -686,9 +690,20 @@ check(
 // a selector with no markup is a dead button, and markup with no selector is
 // dead weight that outlives whoever added it.
 
-/** Every class checkout.js hunts, from closest() and querySelector(). */
+/**
+ * Every class checkout.js hunts.
+ *
+ * `part(root, '.x')` counts too. Since the window is lifted to <body>, the
+ * block and its dialog are two subtrees and every lookup goes through that
+ * helper -- so a hunter that only knew `querySelector` stopped seeing almost
+ * all of them, and the two checks below started passing on a shrunken set.
+ */
 $hunted = ( static function ( string $js ): array {
-	preg_match_all( "/\\.(?:closest|querySelector(?:All)?)\\(\\s*'\\.([\\w-]+)'/", $js, $m );
+	preg_match_all(
+		"/(?:\\.(?:closest|querySelector(?:All)?)\\(\\s*|\\bpart\\(\\s*root\\s*,\\s*)'\\.([\\w-]+)'/",
+		$js,
+		$m
+	);
 	return array_values( array_unique( $m[1] ) );
 } )( $js );
 
@@ -872,10 +887,17 @@ check(
 	// This replaced a rule about hiding the button. The button used to be hidden
 	// while the checkout was open, so a second click could not start a second
 	// session -- and a CSS `display` outranking [hidden] quietly defeated it.
-	// A modal makes the same guarantee structurally: nothing behind it is
-	// clickable, in every browser, with no rule to defeat.
-	'BELL: the checkout is modal, so a second click cannot reach the button',
-	str_contains( $js, 'dialog.showModal()' ) && ! str_contains( $js, 'button.hidden = true' )
+	// The veil makes the same guarantee structurally: a fixed pseudo-element
+	// across the whole viewport, so the button behind it is not reachable and
+	// there is no author `display` that can defeat it.
+	//
+	// It is NOT the modal top layer any more -- see the Apple Pay checks below.
+	// So the guarantee is the veil's, and this is the check that says so: drop
+	// the ::before and the shop behind the checkout becomes clickable again.
+	'BELL: a veil covers the shop, so a second click cannot reach the button',
+	str_contains( $jsCode, 'dialog.show();' )
+		&& ! str_contains( $jsCode, 'button.hidden = true' )
+		&& 1 === preg_match( '/\.wpdc__dialog\[open\]::before\s*\{[^}]*position:\s*fixed/', $css )
 );
 check(
 	// The harness defines WPDC_VERSION on the main file's behalf. If the two drift
@@ -1253,51 +1275,170 @@ check(
 
 check(
 	/*
-	 * Apple Pay on the desktop, reported from a live checkout.
+	 * Apple Pay on the desktop, and why this checkout is not a modal.
 	 *
-	 * `showModal()` puts our dialog in the browser's TOP LAYER, which is not a
-	 * z-index but a plane above the whole document. Apple's sheet is an ordinary
-	 * `<apple-pay-modal>` on <body> with z-index 99998, so it renders
-	 * underneath whatever number it picks -- two billion would not help.
+	 * `showModal()` puts an element in the TOP LAYER, which is not a z-index but
+	 * a plane above the whole document, and it makes the rest of the document
+	 * INERT. Apple's sheet is an ordinary element on <body> at z-index 99998, so
+	 * under a modal checkout it paints underneath and cannot be clicked. Two
+	 * billion would not help.
 	 *
-	 * Painting is only half. A modal dialog makes the rest of the document
-	 * INERT, so even hidden, ours would leave Apple's QR code unclickable: a
-	 * customer staring at a code that does nothing.
-	 *
-	 * So the dialog steps down to non-modal while a sheet is up, and back
-	 * afterwards.
+	 * Reported from a live checkout, in these words: "er war da nur unter
+	 * unserem popup".
 	 */
-	'BELL: our window steps out of the top layer while a wallet sheet is up',
-	str_contains( $jsCode, 'function walletSheetIsUp' )
-		&& str_contains( $jsCode, "querySelector('apple-pay-modal')" )
-		&& 1 === preg_match( '/wpdcWallet = .1.;[\s\S]{0,80}dialog\.show\(\);/', $jsCode )
-		&& 1 === preg_match( '/delete dialog\.dataset\.wpdcWallet;[\s\S]{0,80}dialog\.showModal\(\);/', $jsCode )
+	'BELL: the checkout never takes the top layer',
+	str_contains( $jsCode, 'dialog.show();' )
+		&& ! str_contains( $jsCode, 'showModal' )
 );
 
 check(
-	// Apple leaves the element in the DOM with `visibility: hidden` between
-	// attempts. Presence alone would drop us out of the top layer for the rest
-	// of the checkout after the first try -- and never put us back.
-	'BELL: presence is not enough; the sheet has to be visible',
-	1 === preg_match( '/getComputedStyle\(sheet\)/', $jsCode )
-		&& 1 === preg_match( '/seen\.visibility === .hidden./', $jsCode )
+	// A finished order showed a greyed "Rabattcode", "Einlösen" and "Code
+	// entfernen" beside the licence key. Disabled controls still read as
+	// controls, and they invite the one action that can no longer work.
+	//
+	// Both halves, because either alone is a no-op: the JS hides the form, and
+	// the CSS owes `[hidden]` its display back -- `display: grid` on that form
+	// beats the attribute, which is the same trap this file has fallen into
+	// three times before.
+	'BELL: a completed order carries no discount form at all',
+	1 === preg_match( "/function showDone[\\s\\S]{0,1200}part\\(root, '\\.wpdc__discount'\\)[\\s\\S]{0,60}hidden = true/", $jsCode )
+		&& 1 === preg_match( '/\\.wpdc__discount\\[hidden\\]\\s*\\{[^}]*display:\\s*none/', $css )
 );
 
 check(
-	// `close()` fires `close` synchronously and the listener tears the checkout
-	// down. Stepping out of the top layer must not end the purchase somebody is
-	// in the middle of paying for.
-	'BELL: a close we did ourselves does not cancel the checkout',
-	1 === preg_match( '/wpdcReopening === .1.\)\s*return;/', $jsCode )
-		&& 1 === preg_match( '/wpdcReopening = .1.;[\s\S]{0,120}dialog\.close\(\)/', $jsCode )
+	/*
+	 * The window leaves the page tree at startup.
+	 *
+	 * Measured on /buecher/wordpress-band-1/: the checkout sits inside a
+	 * WPBakery column carrying `transform: matrix(1, 0, 0, 1, ...)`. A transform
+	 * creates a stacking context AND becomes the containing block for
+	 * `position: fixed`, so the window was painted over by a product card in the
+	 * next column and centred itself in the column instead of the viewport. No
+	 * z-index escapes a transformed ancestor.
+	 *
+	 * At startup, while the dialog is still EMPTY: re-parenting reloads any
+	 * iframe inside it, and doing this later would tear down a live payment.
+	 */
+	'BELL: the window is lifted to <body>, before the SDK mounts anything in it',
+	1 === preg_match( '/document\\.body\\.appendChild\\(dialog\\)/', $jsCode )
+		&& 1 === preg_match( '/DOMContentLoaded.[\\s\\S]{0,120}liftDialogs\\(\\)/', $jsCode )
+		// The hash comes off every trigger at the same moment, and for the same
+		// reason: the theme animates `a[href^="#"]` itself, so a cancelled
+		// default cancels nothing.
+		&& 1 === preg_match( '/DOMContentLoaded.[\\s\\S]{0,160}disarmTriggers\\(\\)/', $jsCode )
+		&& 1 === preg_match( "/removeAttribute\\('href'\\)/", $jsCode )
+		&& ! preg_match( '/Checkout\\.open[\\s\\S]{0,400}appendChild\\(dialog\\)/', $jsCode )
 );
 
 check(
-	// `::backdrop` exists only for a modal dialog, so stepping down would snap
-	// the page bright at the worst possible moment. A spread shadow paints the
-	// same darkness, captures no clicks, and needs no markup.
-	'SILENCE: the page stays dimmed while the dialog is non-modal',
-	1 === preg_match( '/\.wpdc__dialog\[data-wpdc-wallet\][^}]*box-shadow[^}]*100vmax/', $css )
+	// Leaving the tree breaks two things that must not break: the armour keys on
+	// an ANCESTOR class, and the block finds its dialog by searching inside
+	// itself. Both were retargeted; either one left behind is silent -- the
+	// panel's controls turn navy on navy, or the buy button stops opening.
+	'BELL: the armour and the lookup survive the move',
+	0 === preg_match( '/\\.wp-dodo-checkout \\.wpdc__dialog/', $css )
+		&& 1 === preg_match( '/\\.wp-dodo-checkout\\.wpdc__dialog/', $css )
+		&& str_contains( $jsCode, 'data-wpdc-owner' )
+		// Exactly one, and it is the deliberate fallback INSIDE `dialogFor` --
+		// for the moment before the lift and for a block without an id. A second
+		// one anywhere else is a caller that will stop finding its dialog.
+		&& 1 === substr_count( $jsCode, "root.querySelector('.wpdc__dialog')" )
+		&& 1 === preg_match( "/function dialogFor\\([\\s\\S]{0,400}root\\.querySelector\\('\\.wpdc__dialog'\\)/", $jsCode )
+);
+
+check(
+	// Any element can open the checkout -- a cover image, a price, a second
+	// button further down the page. It reaches the SAME buy button rather than
+	// carrying its own copy of the purchase path, so a trigger can never drift
+	// away from the one thing that has been proven to work.
+	'BELL: a marked element opens the checkout through the block\'s own button',
+	// Capture phase, and prevented before anything else is decided: these are
+	// `href="#"` links, and both the browser and Impreza's smooth scroll act on
+	// that before a bubbling listener would. The page jumped to the top on
+	// every cover click until this moved up here.
+	1 === preg_match( "/closest\\('\\[data-wpdc-open\\]'\\)[\\s\\S]{0,900}event\\.preventDefault\\(\\)[\\s\\S]{0,200}blockForTrigger/", $jsCode )
+		&&
+	1 === preg_match( "/closest\\('\\[data-wpdc-open\\]'\\)/", $jsCode )
+		&& 1 === preg_match( "/blockForTrigger[\\s\\S]{0,400}part\\(root, '\\.wpdc__button'\\)[\\s\\S]{0,200}button\\.click\\(\\)/", $jsCode )
+);
+
+check(
+	/*
+	 * The rule that keeps somebody from paying for the wrong book.
+	 *
+	 * Block ids are running numbers in render order, so moving the printed
+	 * edition above the eBook in the page builder repoints every trigger that
+	 * named one. The product id says WHAT is bought instead of WHERE it sits.
+	 *
+	 * And when it still cannot be decided -- several blocks, no id given --
+	 * nothing opens. An image that does not react is a fault you can see; one
+	 * that opens the wrong order is not.
+	 */
+	'BELL: an ambiguous trigger opens nothing rather than guessing',
+	1 === preg_match( "/dataset\\.product === wanted/", $jsCode )
+		&& 1 === preg_match( '/blocks\\.length === 1/', $jsCode )
+		&& 1 === preg_match( '/console\\.warn[\\s\\S]{0,200}return null;\\s*\\}/', $jsCode )
+);
+
+check(
+	// The veil is a `::before` at `z-index: -1`, and a negative z-index child
+	// paints ABOVE its element's background -- so the dialog's own white never
+	// covered it. Dodo's iframe is transparent, so the dimming came through the
+	// payment form: card fields on a dark page with the site footer behind them.
+	//
+	// `.wpdc__scroll` is the first layer that is CONTENT rather than background,
+	// which is why the opaque colour belongs there and nowhere else.
+	'BELL: the checkout content is opaque, so the veil cannot show through it',
+	1 === preg_match( '/\\.wpdc__scroll\\s*\\{[^}]*background:\\s*#fff/', $css )
+);
+
+check(
+	// The arithmetic that replaces the detection. Above Impreza's fixed header
+	// (111) so the checkout is not buried by the shop; below Apple's 99998 so a
+	// wallet sheet lands on top without anyone watching for it.
+	'BELL: the dialog stacks above this theme and below a wallet sheet',
+	1 === preg_match( '/\\.wpdc__dialog\\[open\\]\\s*\\{[^}]*z-index:\\s*(\\d+)/', $css, $zed )
+		&& (int) $zed[1] > 111
+		&& (int) $zed[1] < 99998
+);
+
+check(
+	// 0.7.2 detected the sheet and stepped down to non-modal for as long as it
+	// was up. It watched `<apple-pay-modal>` -- and Apple paints into a sibling
+	// div while leaving that element `visibility: hidden`, so it never fired and
+	// the sheet stayed under our window.
+	//
+	// The lesson is not "watch a different element". It is that a checkout must
+	// not depend on the private structure of somebody else's widget, because
+	// that structure changes on their deploy and not on ours.
+	"SILENCE: nothing here reaches into Apple's DOM",
+	! str_contains( $jsCode, 'apple-pay-modal' )
+		&& ! str_contains( $jsCode, 'walletSheetIsUp' )
+		&& ! str_contains( $jsCode, 'wpdcWallet' )
+		&& ! str_contains( $css, 'data-wpdc-wallet' )
+);
+
+check(
+	// First of the three things `showModal()` gave for free. Escape is the one a
+	// customer notices missing.
+	'BELL: Escape still closes the checkout',
+	1 === preg_match( "/addEventListener\\('keydown'[\\s\\S]{0,400}Escape[\\s\\S]{0,300}wpdc__dialog\\[open\\][\\s\\S]{0,120}closeFrame/", $jsCode )
+);
+
+check(
+	// Second. A checkout that opens without moving focus leaves a keyboard or
+	// screen-reader customer standing on the Buy button, behind a window they
+	// cannot see.
+	'BELL: opening moves focus into the dialog',
+	1 === preg_match( "/dialog\\.show\\(\\);[\\s\\S]{0,400}querySelector\\('\\.wpdc__close'\\)[\\s\\S]{0,120}\\.focus\\(\\)/", $jsCode )
+);
+
+check(
+	// Third. A modal dialog carries aria-modal implicitly; a non-modal one has to
+	// say it, or assistive technology offers the whole shop behind the checkout
+	// as if it were still available.
+	'BELL: the non-modal dialog still declares itself modal to assistive tech',
+	str_contains( $shortcode, '<dialog class="wpdc__dialog" aria-modal="true"' )
 );
 
 check(
@@ -2580,9 +2721,10 @@ check(
 	! str_contains( $css, 'wpdc__frame--folded' ) && ! str_contains( $js, 'fold' )
 );
 check(
-	// A native <dialog>, so the focus trap, Escape, the backdrop and the top
-	// layer come from the browser. Hand-rolling those is where modals go wrong,
-	// and this is the one page a customer must not get stuck on.
+	// A native <dialog>, not a div pretending. It is opened non-modal -- see the
+	// Apple Pay checks above -- so Escape, focus and the backdrop are ours now;
+	// what the element still buys is the open/close state, the `close` event
+	// every dismissal fires, and a role assistive technology already knows.
 	'BELL: the modal is a real dialog element, not a div pretending',
 	str_contains( $shortcode, '<dialog class="wpdc__dialog"' )
 		&& str_contains( $js, "root.querySelector('.wpdc__dialog')" )
@@ -2592,7 +2734,7 @@ check(
 	// iframe measured inside a zero-height box comes back zero. Opened after the
 	// SDK renders, the frame is there and invisible.
 	'BELL: the dialog is shown before the SDK is told to render into it',
-	strpos( $js, 'dialog.showModal()' ) < strpos( $js, 'dodo.Checkout.open(' )
+	strpos( $jsCode, 'dialog.show();' ) < strpos( $jsCode, 'dodo.Checkout.open(' )
 );
 check(
 	// Closing the window without telling the SDK leaves Dodo holding a live
@@ -2602,9 +2744,9 @@ check(
 		&& str_contains( $js, "if (dialog && dialog.open) dialog.close();" )
 );
 check(
-	// Escape and the backdrop are the dialog's own, and both fire `close` --
-	// listened for, so the bookkeeping happens however it was dismissed, not
-	// only when the X was used.
+	// Escape and a click on the veil both end in `dialog.close()`, which fires
+	// `close` -- listened for, so the bookkeeping happens however it was
+	// dismissed, not only when the X was used.
 	'BELL: a dismissal by Escape or backdrop is handled, not just the X button',
 	str_contains( $js, "document.addEventListener('close'" )
 );

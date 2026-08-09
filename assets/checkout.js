@@ -18,13 +18,121 @@
 
   var cfg = window.wpdcCheckout || {};
 
+  /**
+   * The window is moved to <body>, and the reason is measured rather than
+   * defensive.
+   *
+   * On the real sales page the checkout renders inside a WPBakery column that
+   * carries `transform: matrix(1, 0, 0, 1, ...)`. A transform does two things
+   * at once: it creates a stacking context, so our `z-index: 99000` only
+   * competes INSIDE that column and a pricing card in the next one paints over
+   * the checkout; and it becomes the containing block for `position: fixed`,
+   * so the window centres itself in the column instead of the viewport.
+   * Photographed on /buecher/wordpress-band-1/: the checkout half-covered by a
+   * product card, sitting left of centre.
+   *
+   * There is no z-index that escapes a transformed ancestor. Leaving the tree
+   * is the only fix -- and the top layer, which would also escape it, is the
+   * one place Apple Pay cannot be reached from.
+   *
+   * TIMING IS THE WHOLE TRICK: this runs at startup, while the dialog is still
+   * empty. Re-parenting an element RELOADS any iframe inside it, so doing this
+   * later would tear down a live Dodo session mid-payment. The SDK mounts into
+   * a dialog that is already where it will stay.
+   *
+   * The class travels with it because the armoured rules key on both classes
+   * now; see the note at the top of checkout.css.
+   */
+  /** The dialog belonging to a block, wherever it now lives. */
+  function dialogFor(root) {
+    if (root && root.id) {
+      var lifted = document.querySelector(
+        '.wpdc__dialog[data-wpdc-owner="' + root.id + '"]',
+      );
+      if (lifted) return lifted;
+    }
+    // Before the lift, and for any block without an id.
+    return root ? root.querySelector('.wpdc__dialog') : null;
+  }
+
+  /**
+   * A part of this checkout, wherever it lives.
+   *
+   * Since the lift, the block and its window are two separate subtrees: the
+   * buy button, the message line and the bump checkbox stayed in the page,
+   * while the frame, the panel, the totals and the completion moved to <body>
+   * inside the dialog. A single `root.querySelector` sees only half of that.
+   *
+   * This cost a real regression: `openFrame` looked for `.wpdc__frame` in the
+   * block, found nothing, returned false -- and the fallback that exists for a
+   * missing SDK sent a paying customer to Dodo's hosted page instead of
+   * opening the window. Looking in both places is what makes the split
+   * invisible to every caller.
+   */
+  function part(root, selector) {
+    if (!root) return null;
+    var dialog = dialogFor(root);
+    return (dialog && dialog.querySelector(selector)) || root.querySelector(selector);
+  }
+
+  /**
+   * A trigger stops being an anchor.
+   *
+   * `preventDefault` was not enough and the page kept jumping to the top:
+   * Impreza does not rely on the default at all, it matches `a[href^="#"]` and
+   * ANIMATES the scroll itself. A cancelled default cannot cancel somebody
+   * else's animation.
+   *
+   * So the hash comes off. With no `href` the theme's selector no longer
+   * matches, there is no default left to prevent, and nothing to animate
+   * towards. `role` and `tabindex` put back what removing the href takes away:
+   * it still announces itself as a control and is still reachable by keyboard.
+   */
+  function disarmTriggers() {
+    var triggers = document.querySelectorAll('a[data-wpdc-open]');
+    for (var i = 0; i < triggers.length; i += 1) {
+      var a = triggers[i];
+      var href = a.getAttribute('href') || '';
+      if (href !== '' && href.charAt(0) !== '#') continue;
+      a.removeAttribute('href');
+      if (!a.getAttribute('role')) a.setAttribute('role', 'button');
+      if (!a.hasAttribute('tabindex')) a.setAttribute('tabindex', '0');
+    }
+  }
+
+  function liftDialogs() {
+    var dialogs = document.querySelectorAll('.wp-dodo-checkout .wpdc__dialog');
+    for (var i = 0; i < dialogs.length; i += 1) {
+      var dialog = dialogs[i];
+      if (dialog.parentElement === document.body) continue;
+      dialog.classList.add('wp-dodo-checkout');
+      // The tie back to the block it belongs to. Once it leaves the tree,
+      // `root.querySelector` cannot reach it, and a page may carry several
+      // blocks -- so the pairing has to be written down rather than inferred
+      // from position.
+      var owner = dialog.closest('.wp-dodo-checkout[id]');
+      if (owner) dialog.dataset.wpdcOwner = owner.id;
+      document.body.appendChild(dialog);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+      liftDialogs();
+      disarmTriggers();
+    });
+  } else {
+    liftDialogs();
+    disarmTriggers();
+  }
+
   function say(root, text) {
-    var el = root.querySelector('.wpdc__message');
+    var el = part(root, '.wpdc__message');
     if (el) el.textContent = text;
   }
 
   function requestUrl(root) {
-    var bump = root.querySelector('.wpdc__bump-input');
+    var bump = part(root, '.wpdc__bump-input');
     var body = {
       product: root.dataset.product,
       quantity: Number(root.dataset.quantity || 1),
@@ -202,8 +310,8 @@
           return;
         }
         if (event.event_type === 'checkout.customer_details_submitted') {
-          var scroll = root.querySelector('.wpdc__scroll');
-          var frame = root.querySelector('.wpdc__frame');
+          var scroll = part(root, '.wpdc__scroll');
+          var frame = part(root, '.wpdc__frame');
           if (scroll) scroll.scrollTop = 0;
           if (frame) {
             frame.scrollTop = 0;
@@ -253,7 +361,7 @@
   /**
    * The wait, and the end of it.
    *
-   * Between showModal() and Dodo rendering into the container there are a few
+   * Between opening the dialog and Dodo rendering into the container there are a few
    * seconds of empty white beside a panel that is already full. It reads as
    * broken, and the operator photographed exactly that.
    *
@@ -283,7 +391,7 @@
 
   function settleLoading(root) {
     clearTimeout(loadTimer);
-    var frame = root.querySelector('.wpdc__frame');
+    var frame = part(root, '.wpdc__frame');
     if (!frame) return;
     // `is-ready` only on the transition OUT of waiting, so a frame that reflows
     // later -- and Dodo's reflows on every address change -- does not replay
@@ -294,7 +402,7 @@
   }
 
   function paintTotals(root, b) {
-    var totals = root.querySelector('.wpdc__totals');
+    var totals = part(root, '.wpdc__totals');
     if (!totals) return;
 
     var currency = b.currency || b.finalTotalCurrency || '';
@@ -428,12 +536,12 @@
 
     ensureReady(dodo, url);
 
-    var dialog = root.querySelector('.wpdc__dialog');
-    var frame = root.querySelector('.wpdc__frame');
-    if (!dialog || !frame || !frame.id || !dialog.showModal) return false;
+    var dialog = dialogFor(root);
+    var frame = part(root, '.wpdc__frame');
+    if (!dialog || !frame || !frame.id || !dialog.show) return false;
 
-    // One checkout at a time. The modal enforces it by itself -- nothing behind
-    // it is clickable -- but a second block's dialog left open underneath would
+    // One checkout at a time. The veil enforces it -- nothing behind it is
+    // clickable -- but a second block's dialog left open underneath would
     // still be a second cart.
     if (openRoot && openRoot !== root) closeFrame(dodo);
 
@@ -446,10 +554,10 @@
     // rendering into a box nobody could see. Opening is the one moment where
     // "this is a fresh checkout" is unambiguously true, so the reset belongs
     // here rather than spread across the three exits.
-    var done = root.querySelector('.wpdc__done');
+    var done = part(root, '.wpdc__done');
     if (done) done.hidden = true;
     frame.hidden = false;
-    var panel = root.querySelector('.wpdc__panel');
+    var panel = part(root, '.wpdc__panel');
     if (panel) {
       panel.querySelectorAll('input, button, select').forEach(function (el) {
         el.disabled = false;
@@ -458,7 +566,16 @@
 
     // Shown BEFORE the SDK is told to render: a dialog that is not open has no
     // layout, and an iframe measured inside a zero-height box comes back zero.
-    dialog.showModal();
+    //
+    // `show()`, never `showModal()`. See the note above the Escape handler --
+    // the top layer is the one place Apple Pay cannot be reached from.
+    dialog.show();
+
+    // What showModal() used to do for us. A checkout that opens without moving
+    // focus leaves a keyboard or screen-reader customer still standing on the
+    // Buy button, tabbing through the shop behind a window they cannot see.
+    var closer = dialog.querySelector('.wpdc__close');
+    if (closer) closer.focus();
     startLoading(root, frame, url);
     dodo.Checkout.open({ checkoutUrl: url, elementId: frame.id });
     watchForLateGrowth(frame);
@@ -548,10 +665,10 @@
     // wait a no-op.
     root.dataset.pollGen = String((parseInt(root.dataset.pollGen || '0', 10) || 0) + 1);
     delete root.dataset.awaiting;
-    var dialog = root.querySelector('.wpdc__dialog');
+    var dialog = dialogFor(root);
     if (dialog && dialog.open) dialog.close();
     try { if (dodo) dodo.Checkout.close(); } catch (e) { /* already closed */ }
-    var button = root.querySelector('.wpdc__button');
+    var button = part(root, '.wpdc__button');
     if (button) button.disabled = false;
   }
 
@@ -646,16 +763,17 @@
       // once `showDone` has built the panel. The zero-total path calls that on
       // its way in; the paying path never did. So for every paying customer
       // there was no node to write into, and the fallback -- `say()` -- writes
-      // to `.wpdc__message`, which sits OUTSIDE the <dialog>. `showModal()`
-      // puts the dialog in the top layer and makes the rest of the document
-      // inert, so that sentence rendered behind the backdrop.
+      // to `.wpdc__message`, which sits OUTSIDE the <dialog> -- so that
+      // sentence rendered behind the veil, on a page the customer cannot see
+      // past. (Then it was the modal's backdrop; it is the dialog's own
+      // `::before` now, and the sentence is just as invisible either way.)
       //
       // Net effect: a paying customer whose poll ran out saw nothing change at
       // all. They sat on the payment step with no word either way -- exactly
       // the state the "never report an order we could not confirm" work set
       // out to end, fixed for one branch and not the other.
       showDone(root, false);
-      var wait = root.querySelector('.wpdc__done-wait');
+      var wait = part(root, '.wpdc__done-wait');
       if (wait) {
         var spinner = wait.querySelector('.wpdc__done-spinner');
         if (spinner) spinner.remove();
@@ -759,10 +877,10 @@
     if (settled) {
       try { if (dodo) dodo.Checkout.close(); } catch (e) { /* already gone */ }
     }
-    var frame = root.querySelector('.wpdc__frame');
-    var done = root.querySelector('.wpdc__done');
-    var wait = root.querySelector('.wpdc__done-wait');
-    var ok = root.querySelector('.wpdc__done-ok');
+    var frame = part(root, '.wpdc__frame');
+    var done = part(root, '.wpdc__done');
+    var wait = part(root, '.wpdc__done-wait');
+    var ok = part(root, '.wpdc__done-ok');
     if (frame) frame.hidden = true;
     if (wait) wait.hidden = settled;
     if (ok) ok.hidden = !settled;
@@ -774,12 +892,27 @@
     // opened into a frame that is now hidden. They would never see it and it
     // would be a real session at Dodo. Disabled once there is nothing left to
     // decide, in both states: during the wait the cart is already at Dodo.
-    var panel = root.querySelector('.wpdc__panel');
+    var panel = part(root, '.wpdc__panel');
     if (panel) {
       panel.querySelectorAll('input, button, select').forEach(function (el) {
         el.disabled = true;
       });
     }
+
+    // And GONE, not merely dead.
+    //
+    // Disabled controls still read as controls: a finished order showed a
+    // greyed "Rabattcode", an "Einlösen" and a "Code entfernen" beside the
+    // licence key, which invites a customer to try the one thing that can no
+    // longer work. There is nothing left to discount once the money has moved,
+    // so the form is not disabled information -- it is noise on the one screen
+    // that should say exactly one thing.
+    //
+    // The disabling above stays: it is what stops a re-mint in the seconds
+    // BEFORE this runs, and it covers anything else the panel grows later.
+    var discount = part(root, '.wpdc__discount');
+    if (discount) discount.hidden = true;
+
     return done;
   }
 
@@ -1065,91 +1198,56 @@
   });
 
   document.addEventListener('close', function (event) {
-    // A close we did ourselves, to step out of the top layer for a wallet
-    // sheet. Tearing the checkout down here would end the purchase the customer
-    // is in the middle of paying for.
-    if (event.target.dataset && event.target.dataset.wpdcReopening === '1') return;
     if (event.target.classList && event.target.classList.contains('wpdc__dialog')) {
       closeFrame(sdk());
     }
   }, true);
 
   /**
-   * Apple Pay on the desktop, and why our own window has to get out of its way.
+   * Why this checkout is never a modal dialog, and what that costs.
    *
-   * `showModal()` puts this dialog in the browser's TOP LAYER, which is not a
-   * z-index -- it is a plane above the whole document. Apple's sheet is an
-   * ordinary `<apple-pay-modal>` appended to <body> with `z-index: 99998`, so it
-   * renders underneath ours no matter what number it picks. Two billion would
-   * not help.
+   * `showModal()` puts an element in the browser's TOP LAYER. That is not a
+   * z-index -- it is a plane above the whole document -- and two things follow
+   * that no stylesheet can undo: everything else paints underneath, whatever
+   * number it picks, and the rest of the document becomes INERT.
    *
-   * And painting is only half of it: a modal dialog makes the rest of the
-   * document INERT. Even hidden, our dialog would leave Apple's QR sheet
-   * unclickable -- a customer looking at a code that does nothing.
+   * Apple Pay on the desktop opens its sheet as an ordinary element appended to
+   * <body>, carrying `z-index: 99998`. Under a modal checkout it renders behind
+   * ours and cannot be clicked -- reported here, in those words: "er war da nur
+   * unter unserem popup".
    *
-   * So while a wallet sheet is up, the dialog steps down to non-modal. It stays
-   * exactly where it is and keeps its contents; it simply stops owning the top
-   * layer and stops making the page inert. When the sheet goes, it steps back
-   * up.
+   * 0.7.2 tried to detect that sheet and step down to non-modal while it was
+   * up. It watched `<apple-pay-modal>`, and Apple paints into a sibling div
+   * while leaving that element `visibility: hidden`. The detection was correct
+   * about a DOM that is not the one Apple ships -- and that is the flaw in the
+   * approach rather than in the guess: it makes our checkout depend on the
+   * private structure of somebody else's widget, which changes on their deploy
+   * and not on ours.
    *
-   * Watched by presence AND visibility, because Apple leaves the element in the
-   * DOM with `visibility: hidden` between attempts -- presence alone would drop
-   * us out of the top layer for the rest of the checkout after the first try.
+   * So we never take the top layer. `show()` leaves the dialog in the ordinary
+   * stacking order at `z-index: 99000` -- above this theme, below Apple's
+   * 99998 -- and a wallet sheet lands on top by arithmetic instead of by
+   * detection. Nothing to observe, nothing to guess, nothing of Apple's to
+   * break.
+   *
+   * WHAT IT COSTS, stated rather than discovered. `showModal()` gave three
+   * things for free, and each is paid back by hand:
+   *
+   *   ::backdrop          -> a fixed `::before` on the dialog (checkout.css),
+   *                          which also captures the clicks the backdrop used
+   *                          to, so the shop behind stays unreachable
+   *   focus on open       -> `closer.focus()` where the dialog is shown
+   *   Escape closes       -> the listener below
+   *
+   * The one thing not paid back is inertness for assistive technology:
+   * `aria-modal="true"` asks for it rather than enforcing it.
    */
-  function walletSheetIsUp() {
-    var sheet = document.querySelector('apple-pay-modal');
-    if (!sheet) return false;
-    /*
-     * Asked of the browser, not of the attribute.
-     *
-     * The first version read `style="visibility: hidden"` off the element,
-     * which is guessing at how Apple writes it: a class, a stylesheet or a
-     * property set from script all produce the same rendering and none of them
-     * touch that attribute. `getComputedStyle` is the answer the browser itself
-     * uses to decide whether to paint, so it cannot disagree with the screen.
-     *
-     * `offsetParent` is the second half: `display: none` reports its own
-     * visibility as `visible`, so a sheet that is not in the layout at all
-     * would otherwise read as up.
-     */
-    var seen = window.getComputedStyle(sheet);
-    if (seen.visibility === 'hidden' || seen.display === 'none') return false;
-    return sheet.offsetParent !== null || seen.position === 'fixed';
-  }
-
-  function matchWallet() {
-    var up = walletSheetIsUp();
-    var dialogs = document.querySelectorAll('.wpdc__dialog');
-    for (var i = 0; i < dialogs.length; i += 1) {
-      var dialog = dialogs[i];
-      if (!dialog.open) continue;
-      var steppedDown = dialog.dataset.wpdcWallet === '1';
-      if (up === steppedDown) continue;
-
-      // close() fires `close` synchronously, and the listener above tears the
-      // checkout down. The flag is what tells it this one is ours.
-      dialog.dataset.wpdcReopening = '1';
-      dialog.close();
-      delete dialog.dataset.wpdcReopening;
-
-      if (up) {
-        dialog.dataset.wpdcWallet = '1';
-        dialog.show();
-      } else {
-        delete dialog.dataset.wpdcWallet;
-        dialog.showModal();
-      }
-    }
-  }
-
-  if (window.MutationObserver) {
-    new MutationObserver(matchWallet).observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['style'],
-    });
-  }
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape' && event.key !== 'Esc') return;
+    // Not `openRoot`: the dialog is the thing Escape dismisses, and asking the
+    // DOM which one is open cannot disagree with what the customer sees.
+    if (document.querySelector('.wpdc__dialog[open]')) closeFrame(sdk());
+  });
 
   /**
    * A discount code, applied by minting the session again.
@@ -1191,7 +1289,7 @@
     return requestUrl(root)
       .then(function (url) {
         var dodo = sdk();
-        var frame = root.querySelector('.wpdc__frame');
+        var frame = part(root, '.wpdc__frame');
         if (dodo) {
           try { dodo.Checkout.close(); } catch (e) { /* nothing open */ }
         }
@@ -1288,6 +1386,98 @@
         fail(note, err && err.wpdcFromServer ? err.message : cfg.failed);
       });
   });
+
+  /**
+   * Anything on the page can open the checkout: a cover image, a price, a
+   * second button further down. `data-wpdc-open` is the whole contract.
+   *
+   *   <a href="#" data-wpdc-open="THE-PRODUCT-ID">  names the product
+   *   <a href="#" data-wpdc-open>                 inside a block, or the only one
+   *
+   * WHY THE PRODUCT ID AND NOT THE BLOCK ID: block ids are running numbers in
+   * render order, so moving the printed edition above the eBook in the page
+   * builder silently repoints every trigger. The customer clicks an eBook
+   * cover and gets the 34,99 checkout, and nobody notices while rearranging a
+   * page. The product id describes WHAT is bought rather than WHERE it sits.
+   *
+   * And the rule that matters most: when it cannot be decided, NOTHING opens.
+   * Guessing means somebody pays for the wrong book -- an image that does not
+   * react is a fault you can see, one that opens the wrong order is not.
+   */
+  function blockForTrigger(trigger) {
+    var inside = trigger.closest('.wp-dodo-checkout');
+    if (inside) return inside;
+
+    var blocks = document.querySelectorAll('.wp-dodo-checkout');
+    var wanted = (trigger.getAttribute('data-wpdc-open') || '').trim();
+
+    if (wanted !== '') {
+      for (var i = 0; i < blocks.length; i += 1) {
+        if (blocks[i].dataset.product === wanted) return blocks[i];
+      }
+      console.warn('wp-dodo-checkout: no block on this page sells ' + wanted);
+      return null;
+    }
+
+    if (blocks.length === 1) return blocks[0];
+
+    console.warn(
+      'wp-dodo-checkout: several products on this page -- put the product id in ' +
+        'data-wpdc-open, or this trigger cannot know which one you mean',
+    );
+    return null;
+  }
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    var trigger = event.target.closest && event.target.closest('[data-wpdc-open]');
+    if (!trigger) return;
+    // What a real button gives for free, paid back: an element that says
+    // role="button" has to answer the two keys a button answers.
+    event.preventDefault();
+    trigger.click();
+  });
+
+  document.addEventListener(
+    'click',
+    function (event) {
+      var trigger = event.target.closest('[data-wpdc-open]');
+      if (!trigger) return;
+
+      /*
+       * Stopped here, first thing, and in the CAPTURE phase.
+       *
+       * These triggers are ordinary links, usually `href="#"`, and two things
+       * act on that before anything of ours would: the browser jumps to the
+       * top of the document, and Impreza brings its own smooth-scroll for
+       * anchors. Preventing the default further down -- after resolving the
+       * block, as this first did -- was already too late, and the page shot to
+       * the top the moment a cover image was clicked.
+       *
+       * Unconditional, before we know whether a block can be resolved: a `#`
+       * should never scroll anywhere, and a trigger that cannot decide which
+       * product it means should do nothing at all rather than nothing plus a
+       * jump.
+       */
+      event.preventDefault();
+      // And nobody downstream gets to act on this click either. The theme's
+      // anchor handling is a jQuery listener that scrolls on its own; stopping
+      // the default never reached it.
+      event.stopImmediatePropagation();
+
+      var root = blockForTrigger(trigger);
+      if (!root) return;
+
+      // The block's own buy button, clicked. Not a second copy of the purchase
+      // path: one way in means a trigger can never drift away from the button
+      // that has actually been proven to work.
+      var button = part(root, '.wpdc__button');
+      if (!button || button.disabled) return;
+
+      button.click();
+    },
+    true,
+  );
 
   document.addEventListener('click', function (event) {
     var button = event.target.closest('.wpdc__button');
