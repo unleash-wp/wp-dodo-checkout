@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.10' );
+define( 'WPDC_VERSION', '0.7.11' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1344,6 +1344,23 @@ check(
 		// one anywhere else is a caller that will stop finding its dialog.
 		&& 1 === substr_count( $jsCode, "root.querySelector('.wpdc__dialog')" )
 		&& 1 === preg_match( "/function dialogFor\\([\\s\\S]{0,400}root\\.querySelector\\('\\.wpdc__dialog'\\)/", $jsCode )
+);
+
+check(
+	/*
+	 * One class, two jobs -- and the seam between them.
+	 *
+	 * The lift gave the dialog `wp-dodo-checkout` so the armoured CSS would keep
+	 * reaching it. Every handler ALSO finds its block with that class, so
+	 * `closest()` from inside the window answered with the window: a discount
+	 * code resolved to an element carrying no `data-product`, and the mint came
+	 * back `400 missing parameter: product` to a customer holding a valid code.
+	 *
+	 * So no handler may take `closest('.wp-dodo-checkout')` at face value again.
+	 */
+	'BELL: handlers resolve the block, never the window that carries its class',
+	0 === preg_match( "/(?:clear|form|button|trigger)\\.closest\\('\\.wp-dodo-checkout'\\)/", $jsCode )
+		&& 1 === preg_match( "/function rootFor[\\s\\S]{0,400}wpdc__dialog[\\s\\S]{0,200}wpdcOwner/", $jsCode )
 );
 
 check(

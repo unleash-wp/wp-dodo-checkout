@@ -43,6 +43,26 @@
    * The class travels with it because the armoured rules key on both classes
    * now; see the note at the top of checkout.css.
    */
+  /**
+   * The BLOCK an element belongs to -- never the window.
+   *
+   * The lift gave the dialog the `wp-dodo-checkout` class so the armoured CSS
+   * would still reach it. That class is also how every handlerfinds its block, so
+   * `closest()` inside the window now answered with the WINDOW: a discount code
+   * typed into the panel resolved to an element carrying no `data-product`, and
+   * the session mint came back `400 missing parameter: product`.
+   *
+   * One class, two jobs. This is the seam between them: if what we landed on is
+   * the dialog, follow `data-wpdc-owner` back to the block that owns it.
+   */
+  function rootFor(el) {
+    var hit = el && el.closest ? el.closest('.wp-dodo-checkout') : null;
+    if (!hit) return null;
+    if (!hit.classList.contains('wpdc__dialog')) return hit;
+    var owner = hit.dataset.wpdcOwner;
+    return owner ? document.getElementById(owner) : null;
+  }
+
   /** The dialog belonging to a block, wherever it now lives. */
   function dialogFor(root) {
     if (root && root.id) {
@@ -1325,7 +1345,7 @@
     var clear = event.target.closest('.wpdc__discount-clear');
     if (!clear) return;
 
-    var root = clear.closest('.wp-dodo-checkout');
+    var root = rootFor(clear);
     var form = clear.closest('.wpdc__discount');
     var input = form.querySelector('.wpdc__discount-input');
     var apply = form.querySelector('.wpdc__discount-apply');
@@ -1348,7 +1368,7 @@
     if (!form) return;
     event.preventDefault();
 
-    var root = form.closest('.wp-dodo-checkout');
+    var root = rootFor(form);
     var input = form.querySelector('.wpdc__discount-input');
     var apply = form.querySelector('.wpdc__discount-apply');
     var note = form.querySelector('.wpdc__discount-note');
@@ -1405,7 +1425,7 @@
    * react is a fault you can see, one that opens the wrong order is not.
    */
   function blockForTrigger(trigger) {
-    var inside = trigger.closest('.wp-dodo-checkout');
+    var inside = rootFor(trigger);
     if (inside) return inside;
 
     var blocks = document.querySelectorAll('.wp-dodo-checkout');
@@ -1488,7 +1508,7 @@
     // was swallowed at this line: no request, no message, nothing in the
     // console. The whole chain behind it -- REST route, secret, session mint,
     // webhook, ledger -- was correct and unreachable.
-    var root = button.closest('.wp-dodo-checkout');
+    var root = rootFor(button);
     if (!root) return;
 
     event.preventDefault();
