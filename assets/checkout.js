@@ -361,6 +361,21 @@
         }
         if (event.event_type === 'checkout.error') {
           settleLoading(root);
+          // The whole event, not the sentence we show.
+          //
+          // What reaches the customer is `event.data.message`, and on Safari
+          // that has been the string "Load failed" -- WebKit's generic wording
+          // for a fetch that did not complete. It names the symptom and hides
+          // every field that says which request, from which frame, and why.
+          // Without this line the only thing anybody could send Dodo was that
+          // label, which cost two rounds of mail and told them nothing.
+          //
+          // `console.error`, not a silent collector: the person who needs it is
+          // whoever has the failing phone in their hand, and the only tool they
+          // have is the inspector.
+          if (window.console && console.error) {
+            console.error('[wpdc] checkout.error', event);
+          }
           say(root, (event.data && event.data.message) || cfg.failed);
           return;
         }

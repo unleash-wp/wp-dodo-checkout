@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.13' );
+define( 'WPDC_VERSION', '0.7.14' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1530,6 +1530,25 @@ check(
 	str_contains( $js, 'showVeil(false)' )
 		&& false !== strpos( $js, 'dialog.close();' )
 		&& strpos( $js, 'showVeil(false)' ) > strpos( $js, 'dialog.close();' )
+);
+check(
+	// The sentence a customer reads is not the reason a developer needs.
+	//
+	// Dodo's `checkout.error` carries a whole event, and `event.data.message`
+	// is the only part of it the panel shows. On Safari that part has been the
+	// string "Load failed" -- WebKit's generic wording for a fetch that did not
+	// complete. It names the symptom and hides which request, from which frame,
+	// and why. Two rounds of mail with Dodo were spent on that label, because
+	// it was the only thing anybody could copy out of a phone.
+	//
+	// The order is the assertion: whatever gets shown, the whole event is
+	// logged FIRST. An edit that keeps `say()` and drops the log restores
+	// exactly the state that cost those two rounds, and nothing about the
+	// checkout would look any different.
+	'BELL: a checkout.error logs the whole event, not only the sentence shown',
+	false !== strpos( $js, "console.error('[wpdc] checkout.error', event)" )
+		&& strpos( $js, "console.error('[wpdc] checkout.error', event)" )
+			< strpos( $js, 'say(root, (event.data && event.data.message) || cfg.failed)' )
 );
 check(
 	// On a 375px screen a 1rem margin spends room the form needs, and a card
