@@ -126,6 +126,46 @@
     if (veil) veil.hidden = !on;
   }
 
+  /**
+   * The shop stops moving while the checkout is open.
+   *
+   * `showModal()` would do this for free and is the one thing we cannot use:
+   * the top layer is where Apple Pay's sheet cannot be reached. So the lock is
+   * built by hand, and it is built the way iOS forces rather than the way that
+   * reads best -- `overflow: hidden` on <body> is enough on a desktop and is
+   * quietly ignored by Safari on a phone, which keeps scrolling the page under
+   * a fixed overlay.
+   *
+   * What does work there is taking the body out of flow, and the price of that
+   * is the scroll position: a fixed body jumps to the top, so the offset is
+   * carried in `top` and given back on close. Somebody who opened the checkout
+   * halfway down a sales page must land back where they were reading, not at
+   * the masthead.
+   *
+   * The inner scroller is unaffected: the dialog is a sibling of <body>'s flow,
+   * and `.wpdc__scroll` keeps its own overflow.
+   */
+  var lockedAt = null;
+
+  function lockPage(on) {
+    var body = document.body;
+    if (!body) return;
+    if (on) {
+      // Guard against a second open: re-locking would record `0` as the
+      // position to return to, because the body is already at the top.
+      if (lockedAt !== null) return;
+      lockedAt = window.pageYOffset || document.documentElement.scrollTop || 0;
+      body.style.top = '-' + lockedAt + 'px';
+      body.classList.add('wpdc-locked');
+      return;
+    }
+    if (lockedAt === null) return;
+    body.classList.remove('wpdc-locked');
+    body.style.top = '';
+    window.scrollTo(0, lockedAt);
+    lockedAt = null;
+  }
+
   function liftDialogs() {
     var dialogs = document.querySelectorAll('.wp-dodo-checkout .wpdc__dialog');
     for (var i = 0; i < dialogs.length; i += 1) {
@@ -622,6 +662,7 @@
     // the top layer is the one place Apple Pay cannot be reached from.
     dialog.show();
     showVeil(true);
+    lockPage(true);
 
     // What showModal() used to do for us. A checkout that opens without moving
     // focus leaves a keyboard or screen-reader customer still standing on the
@@ -723,6 +764,9 @@
     // close path, and a backdrop left behind is a black sheet over the shop
     // that nothing can dismiss.
     showVeil(false);
+    // Same rule as the veil, and a worse failure: a page that cannot be
+    // scrolled after the checkout is gone looks like a frozen browser.
+    lockPage(false);
     try { if (dodo) dodo.Checkout.close(); } catch (e) { /* already closed */ }
     var button = part(root, '.wpdc__button');
     if (button) button.disabled = false;

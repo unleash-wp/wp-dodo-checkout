@@ -258,6 +258,26 @@
   display: none;
 }
 
+/* The shop holds still while the checkout is open.
+
+   `position: fixed`, not `overflow: hidden`. The polite version works on a
+   desktop and Safari on a phone ignores it: the page keeps scrolling under the
+   overlay, which is exactly where it matters, because that is the screen where
+   a stray thumb loses the form.
+
+   `width: 100%` is not decoration. A fixed body shrinks to its content, and a
+   layout that reflows the moment the checkout opens looks like the page broke
+   rather than like a dialog appeared.
+
+   The scroll offset lives in the inline `top` the script writes, and the
+   script gives it back on close. Both halves are needed: without the class
+   nothing locks, without the offset everybody returns to the masthead. */
+.wpdc-locked {
+  position: fixed;
+  width: 100%;
+  overflow: hidden;
+}
+
 /* Present, not polite. It was a transparent glyph that read as decoration, and
    on a phone it was the thing customers could not find. A solid disc with a
    border reads as a control at any size, and 2.5rem is a target a thumb hits. */

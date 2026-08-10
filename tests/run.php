@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.14' );
+define( 'WPDC_VERSION', '0.7.15' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1545,6 +1545,39 @@ check(
 	// logged FIRST. An edit that keeps `say()` and drops the log restores
 	// exactly the state that cost those two rounds, and nothing about the
 	// checkout would look any different.
+	// `position: fixed`, not `overflow: hidden`. The polite version works on a
+	// desktop and mobile Safari ignores it -- the page keeps scrolling under
+	// the overlay, on exactly the screen where a stray thumb loses the form.
+	//
+	// `width: 100%` belongs to the same rule: a fixed body shrinks to its
+	// content, and a layout that reflows the moment the checkout opens reads as
+	// a broken page rather than as a dialog.
+	//
+	// The CALL is asserted, not only the machinery. A first version of this
+	// check looked for the rule and for `classList.add` alone, and deleting
+	// `lockPage(true)` from the open path left it green: everything needed to
+	// lock the page existed, and nothing locked it.
+	'BELL: the shop cannot be scrolled while the checkout is open',
+	1 === preg_match( '/\.wpdc-locked\s*\{[^}]*position:\s*fixed/', $css )
+		&& 1 === preg_match( '/\.wpdc-locked\s*\{[^}]*width:\s*100%/', $css )
+		&& str_contains( $js, "body.classList.add('wpdc-locked')" )
+		&& false !== strpos( $js, 'lockPage(true)' )
+		&& strpos( $js, 'lockPage(true)' ) > strpos( $js, 'dialog.show();' )
+);
+check(
+	// Two ways to leave somebody stranded, and both look like a broken browser
+	// rather than a broken checkout.
+	//
+	// Forgetting the unlock freezes the shop after the dialog is gone. Keeping
+	// the unlock but dropping `scrollTo` is subtler and just as bad: a fixed
+	// body sits at the top, so everybody who opened the checkout halfway down a
+	// sales page is returned to the masthead and has to find their place again.
+	'BELL: closing the checkout gives the page back, at the offset it was left',
+	str_contains( $js, 'lockPage(false)' )
+		&& str_contains( $js, 'window.scrollTo(0, lockedAt)' )
+		&& strpos( $js, 'lockPage(false)' ) > strpos( $js, 'dialog.close();' )
+);
+check(
 	'BELL: a checkout.error logs the whole event, not only the sentence shown',
 	false !== strpos( $js, "console.error('[wpdc] checkout.error', event)" )
 		&& strpos( $js, "console.error('[wpdc] checkout.error', event)" )
