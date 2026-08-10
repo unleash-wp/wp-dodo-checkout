@@ -120,6 +120,12 @@
     }
   }
 
+  var veil = null;
+
+  function showVeil(on) {
+    if (veil) veil.hidden = !on;
+  }
+
   function liftDialogs() {
     var dialogs = document.querySelectorAll('.wp-dodo-checkout .wpdc__dialog');
     for (var i = 0; i < dialogs.length; i += 1) {
@@ -133,6 +139,16 @@
       var owner = dialog.closest('.wp-dodo-checkout[id]');
       if (owner) dialog.dataset.wpdcOwner = owner.id;
       document.body.appendChild(dialog);
+
+      // The backdrop, as a sibling. See the note in checkout.css: as a child of
+      // the dialog it painted over the dialog's own background, and on a phone
+      // the page showed through the checkout.
+      if (!veil) {
+        veil = document.createElement('div');
+        veil.className = 'wpdc__veil';
+        veil.hidden = true;
+        document.body.insertBefore(veil, dialog);
+      }
     }
   }
 
@@ -590,6 +606,7 @@
     // `show()`, never `showModal()`. See the note above the Escape handler --
     // the top layer is the one place Apple Pay cannot be reached from.
     dialog.show();
+    showVeil(true);
 
     // What showModal() used to do for us. A checkout that opens without moving
     // focus leaves a keyboard or screen-reader customer still standing on the
@@ -687,6 +704,10 @@
     delete root.dataset.awaiting;
     var dialog = dialogFor(root);
     if (dialog && dialog.open) dialog.close();
+    // Unconditional, and not inside the `open` check above: this runs on every
+    // close path, and a backdrop left behind is a black sheet over the shop
+    // that nothing can dismiss.
+    showVeil(false);
     try { if (dodo) dodo.Checkout.close(); } catch (e) { /* already closed */ }
     var button = part(root, '.wpdc__button');
     if (button) button.disabled = false;
@@ -1202,11 +1223,20 @@
     // from every other modal says the outside is a way out. Without this they
     // hunt for the X, and on a phone the X was the thing they could not find.
     //
-    // The test is `event.target === dialog` rather than a hit against the
-    // ::backdrop, which no selector can reach: a click inside the checkout
-    // lands on an element WITHIN the dialog, so the dialog itself is only ever
-    // the target when the click was outside its content box.
-    if (event.target.tagName === 'DIALOG' && event.target.classList.contains('wpdc__dialog')) {
+    // Two targets, because the dark area stopped being part of the dialog.
+    //
+    // It used to be a `::before` INSIDE the dialog, so a click on it reported
+    // the dialog as its target and one test covered both. The veil is a
+    // sibling now (it had to be -- as a child it painted over the dialog's own
+    // background), and a click on it reports the veil. Testing only for the
+    // dialog would have left the way out working on desktop, where the window
+    // is narrow enough that clicks still land beside it, and dead on a phone,
+    // where the veil covers everything the window does not.
+    var hit = event.target;
+    var outside =
+      (hit.tagName === 'DIALOG' && hit.classList.contains('wpdc__dialog')) ||
+      (hit.classList && hit.classList.contains('wpdc__veil'));
+    if (outside) {
       closeFrame(sdk());
     }
   });

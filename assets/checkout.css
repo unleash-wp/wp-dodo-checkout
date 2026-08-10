@@ -157,18 +157,50 @@
   grid-template-rows: minmax(0, 1fr);
 }
 
-.wpdc__scroll {
-  /* Opaque, and not for decoration.
+/* `align-items`, declared because NOT declaring it was the whole mobile fault.
+   Measured on a 375x812 phone against the live page:
 
-     The veil below is a `::before` at `z-index: -1`, and a negative z-index
-     child paints ABOVE its element's own background -- only its in-flow
-     content covers it. So the dialog's white never did, and Dodo's iframe is
-     transparent: the dimming came straight through the payment form.
+     dialog        top   38   bottom  775   height 737   (its max-height)
+     .wpdc__scroll top  -39   bottom  851   height 889
+
+   The scroll container started 77px ABOVE the window and ended 76px below it,
+   and `overflow: hidden` cut both ends -- the product image, name and price
+   gone off the top, Dodo's pay button cut off the bottom. `overflow-y: auto`
+   never engaged, because the box was exactly as tall as its content.
+
+   The cause is a rule in the SITE's own stylesheet:
+
+     .wp-dodo-checkout { align-items: center }
+
+   and the bite is self-inflicted. Before the lift that class sat only on the
+   page block, where centring children is harmless. Moving the dialog to <body>
+   made it carry the class for the armoured selectors -- and this rule came
+   along. A centred grid item is not stretched to its track: it takes its
+   content height (889) and overflows the 737 track symmetrically, which is
+   exactly the -39/+76 measured.
+
+   Two classes (0,2,0) already beat the theme's one (0,1,0). The important is
+   because losing this one does not look like a style difference -- it looks
+   like a broken checkout, with the price above the screen and the pay button
+   below it. */
+.wp-dodo-checkout.wpdc__dialog {
+  align-items: stretch !important;
+}
+
+.wpdc__scroll {
+  /* Opaque, and kept even after the veil moved out.
+
+     The veil used to be a `::before` on the dialog at `z-index: -1`, and a
+     negative z-index child paints ABOVE its element's own background -- only
+     in-flow content covers it. So the dialog's white never did, and Dodo's
+     iframe is transparent: the dimming came straight through the payment form.
      Photographed by the operator -- card fields on a dark page with the site
      footer visible behind them.
 
-     This is the first layer that is CONTENT rather than background, which is
-     why the opaque colour belongs here and not on the dialog. */
+     The veil is a sibling now (see `.wpdc__veil`), so this is no longer load
+     bearing. It stays because a checkout whose background depends on a parent
+     is a checkout one theme rule away from transparent, and that failure looks
+     like a broken payment form rather than a style. */
   background: #fff;
 
   min-height: 0;
@@ -203,24 +235,27 @@
   animation: wpdc-fade .3s ease both;
 }
 
-/* The backdrop, rebuilt by hand.
-
+/* The backdrop, and why it is a SIBLING rather than part of the dialog.
    `::backdrop` exists only for a modal dialog, and this one is deliberately not
-   one. A pseudo-element rather than the spread `box-shadow` 0.7.2 used, because
-   a shadow paints the darkness and captures nothing: the shop behind stayed
-   clickable, so a customer could navigate away mid-payment through a link they
-   could barely see.
-
-   `z-index: -1` keeps it inside this dialog's stacking context -- behind the
-   panel, above the page, and still far below Apple's 99998. Clicks on it land
-   with the DIALOG as their target, which is exactly what the light-dismiss
-   handler in checkout.js already looks for. */
-.wpdc__dialog[open]::before {
-  content: '';
+   one -- the top layer is where Apple Pay cannot be reached from.
+   The first replacement was a `::before` on the dialog at `z-index: -1`, and it
+   was wrong in a way that took two rounds to see: a negative-z-index child
+   paints ABOVE its own element's background and only below its in-flow content.
+   So the dialog's white never covered it. Desktop was patched by putting an
+   opaque colour on the content, which held there and did not hold on a phone,
+   where the layout leaves other surfaces exposed -- the page showed straight
+   through the checkout.
+   A sibling has no such rule. It sits under the dialog by number, the dialog
+   paintsfully opaque above it, and no layout can leak. */
+.wpdc__veil {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 98999;
   background: rgb(0 0 0 / .55);
+  animation: wpdc-fade .3s ease both;
+}
+.wpdc__veil[hidden] {
+  display: none;
 }
 
 /* Present, not polite. It was a transparent glyph that read as decoration, and
@@ -988,7 +1023,7 @@
 @media (prefers-reduced-motion: reduce) {
   .wpdc__frame.is-ready iframe,
   .wpdc__dialog[open],
-  .wpdc__dialog[open]::before {
+  .wpdc__veil {
     animation: none;
   }
   .wpdc__frame.is-loading::after {

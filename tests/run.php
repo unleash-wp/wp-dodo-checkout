@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.12' );
+define( 'WPDC_VERSION', '0.7.13' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -897,7 +897,33 @@ check(
 	'BELL: a veil covers the shop, so a second click cannot reach the button',
 	str_contains( $jsCode, 'dialog.show();' )
 		&& ! str_contains( $jsCode, 'button.hidden = true' )
-		&& 1 === preg_match( '/\.wpdc__dialog\[open\]::before\s*\{[^}]*position:\s*fixed/', $css )
+		// A SIBLING, not a `::before` on the dialog. As a child at `z-index: -1`
+		// it painted over the dialog's own background and the page showed
+		// through the checkout on a phone.
+		&& 1 === preg_match( '/\.wpdc__veil\s*\{[^}]*position:\s*fixed/', $css )
+		&& str_contains( $jsCode, "veil.className = 'wpdc__veil'" )
+		&& ! preg_match( '/\.wpdc__dialog\[open\]::before/', $css )
+);
+check(
+	// The mobile fault, nailed down because it is invisible in the file and
+	// only shows on a phone.
+	//
+	// The site's own stylesheet carries `.wp-dodo-checkout { align-items: center }`.
+	// The lift puts that class on the dialog, so the rule follows it there --
+	// and a CENTRED grid item is not stretched to its track. Measured on a
+	// 375x812 phone: the 889px scroll container centred itself in a 737px
+	// window and overflowed 77px above and 76px below, where `overflow: hidden`
+	// cut it. Product image, name and price off the top; Dodo's pay button off
+	// the bottom. `overflow-y: auto` never engaged.
+	//
+	// Both classes, because one loses to the theme on source order. Important,
+	// because losing does not look like a style difference -- it looks like a
+	// broken checkout.
+	'BELL: the window stretches its scroller, so a theme cannot centre it out of view',
+	1 === preg_match(
+		'/\.wp-dodo-checkout\.wpdc__dialog\s*\{[^}]*align-items:\s*stretch\s*!important/',
+		$css
+	)
 );
 check(
 	// The harness defines WPDC_VERSION on the main file's behalf. If the two drift
@@ -1487,9 +1513,23 @@ check(
 	// A native dialog does NOT close on a backdrop click -- the platform gives
 	// Escape and nothing else, while everything a customer has learned from
 	// every other modal says the outside is a way out.
-	'BELL: clicking beside the checkout closes it',
-	str_contains( $js, "event.target.tagName === 'DIALOG'" )
+	// BOTH targets. The dark area used to be a `::before` inside the dialog, so
+	// a click on it reported the dialog; it is a sibling now, so it reports the
+	// veil. Checking only the dialog leaves the way out alive on a wide screen
+	// and dead on a phone, where the veil covers everything the window does not.
+	'BELL: clicking beside the checkout closes it, on the window AND on the veil',
+	str_contains( $js, "hit.tagName === 'DIALOG'" )
 		&& str_contains( $js, "classList.contains('wpdc__dialog')" )
+		&& str_contains( $js, "classList.contains('wpdc__veil')" )
+);
+check(
+	// A backdrop that outlives its window is a black sheet over the shop that
+	// nothing can dismiss. It used to be part of the dialog, so `close()` took
+	// it away for free; a sibling has to be told.
+	'BELL: closing the checkout takes the veil with it',
+	str_contains( $js, 'showVeil(false)' )
+		&& false !== strpos( $js, 'dialog.close();' )
+		&& strpos( $js, 'showVeil(false)' ) > strpos( $js, 'dialog.close();' )
 );
 check(
 	// On a 375px screen a 1rem margin spends room the form needs, and a card
