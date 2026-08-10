@@ -103,9 +103,62 @@ function wpdc_format_price( ?int $minor, string $currency ): string {
 	if ( null === $minor ) {
 		return __( 'no price set', 'wp-dodo-checkout' );
 	}
+
 	$digits = wpdc_currency_digits( $currency );
-	$factor = 10 ** $digits;
-	return number_format_i18n( $minor / $factor, $digits ) . ( '' !== $currency ? ' ' . $currency : '' );
+	$amount = $minor / ( 10 ** $digits );
+
+	if ( '' === $currency ) {
+		return number_format_i18n( $amount, $digits );
+	}
+
+	/*
+	 * A symbol, not a code, because a customer reads this.
+	 *
+	 * It used to append the currency code, which was right for the one caller it
+	 * had -- an admin catalogue listing products. Then the sales page started
+	 * rendering it, and "24,99 EUR" appeared where "24,99 €" had been. The
+	 * script replaces it within a moment, but the server's version is what shows
+	 * first, what a cached page keeps, and what somebody with JavaScript off
+	 * reads for good.
+	 *
+	 * PHP's Intl is an OPTIONAL extension and plenty of shared hosting is
+	 * without it, so it is used when present and never depended on.
+	 */
+	if ( class_exists( 'NumberFormatter' ) ) {
+		$fmt = new NumberFormatter( wpdc_locale_for( wpdc_request_language() ), NumberFormatter::CURRENCY );
+		$out = $fmt->formatCurrency( $amount, strtoupper( $currency ) );
+		if ( is_string( $out ) && '' !== $out ) {
+			return $out;
+		}
+	}
+
+	// Without Intl: the symbol for the currencies this shop actually prices in,
+	// and the code for anything else. A code is plain but never wrong, which is
+	// the right way round for money.
+	$symbols = array(
+		'EUR' => '€',
+		'USD' => '$',
+		'GBP' => '£',
+		'JPY' => '¥',
+		'INR' => '₹',
+		'BRL' => 'R$',
+		'CHF' => 'CHF',
+		// The dollars that are not THE dollar keep their letters, because an
+		// Australian shown a bare $ has been told the American price.
+		'CAD' => 'CA$',
+		'AUD' => 'A$',
+		'NZD' => 'NZ$',
+		'SGD' => 'S$',
+		'MXN' => 'MX$',
+	);
+
+	$symbol = $symbols[ strtoupper( $currency ) ] ?? strtoupper( $currency );
+	$number = number_format_i18n( $amount, $digits );
+
+	// German writes the symbol after the number, English before it. Two rules
+	// because the shop speaks two languages -- the same reason wpdc_locale_for
+	// lists two locales and not forty.
+	return 'de' === wpdc_request_language() ? $number . ' ' . $symbol : $symbol . $number;
 }
 
 /**
@@ -179,6 +232,23 @@ function wpdc_visitor_country(): string {
 	return $code;
 }
 
+
+/**
+ * A two-letter language to the locale WordPress names its catalogues with.
+ *
+ * `de` is `de_DE`, everything else is `en_US`. Deliberately a short list rather
+ * than a guess like `xx_XX`, which names a catalogue that does not exist and
+ * leaves the labels English beside a checkout that is not.
+ *
+ * This block spent a while stranded above the wrong function, which is how a
+ * comment stops being documentation and starts being noise.
+ */
+function wpdc_locale_for( string $lang ): string {
+	// Two, because the shop speaks two. A longer list would name catalogues
+	// that do not exist and leave the labels English beside a checkout that is
+	// not.
+	return 'de' === $lang ? 'de_DE' : 'en_US';
+}
 
 /**
  * Two languages, and everyone lands in one of them.

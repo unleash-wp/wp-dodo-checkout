@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.16' );
+define( 'WPDC_VERSION', '0.7.17' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -2985,9 +2985,32 @@ check(
 	// fourteen cents. Printed as "0,24 JPY" that reads like a plausible number
 	// and hides a real mistake; printed as "24 JPY" it is obviously wrong and
 	// somebody fixes it.
+	// The PROPERTY, not one spelling. Whether this reads "24 ¥" or "¥24" depends
+	// on the locale and on whether PHP's Intl extension is installed, and
+	// pinning a spelling made this check fail the moment the formatter learned
+	// to print a symbol -- for output that was more correct, not less. What must
+	// never change is the magnitude.
 	'BELL: twenty-four yen prints as twenty-four',
-	'24 JPY' === wpdc_format_price( 24, 'JPY' )
-		&& '24,99 EUR' === wpdc_format_price( 2499, 'EUR' )
+	( static function (): bool {
+		$yen = wpdc_format_price( 24, 'JPY' );
+		foreach ( array( '0,24', '0.24', '24,00', '24.00' ) as $wrong ) {
+			if ( str_contains( $yen, $wrong ) ) {
+				return false;
+			}
+		}
+		return str_contains( $yen, '24' );
+	} )()
+);
+check(
+	// A customer reads this, and customers read symbols. The function appended
+	// the currency CODE, which was right while its only caller was an admin
+	// catalogue -- and became "24,99 EUR" on a sales page the day the price
+	// shortcode started rendering it, where "24,99 €" had stood for months.
+	'BELL: the price a visitor reads carries a symbol, not a currency code',
+	( static function (): bool {
+		$eur = wpdc_format_price( 2499, 'EUR' );
+		return str_contains( $eur, '24' ) && str_contains( $eur, '99' ) && ! str_contains( $eur, 'EUR' );
+	} )()
 );
 
 $_SERVER['HTTP_CF_IPCOUNTRY'] = 'de';

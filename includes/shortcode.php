@@ -419,22 +419,6 @@ function wpdc_restore_catalogue(): void {
 	}
 }
 
-/**
- * A two-letter language to the locale WordPress names its catalogues with.
- *
- * `de` is `de_DE`, everything else is `en_US`. Deliberately a short list rather
- * than a guess like `xx_XX`, which names a catalogue that does not exist and
- * leaves the labels English beside a checkout that is not.
- *
- * This block spent a while stranded above the wrong function, which is how a
- * comment stops being documentation and starts being noise.
- */
-function wpdc_locale_for( string $lang ): string {
-	// Two, because the shop speaks two. A longer list would name catalogues
-	// that do not exist and leave the labels English beside a checkout that is
-	// not.
-	return 'de' === $lang ? 'de_DE' : 'en_US';
-}
 
 /**
  * Dodo's product descriptions come back as MARKDOWN, which nothing in the API
