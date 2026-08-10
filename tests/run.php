@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.17' );
+define( 'WPDC_VERSION', '0.7.18' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -69,6 +69,16 @@ function get_locale(): string {
 }
 function determine_locale(): string {
 	return get_locale();
+}
+/**
+ * Polylang, present but silent unless a test says otherwise.
+ *
+ * Modelled as ALWAYS DEFINED and usually empty, because that is the shape the
+ * code has to survive: `function_exists` is true on any site running Polylang,
+ * and an empty answer is what it gives outside the loop.
+ */
+function pll_current_language( string $what = 'slug' ) {
+	return $GLOBALS['wpdc_test_pll'] ?? '';
 }
 /**
  * German grouping, because that is the locale this harness pretends to be and
@@ -1852,9 +1862,56 @@ check(
 	// The function existing proves nothing: the first version of this block
 	// tested only the resolution table, so deleting the fallback from the
 	// shortcode killed no test and the labels would have gone back to English.
-	'BELL: and the shortcode actually falls back to it',
-	str_contains( $shortcode, ': wpdc_request_language();' )
+	//
+	// BOTH shortcodes, counted. The header is now one step down: what they
+	// consult is the PAGE's language, which asks Polylang first and falls
+	// through to the header only where there is no Polylang to ask. Counting
+	// catches a fallback dropped from either one.
+	'BELL: and both shortcodes fall back to the page language, never the site locale',
+	2 === substr_count( $shortcode, ': wpdc_page_language();' )
 		&& ! preg_match( '/\$lang\s*=[^;]*get_locale/', $shortcode )
+);
+
+$GLOBALS['wpdc_test_pll']        = 'de';
+$_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'en-GB,en;q=0.9';
+$pageWins                        = wpdc_page_language();
+$germanPrice                     = wpdc_format_price( 2499, 'EUR', wpdc_page_language() );
+$GLOBALS['wpdc_test_pll']        = '';
+$headerWins                      = wpdc_page_language();
+unset( $_SERVER['HTTP_ACCEPT_LANGUAGE'], $GLOBALS['wpdc_test_pll'] );
+$neither = wpdc_page_language();
+
+check(
+	// A price is printed into the page BODY, so it survives in a full-page cache
+	// and it belongs to the page rather than to whoever asked for the page. Read
+	// off Accept-Language it rendered "€24.99" into a German sales page whenever
+	// a request carried no header -- measured on the live site.
+	//
+	// Polylang serves each language on its own URL, so its answer is a property
+	// of the page and a cache keyed on the URL is keyed on the language too.
+	'BELL: the page decides its language, not the browser that asked for it',
+	'de' === $pageWins && 'en' === $headerWins && '' === $neither
+);
+check(
+	// German writes the symbol after the number. This is the visible half of the
+	// rule above: with the header winning, a German page showed "€24.99".
+	'BELL: a German page prints the symbol after the number',
+	str_ends_with( trim( $germanPrice ), '€' )
+);
+check(
+	// The no-Intl path, called DIRECTLY. It only runs where a library is
+	// missing, so it never runs on the machine writing the tests -- and it duly
+	// survived a mutation that made every locale print the symbol in front,
+	// because the assertion above goes through NumberFormatter and never reaches
+	// this code. That is why it is its own function now.
+	'BELL: without Intl the symbol still lands on the right side of the number',
+	'24,99 €' === wpdc_format_price_basic( 24.99, 'EUR', 2, 'de' )
+		&& '€24,99' === wpdc_format_price_basic( 24.99, 'EUR', 2, 'en' )
+		// The dollars that are not THE dollar keep their letters: an Australian
+		// shown a bare $ has been told the American price.
+		&& str_contains( wpdc_format_price_basic( 19.99, 'AUD', 2, 'en' ), 'A$' )
+		// An unmapped currency falls back to its code rather than to nothing.
+		&& str_contains( wpdc_format_price_basic( 100.0, 'HUF', 2, 'en' ), 'HUF' )
 );
 
 check(

@@ -99,7 +99,11 @@ function wpdc_is_product_id( $value ): bool {
  * the checkout window. It has moved between here and settings.php twice as that
  * second caller came and went; it stays here while both exist.
  */
-function wpdc_format_price( ?int $minor, string $currency ): string {
+function wpdc_format_price( ?int $minor, string $currency, ?string $lang = null ): string {
+	// Named by the caller when the caller knows better. The price shortcode
+	// does: it carries a `lang` attribute so a shop can price a German edition
+	// and an English one from pages nothing else can tell apart.
+	$lang = null !== $lang && '' !== $lang ? $lang : wpdc_page_language();
 	if ( null === $minor ) {
 		return __( 'no price set', 'wp-dodo-checkout' );
 	}
@@ -125,16 +129,28 @@ function wpdc_format_price( ?int $minor, string $currency ): string {
 	 * without it, so it is used when present and never depended on.
 	 */
 	if ( class_exists( 'NumberFormatter' ) ) {
-		$fmt = new NumberFormatter( wpdc_locale_for( wpdc_request_language() ), NumberFormatter::CURRENCY );
+		$fmt = new NumberFormatter( wpdc_locale_for( $lang ), NumberFormatter::CURRENCY );
 		$out = $fmt->formatCurrency( $amount, strtoupper( $currency ) );
 		if ( is_string( $out ) && '' !== $out ) {
 			return $out;
 		}
 	}
 
-	// Without Intl: the symbol for the currencies this shop actually prices in,
-	// and the code for anything else. A code is plain but never wrong, which is
-	// the right way round for money.
+	return wpdc_format_price_basic( $amount, $currency, $digits, $lang );
+}
+
+/**
+ * The same price without PHP's Intl extension, which plenty of hosting lacks.
+ *
+ * Its own function because a branch that only runs where a library is MISSING
+ * is a branch that never runs on the machine writing the tests. Kept inline, it
+ * survived a mutation that made every locale print the symbol in front -- the
+ * check passed through NumberFormatter and never reached this code at all.
+ */
+function wpdc_format_price_basic( float $amount, string $currency, int $digits, string $lang ): string {
+	// The symbol for the currencies this shop actually prices in, and the code
+	// for anything else. A code is plain but never wrong, which is the right way
+	// round for money.
 	$symbols = array(
 		'EUR' => '€',
 		'USD' => '$',
@@ -158,7 +174,7 @@ function wpdc_format_price( ?int $minor, string $currency ): string {
 	// German writes the symbol after the number, English before it. Two rules
 	// because the shop speaks two languages -- the same reason wpdc_locale_for
 	// lists two locales and not forty.
-	return 'de' === wpdc_request_language() ? $number . ' ' . $symbol : $symbol . $number;
+	return 'de' === $lang ? $number . ' ' . $symbol : $symbol . $number;
 }
 
 /**
@@ -291,6 +307,34 @@ function wpdc_request_language(): string {
 	}
 	$first = strtok( $header, ',;' );
 	return is_string( $first ) ? wpdc_two_languages( trim( $first ) ) : '';
+}
+
+/**
+ * The language of the PAGE, which is not the language of whoever asked for it.
+ *
+ * `wpdc_request_language` reads `Accept-Language`, and for something rendered
+ * inside a dialog after a click that is close enough. For a price printed into
+ * the page body it is wrong twice over:
+ *
+ *   - A German page read by an English browser rendered "€24.99" beside German
+ *     prose. Measured on the live site, which is how this was found.
+ *   - Under any full-page cache the first visitor's language is frozen into the
+ *     HTML and served to everybody after them.
+ *
+ * Polylang knows the answer and it is not a guess: it serves each language on
+ * its own URL, so its answer is a property of the page rather than of the
+ * request -- and a cache keyed on the URL is therefore keyed on the language
+ * too. Without Polylang the header remains the best available signal, with the
+ * limit named above.
+ */
+function wpdc_page_language(): string {
+	if ( function_exists( 'pll_current_language' ) ) {
+		$slug = pll_current_language( 'slug' );
+		if ( is_string( $slug ) && '' !== $slug ) {
+			return wpdc_two_languages( $slug );
+		}
+	}
+	return wpdc_request_language();
 }
 
 /**

@@ -76,7 +76,17 @@ function wpdc_register_shortcode(): void {
  * to the page, because they are the shop's words and not this plugin's.
  */
 function wpdc_render_price( $atts ): string {
-	$atts = shortcode_atts( array( 'product' => '' ), is_array( $atts ) ? $atts : array(), 'wpdc_price' );
+	$atts = shortcode_atts(
+		array(
+			'product' => '',
+			// Same escape hatch the checkout shortcode has, and needed for the
+			// same reason: a shop can price a German edition and an English one
+			// from pages the plugin has no other way to tell apart.
+			'lang'    => '',
+		),
+		is_array( $atts ) ? $atts : array(),
+		'wpdc_price'
+	);
 
 	$product = trim( (string) $atts['product'] );
 	if ( ! wpdc_is_product_id( $product ) ) {
@@ -86,10 +96,19 @@ function wpdc_render_price( $atts ): string {
 		return esc_html__( 'wpdc_price: a valid product id is required.', 'wp-dodo-checkout' );
 	}
 
+	// The PAGE's language, not the reader's. A price is printed into the body
+	// and survives in a page cache, so deciding it from `Accept-Language` froze
+	// the first visitor's formatting for everybody -- and rendered "€24.99" into
+	// a German page whenever the request carried no header at all. Measured on
+	// the live site, which is how it was found.
+	$lang = '' !== trim( (string) $atts['lang'] )
+		? wpdc_two_languages( trim( (string) $atts['lang'] ) )
+		: wpdc_page_language();
+
 	$catalog = wpdc_catalog();
 	$base    = is_array( $catalog ) && isset( $catalog[ $product ] ) ? $catalog[ $product ] : null;
 	$text    = is_array( $base )
-		? wpdc_format_price( is_int( $base['price'] ?? null ) ? $base['price'] : null, (string) ( $base['currency'] ?? '' ) )
+		? wpdc_format_price( is_int( $base['price'] ?? null ) ? $base['price'] : null, (string) ( $base['currency'] ?? '' ), $lang )
 		: '';
 
 	// Enqueued here as well, because a page can carry a price without carrying a
@@ -103,7 +122,7 @@ function wpdc_render_price( $atts ): string {
 	// reached it without the catalogue loaded would send a German visitor
 	// English ones. This was caught by the check that exists because it happened
 	// once already.
-	$switched = wpdc_load_catalogue( wpdc_request_language() );
+	$switched = wpdc_load_catalogue( $lang );
 	wpdc_enqueue();
 	if ( $switched ) {
 		wpdc_restore_catalogue();
@@ -164,7 +183,7 @@ function wpdc_render( $atts ): string {
 	// German.
 	$lang     = '' !== trim( (string) $atts['lang'] )
 		? wpdc_two_languages( trim( (string) $atts['lang'] ) )
-		: wpdc_request_language();
+		: wpdc_page_language();
 	$quantity = max( 1, min( 50, (int) $atts['quantity'] ) );
 	$id       = wp_unique_id( 'wpdc-' );
 
