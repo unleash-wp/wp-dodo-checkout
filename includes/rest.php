@@ -52,6 +52,29 @@ function wpdc_register_rest(): void {
 
 	register_rest_route(
 		'wp-dodo-checkout/v1',
+		'/price',
+		array(
+			// GET, and no nonce, unlike its neighbours. Both follow from what this
+			// route is: it reads a price out of a catalogue the shop publishes on
+			// its own sales pages anyway. It creates nothing, it spends nothing
+			// per call -- the Dodo lookup behind it is cached per product -- and
+			// it answers only about ids Dodo currently lists. A nonce here would
+			// buy nothing and would break the one case this exists for: a page
+			// served from a full-page cache, where no fresh nonce is available.
+			'methods'             => 'GET',
+			'callback'            => 'wpdc_rest_price',
+			'permission_callback' => '__return_true',
+			'args'                => array(
+				'product' => array(
+					'required'          => true,
+					'validate_callback' => 'wpdc_is_product_id',
+				),
+			),
+		)
+	);
+
+	register_rest_route(
+		'wp-dodo-checkout/v1',
 		'/session',
 		array(
 			'methods'             => 'POST',
@@ -138,6 +161,52 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 		),
 		200
 	);
+}
+
+/**
+ * What this visitor's price is, so the sales page can stop guessing.
+ *
+ * The page renders the base price server-side and this replaces it. That order
+ * is not a nicety: a sales page is the most cached thing on a WordPress site,
+ * and a per-visitor price rendered INTO the HTML would be frozen by the first
+ * visitor's country and served to everyone after them. So the HTML stays
+ * country-free and the number arrives afterwards.
+ *
+ * The answer must never be cached, and that is what the header below is for.
+ * Cloudflare sits in front of this site; one price cached at the edge and handed
+ * to the next country is exactly the mismatch this feature exists to remove.
+ */
+function wpdc_rest_price( WP_REST_Request $request ): WP_REST_Response {
+	$product = (string) $request->get_param( 'product' );
+	$price   = wpdc_price_for_country( $product, wpdc_visitor_country() );
+
+	if ( wpdc_is_error( $price ) ) {
+		// Silent by design. The page already shows a price; saying "we could not
+		// localise it" would replace a correct base price with a worry.
+		$response = new WP_REST_Response( array( 'ok' => false ), 200 );
+		$response->header( 'cache-control', 'private, no-store' );
+		return $response;
+	}
+
+	$response = new WP_REST_Response(
+		array(
+			'ok' => true,
+			// Minor units and a currency code, never a formatted string. The
+			// browser formats it, because the browser is the only party here that
+			// certainly has an Intl implementation -- PHP's is an optional
+			// extension -- and because Intl knows that the yen has no decimals
+			// without being told.
+			'amount'    => $price['amount'],
+			'currency'  => $price['currency'],
+			// Whether this is the visitor's own price or the shop's default. The
+			// page does not use it today; it is here so a future caller does not
+			// have to infer it by comparing currencies.
+			'localized' => $price['localized'],
+		),
+		200
+	);
+	$response->header( 'cache-control', 'private, no-store' );
+	return $response;
 }
 
 /**

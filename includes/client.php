@@ -221,6 +221,172 @@ function wpdc_catalog( bool $fresh = false ) {
 }
 
 /**
+ * The prices a product carries besides its base one.
+ *
+ * `GET /products/{id}/localized-prices` returns EVERY rule at once, so this is
+ * cached per product and not per country: one call serves every visitor from
+ * every country until the cache expires. Asking per country would multiply the
+ * calls by the number of countries for information that arrived in one response.
+ *
+ * Two shapes come back, and only the reading differs. `by_country` rules carry a
+ * `country_code` and are exact. `by_currency` rules carry only a currency, and
+ * turning a country into one of those is the guesswork this file is careful
+ * about -- see wpdc_price_for_country().
+ *
+ * @return array<int, array{currency: string, amount: int, country: string}>|array{ok: false}
+ */
+function wpdc_localized_prices( string $product ) {
+	if ( ! wpdc_is_product_id( $product ) ) {
+		return array();
+	}
+
+	$key    = 'wpdc_lp_' . WPDC_VERSION . '_' . $product;
+	$cached = get_transient( $key );
+	if ( is_array( $cached ) ) {
+		return $cached;
+	}
+
+	$result = wpdc_dodo_request( 'GET', '/products/' . rawurlencode( $product ) . '/localized-prices' );
+	if ( wpdc_is_error( $result ) ) {
+		// Not cached, because the next visitor deserves a fresh attempt -- but
+		// also not fatal: the caller falls back to the base price, which is what
+		// the page showed before this feature existed.
+		return $result;
+	}
+
+	$rows  = is_array( $result['items'] ?? null ) ? $result['items'] : array();
+	$rules = array();
+
+	foreach ( $rows as $row ) {
+		$currency = is_string( $row['currency'] ?? null ) ? strtoupper( $row['currency'] ) : '';
+		$amount   = is_int( $row['amount'] ?? null ) ? $row['amount'] : null;
+		if ( '' === $currency || null === $amount || $amount <= 0 ) {
+			continue;
+		}
+		$rules[] = array(
+			'currency' => $currency,
+			'amount'   => $amount,
+			'country'  => is_string( $row['country_code'] ?? null ) ? strtoupper( $row['country_code'] ) : '',
+		);
+	}
+
+	set_transient( $key, $rules, WPDC_CATALOG_TTL );
+	return $rules;
+}
+
+/**
+ * Which currency a country most likely pays in, and only where that is obvious.
+ *
+ * This map is deliberately incomplete, and the incompleteness is the design.
+ *
+ * The page cannot ask Dodo what it will charge -- that judgement happens inside
+ * the checkout frame, after the session is minted. So the page GUESSES, and a
+ * guess that differs from the checkout is worse than no guess at all: a visitor
+ * who reads one number and is then shown another has been given a reason to
+ * distrust the shop at the exact moment they were about to pay.
+ *
+ * So only one-to-one pairs are listed -- countries with their own currency,
+ * where no reasonable payment provider would decide otherwise -- plus the euro
+ * area, which is one currency and twenty countries. Everything else falls
+ * through to the base price, which is what the page showed before any of this
+ * existed. Being right or silent beats being clever.
+ */
+function wpdc_country_currency( string $country ): string {
+	$euro = array( 'AT', 'BE', 'HR', 'CY', 'EE', 'FI', 'FR', 'DE', 'GR', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PT', 'SK', 'SI', 'ES' );
+	if ( in_array( $country, $euro, true ) ) {
+		return 'EUR';
+	}
+
+	$own = array(
+		'US' => 'USD',
+		'GB' => 'GBP',
+		'JP' => 'JPY',
+		'IN' => 'INR',
+		'BR' => 'BRL',
+		'CA' => 'CAD',
+		'AU' => 'AUD',
+		'MX' => 'MXN',
+		'CH' => 'CHF',
+		'NZ' => 'NZD',
+		'SG' => 'SGD',
+		'NO' => 'NOK',
+		'SE' => 'SEK',
+		'DK' => 'DKK',
+		'PL' => 'PLN',
+		'ZA' => 'ZAR',
+		'AE' => 'AED',
+	);
+
+	return $own[ $country ] ?? '';
+}
+
+/**
+ * What this visitor should see, in minor units and a currency.
+ *
+ * Falls back to the product's base price at every uncertainty: no country, no
+ * currency we recognise, no rule for that currency, or a lookup that failed. The
+ * fallback is not a degraded mode -- it is exactly what the shop displayed
+ * before localized prices existed, so the worst outcome of this whole feature is
+ * the status quo.
+ *
+ * @return array{amount: int, currency: string, localized: bool}|array{ok: false}
+ */
+function wpdc_price_for_country( string $product, string $country ) {
+	$catalog = wpdc_catalog();
+	if ( wpdc_is_error( $catalog ) ) {
+		return $catalog;
+	}
+
+	// The allow-list, and the reason this route cannot be used to make us call
+	// Dodo about arbitrary ids: a product Dodo does not currently list is not a
+	// product this shop answers about.
+	$base = $catalog[ $product ] ?? null;
+	if ( ! is_array( $base ) || ! is_int( $base['price'] ?? null ) ) {
+		return wpdc_error( 'unknown_product', false, __( 'This product is not available.', 'wp-dodo-checkout' ) );
+	}
+
+	$fallback = array(
+		'amount'    => (int) $base['price'],
+		'currency'  => (string) $base['currency'],
+		'localized' => false,
+	);
+
+	$wanted = wpdc_country_currency( $country );
+	if ( '' === $wanted || $wanted === $fallback['currency'] ) {
+		return $fallback;
+	}
+
+	$rules = wpdc_localized_prices( $product );
+	if ( wpdc_is_error( $rules ) || ! is_array( $rules ) ) {
+		return $fallback;
+	}
+
+	// An exact country rule outranks a currency rule: it is the one shape that
+	// is not a guess.
+	foreach ( $rules as $rule ) {
+		if ( '' !== $rule['country'] && $rule['country'] === $country ) {
+			return array(
+				'amount'    => $rule['amount'],
+				'currency'  => $rule['currency'],
+				'localized' => true,
+			);
+		}
+	}
+
+	foreach ( $rules as $rule ) {
+		if ( '' === $rule['country'] && $rule['currency'] === $wanted ) {
+			return array(
+				'amount'    => $rule['amount'],
+				'currency'  => $rule['currency'],
+				'localized' => true,
+			);
+		}
+	}
+
+	return $fallback;
+}
+
+/**
  * A checkout URL for one product, ready for the overlay.
  *
  * @param string      $product  Dodo product id.

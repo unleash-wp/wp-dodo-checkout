@@ -176,3 +176,9 @@ msgstr "Markiert — mit Strg/Cmd + C kopieren."
 
 msgid "Close window"
 msgstr "Fenster schließen"
+
+msgid "wpdc_price: a valid product id is required."
+msgstr "wpdc_price: eine gültige Produkt-ID ist erforderlich."
+
+msgid "This product is not available."
+msgstr "Dieses Produkt ist nicht verfügbar."

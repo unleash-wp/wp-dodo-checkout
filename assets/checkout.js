@@ -595,17 +595,31 @@
     note.classList.add('is-error');
   }
 
+  /**
+   * Minor units to something a customer reads, in whatever currency they pay.
+   *
+   * The divisor is ASKED FOR, not assumed. Dodo stores every amount in the
+   * smallest unit of its currency, and for the yen that unit is the yen itself:
+   * dividing by a hundred printed a hundredth of the price. This is not
+   * theoretical -- the yen prices on the shop's own books are stored as whole
+   * yen, and this function used to render them as small change.
+   *
+   * Intl already knows how many decimal places a currency has, so it is asked
+   * rather than tabulated a second time here. The server keeps its own table
+   * because PHP's Intl is an optional extension; the browser's never is.
+   */
   function money(minor, currency) {
-    var amount = minor / 100;
     try {
-      return new Intl.NumberFormat(document.documentElement.lang || undefined, {
+      var fmt = new Intl.NumberFormat(document.documentElement.lang || undefined, {
         style: currency ? 'currency' : 'decimal',
         currency: currency || undefined,
-      }).format(amount);
+      });
+      var digits = currency ? fmt.resolvedOptions().maximumFractionDigits : 2;
+      return fmt.format(minor / Math.pow(10, digits));
     } catch (e) {
       // An unknown currency code throws rather than degrading, and a checkout
       // must not lose its totals over a formatting nicety.
-      return amount.toFixed(2) + (currency ? ' ' + currency : '');
+      return (minor / 100).toFixed(2) + (currency ? ' ' + currency : '');
     }
   }
 
@@ -1619,4 +1633,60 @@
         button.disabled = false;
       });
   });
+
+  /**
+   * The price on the page, put into the currency the visitor will be charged in.
+   *
+   * The server rendered the base price, because a sales page is the most cached
+   * object on a WordPress site and a per-visitor price baked into the HTML would
+   * be frozen by whichever country loaded it first. So the number is replaced
+   * here instead, and everything about this is written to fail towards leaving
+   * it alone: no answer, a bad answer, no Intl, no fetch -- the base price
+   * stays, and the base price is true.
+   */
+  function paintPrices() {
+    if (!cfg.price || typeof window.fetch !== 'function' || typeof window.Intl !== 'object') return;
+
+    var nodes = document.querySelectorAll('[data-wpdc-price]');
+    if (!nodes.length) return;
+
+    // One request per PRODUCT, not per element: a page can show the same book's
+    // price in a hero and again in a table, and asking twice for one answer is
+    // two round trips a visitor waits through.
+    var byProduct = {};
+    for (var i = 0; i < nodes.length; i += 1) {
+      var id = nodes[i].getAttribute('data-wpdc-price') || '';
+      if (!id) continue;
+      if (!byProduct[id]) byProduct[id] = [];
+      byProduct[id].push(nodes[i]);
+    }
+
+    Object.keys(byProduct).forEach(function (id) {
+      fetch(cfg.price + '?product=' + encodeURIComponent(id), {
+        headers: { accept: 'application/json' },
+        credentials: 'same-origin',
+      })
+        .then(function (res) {
+          return res.ok ? res.json() : null;
+        })
+        .then(function (data) {
+          if (!data || !data.ok || typeof data.amount !== 'number' || !data.currency) return;
+          var text = money(data.amount, data.currency);
+          byProduct[id].forEach(function (node) {
+            node.textContent = text;
+          });
+        })
+        .catch(function () {
+          // Deliberately silent. The page already shows a correct price; a
+          // console error here would be noise on every visit from a country we
+          // have no rule for, and there is nothing for anyone to do about it.
+        });
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', paintPrices);
+  } else {
+    paintPrices();
+  }
 })();

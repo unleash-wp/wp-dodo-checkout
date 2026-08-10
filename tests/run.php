@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.15' );
+define( 'WPDC_VERSION', '0.7.16' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -69,6 +69,13 @@ function get_locale(): string {
 }
 function determine_locale(): string {
 	return get_locale();
+}
+/**
+ * German grouping, because that is the locale this harness pretends to be and
+ * because the thing under test is the DECIMAL COUNT, not the separators.
+ */
+function number_format_i18n( float $number, int $decimals = 0 ): string {
+	return number_format( $number, $decimals, ',', '.' );
 }
 function apply_filters( string $hook, $value ) {
 	return $GLOBALS['wpdc_test_filters'][ $hook ] ?? $value;
@@ -604,16 +611,20 @@ check(
 	// Same defect as the README check above, one file further along.
 	'BELL: the notices an editor reads name the registered tag',
 	( static function ( string $code ): bool {
-		if ( ! preg_match( "/add_shortcode\\(\\s*'([a-z0-9_]+)'/", $code, $m ) ) {
+		// ALL registered tags, not the first one. The file registers two
+		// shortcodes now, and comparing every notice against whichever
+		// add_shortcode happened to come first would fail a notice that names
+		// the other one correctly.
+		preg_match_all( "/add_shortcode\\(\\s*'([a-z0-9_]+)'/", $code, $tags );
+		if ( array() === $tags[1] ) {
 			return false;
 		}
-		$tag = $m[1];
 		preg_match_all( "/esc_html__\\(\\s*'([a-z0-9_]+):/", $code, $named );
 		if ( array() === $named[1] ) {
 			return false; // a notice that names no tag is not proof of anything
 		}
 		foreach ( $named[1] as $mentioned ) {
-			if ( $mentioned !== $tag ) {
+			if ( ! in_array( $mentioned, $tags[1], true ) ) {
 				return false;
 			}
 		}
@@ -635,8 +646,32 @@ check(
 	// Both args, counted rather than merely present: with one shared check
 	// string, dropping it from `product` and leaving it on `bump` looked
 	// identical -- which a mutation showed.
+	//
+	// Counted per ROUTE, not per file. A file-wide count of two held while two
+	// routes existed; adding a third route that also validates an id would have
+	// made it three and turned the check red for correct code, and the obvious
+	// repair -- raising the number -- would have hidden a validator dropped
+	// somewhere else. What actually matters is that every id argument any route
+	// declares carries the validator.
 	'BELL: the REST route validates BOTH ids before they leave the site',
-	2 === substr_count( $rest, "'validate_callback' => 'wpdc_is_product_id'" )
+	( static function ( string $code ): bool {
+		$ids = 0;
+		foreach ( preg_split( '/register_rest_route\(/', $code ) as $block ) {
+			// Only the argument declarations, so prose mentioning an id does not
+			// count as one.
+			$declared = preg_match_all( "/'(product|bump)'\\s*=> array\\(/", $block );
+			if ( 0 === $declared ) {
+				continue;
+			}
+			if ( $declared !== substr_count( $block, "'validate_callback' => 'wpdc_is_product_id'" ) ) {
+				return false;
+			}
+			$ids += $declared;
+		}
+		// At least the session route's two, so a rename that empties the loop
+		// cannot report success.
+		return $ids >= 2;
+	} )( $rest )
 );
 check(
 	'BELL: the request is same-origin, so the nonce cookie is actually sent',
@@ -1936,8 +1971,31 @@ check(
 	// wpdc_enqueue translates the strings it hands to JavaScript, and it ran
 	// BEFORE the catalogue was loaded -- so "Code applied." reached a German
 	// customer in English while everything rendered below it was translated.
-	'BELL: the catalogue is loaded before the strings JavaScript gets',
-	strpos( $shortcode, 'wpdc_load_catalogue( $lang )' ) < strpos( $shortcode, "\twpdc_enqueue();" )
+	//
+	// EVERY call site, not the first one in the file. This used to compare two
+	// positions in the whole source, which held while exactly one function
+	// enqueued. The moment a second shortcode did it too, the check reported the
+	// order of two unrelated lines -- and would have gone red for correct code
+	// while staying green for the bug it was written about.
+	'BELL: every enqueue is preceded by the catalogue, in its own function',
+	( static function ( string $code ): bool {
+		$blocks = preg_split( '/\nfunction /', $code );
+		$seen   = 0;
+		foreach ( $blocks as $block ) {
+			$call = strpos( $block, "\twpdc_enqueue();" );
+			if ( false === $call ) {
+				continue;
+			}
+			$seen += 1;
+			$load = strpos( $block, 'wpdc_load_catalogue(' );
+			if ( false === $load || $load > $call ) {
+				return false;
+			}
+		}
+		// Vacuously true is the failure mode this guards against: a rename of
+		// the function would empty the loop and report success.
+		return $seen >= 2;
+	} )( $shortcode )
 );
 check(
 	// A discount is money coming OFF. Printed like the subtotal, a 24,99
@@ -2905,6 +2963,151 @@ check(
 	1 === preg_match( '/wpdc__done-ok[\s\S]{0,1600}wpdc__done-dismiss/', $shortcode )
 		&& 1 === substr_count( $shortcode, 'wpdc__done-dismiss' )
 		&& str_contains( $jsCode, "closest('.wpdc__done-dismiss')" )
+);
+
+// ─── The price a visitor reads ───────────────────────────────────────────────
+// The sales page used to say 24,99 € to everybody while the checkout charged
+// ₹499 in India. Two numbers, one page, at the moment somebody decides to buy.
+
+check(
+	// Dodo stores amounts in the smallest unit of the currency, and for eight of
+	// them that unit is the whole unit. Dividing by a hundred is a hundredfold
+	// discount, not a rounding difference.
+	'BELL: a currency without decimals is not divided by a hundred',
+	0 === wpdc_currency_digits( 'JPY' )
+		&& 2 === wpdc_currency_digits( 'EUR' )
+		&& 3 === wpdc_currency_digits( 'KWD' )
+		// Case is not the caller's problem.
+		&& 0 === wpdc_currency_digits( 'jpy' )
+);
+check(
+	// The live yen price at the time of writing is stored as 24, which is
+	// fourteen cents. Printed as "0,24 JPY" that reads like a plausible number
+	// and hides a real mistake; printed as "24 JPY" it is obviously wrong and
+	// somebody fixes it.
+	'BELL: twenty-four yen prints as twenty-four',
+	'24 JPY' === wpdc_format_price( 24, 'JPY' )
+		&& '24,99 EUR' === wpdc_format_price( 2499, 'EUR' )
+);
+
+$_SERVER['HTTP_CF_IPCOUNTRY'] = 'de';
+$lower                        = wpdc_visitor_country();
+$_SERVER['HTTP_CF_IPCOUNTRY'] = 'XX';
+$anon                         = wpdc_visitor_country();
+$_SERVER['HTTP_CF_IPCOUNTRY'] = 'T1';
+$tor                          = wpdc_visitor_country();
+$_SERVER['HTTP_CF_IPCOUNTRY'] = 'DEU';
+$malformed                    = wpdc_visitor_country();
+unset( $_SERVER['HTTP_CF_IPCOUNTRY'] );
+$absent = wpdc_visitor_country();
+
+check(
+	// `XX` is Cloudflare's anonymising proxy and `T1` is Tor. Neither is a
+	// country, and both would otherwise be looked up as one.
+	'BELL: only a real country code counts as a country',
+	'DE' === $lower && '' === $anon && '' === $tor && '' === $malformed && '' === $absent
+);
+
+// Base price 2499 EUR, plus a dollar rule and a yen rule.
+configure();
+catalogue( array( 'pdt_book' ) );
+respond(
+	200,
+	array(
+		'items' => array(
+			array( 'currency' => 'USD', 'amount' => 1999 ),
+			array( 'currency' => 'JPY', 'amount' => 3900 ),
+		),
+	)
+);
+$us = wpdc_price_for_country( 'pdt_book', 'US' );
+$jp = wpdc_price_for_country( 'pdt_book', 'JP' );
+$de = wpdc_price_for_country( 'pdt_book', 'DE' );
+$ch = wpdc_price_for_country( 'pdt_book', 'CH' );
+$no_country = wpdc_price_for_country( 'pdt_book', '' );
+$calls      = count( $GLOBALS['wpdc_test_requests'] );
+
+check(
+	'BELL: a visitor is shown the price of their own currency',
+	1999 === $us['amount'] && 'USD' === $us['currency'] && true === $us['localized']
+		&& 3900 === $jp['amount'] && 'JPY' === $jp['currency']
+);
+check(
+	// Four ways to be uncertain, one answer to all of them. The fallback is not
+	// a degraded mode: it is exactly what the page showed before this feature,
+	// so the worst outcome of the whole thing is the status quo.
+	'BELL: every uncertainty falls back to the base price, never to nothing',
+	// Base currency -- no lookup needed and none wanted.
+	2499 === $de['amount'] && 'EUR' === $de['currency'] && false === $de['localized']
+	// Franc is a currency we map, but no rule exists for it.
+		&& 2499 === $ch['amount'] && false === $ch['localized']
+	// No country at all, which is what an absent Cloudflare header gives.
+		&& 2499 === $no_country['amount'] && false === $no_country['localized']
+);
+check(
+	// One catalogue call and ONE localized-prices call, for five countries.
+	// The endpoint returns every rule at once, so asking per country would
+	// multiply requests by countries for an answer that arrived in one.
+	'BELL: the price rules are fetched once, not once per country',
+	2 === $calls
+);
+
+// The lookup itself failing, which the scenario above never reaches: Dodo is
+// down, or the key was rotated. A mutation that returned the error instead of
+// the base price survived every other check here, because none of them ever
+// made the second call fail.
+configure();
+catalogue( array( 'pdt_book' ) );
+respond( 500, array( 'message' => 'upstream is having a day' ) );
+$outage = wpdc_price_for_country( 'pdt_book', 'US' );
+check(
+	// A shop whose price disappears because a third party is unreachable is a
+	// shop that stops selling for a reason its customers cannot see. The base
+	// price is always true, so it is what an outage falls back to.
+	'BELL: an unreachable price service still yields a price',
+	! wpdc_is_error( $outage )
+		&& 2499 === $outage['amount']
+		&& 'EUR' === $outage['currency']
+		&& false === $outage['localized']
+);
+
+configure();
+catalogue( array( 'pdt_book' ) );
+$unknown = wpdc_price_for_country( 'pdt_not_listed', 'US' );
+check(
+	// The same allow-list the checkout uses. Without it this route would make
+	// the shop call Dodo about any well-shaped id a stranger sends.
+	'BELL: a product Dodo does not list is not priced',
+	wpdc_is_error( $unknown ) && 'unknown_product' === $unknown['reason']
+);
+
+check(
+	// The answer varies by country and Cloudflare sits in front of this site.
+	// One price cached at the edge and handed to the next country is the exact
+	// mismatch this feature exists to remove.
+	'BELL: a per-visitor price is never cached anywhere',
+	2 === substr_count( $rest, "header( 'cache-control', 'private, no-store' )" )
+);
+check(
+	// The shortcode renders the BASE price and the script replaces it. A
+	// per-visitor price written into the HTML would be frozen by whichever
+	// country loaded the page first and served to everyone after them.
+	'BELL: the markup carries no country, so a page cache cannot freeze one',
+	str_contains( $shortcode, "'<span data-wpdc-price=\"%s\">%s</span>'" )
+		&& str_contains( $shortcode, 'wpdc_format_price(' )
+		&& ! str_contains( $shortcode, 'wpdc_visitor_country()' )
+);
+check(
+	// Intl knows how many decimals a currency has. Asking it is what keeps the
+	// yen correct on the page after it was made correct on the server.
+	// One divide-by-a-hundred survives, in the catch: an unknown currency code
+	// makes Intl throw, and a checkout must not lose its totals over a
+	// formatting nicety. Counted rather than forbidden, so the fallback stays
+	// legal and a second one cannot appear unnoticed.
+	'BELL: the browser asks Intl for the decimals instead of assuming two',
+	str_contains( $js, 'resolvedOptions().maximumFractionDigits' )
+		&& str_contains( $js, 'Math.pow(10, digits)' )
+		&& 1 === substr_count( $js, '/ 100' )
 );
 
 if ( $failures ) {

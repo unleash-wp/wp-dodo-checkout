@@ -50,6 +50,74 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 function wpdc_register_shortcode(): void {
 	add_shortcode( 'wpdc_checkout', 'wpdc_render' );
+	add_shortcode( 'wpdc_price', 'wpdc_render_price' );
+}
+
+/**
+ * The price on the sales page, in the currency the visitor will actually pay.
+ *
+ * Until this existed the page said "24,99 €" to everybody while the checkout
+ * charged ₹499 to a visitor in India -- two numbers, one page, at the moment
+ * somebody decides to buy. The checkout was never wrong; the page was, because
+ * it was static text.
+ *
+ * WHAT IS RENDERED HERE IS THE BASE PRICE, on purpose. A sales page is the most
+ * cached object on a WordPress site, and a per-visitor price written into the
+ * HTML would be frozen by whichever country loaded it first. So the markup stays
+ * country-free, survives any page cache, and the script replaces the number
+ * afterwards. A visitor with JavaScript off keeps the price the shop has always
+ * shown, which is a true price and not a placeholder.
+ *
+ * Usage, replacing whatever hard-coded amount the page carries today:
+ *
+ *   [wpdc_price product="pdt_..."]
+ *
+ * Only the number. The asterisk, "incl. VAT" and the rest of the sentence belong
+ * to the page, because they are the shop's words and not this plugin's.
+ */
+function wpdc_render_price( $atts ): string {
+	$atts = shortcode_atts( array( 'product' => '' ), is_array( $atts ) ? $atts : array(), 'wpdc_price' );
+
+	$product = trim( (string) $atts['product'] );
+	if ( ! wpdc_is_product_id( $product ) ) {
+		// Said in the page, like the checkout shortcode does for the same
+		// mistake: an editor who mistypes an id should see it where they made it
+		// rather than in a browser console.
+		return esc_html__( 'wpdc_price: a valid product id is required.', 'wp-dodo-checkout' );
+	}
+
+	$catalog = wpdc_catalog();
+	$base    = is_array( $catalog ) && isset( $catalog[ $product ] ) ? $catalog[ $product ] : null;
+	$text    = is_array( $base )
+		? wpdc_format_price( is_int( $base['price'] ?? null ) ? $base['price'] : null, (string) ( $base['currency'] ?? '' ) )
+		: '';
+
+	// Enqueued here as well, because a page can carry a price without carrying a
+	// checkout -- an overview listing four books beside their prices, with the
+	// buy buttons on the individual pages. Without this the number would never
+	// be replaced there, and the failure would be invisible: a correct-looking
+	// price in the wrong currency.
+	//
+	// And the catalogue goes first, for the same reason it does in wpdc_render:
+	// wpdc_enqueue translates the strings it hands to JavaScript, so a page that
+	// reached it without the catalogue loaded would send a German visitor
+	// English ones. This was caught by the check that exists because it happened
+	// once already.
+	$switched = wpdc_load_catalogue( wpdc_request_language() );
+	wpdc_enqueue();
+	if ( $switched ) {
+		wpdc_restore_catalogue();
+	}
+
+	// The element carries the id so one page can price several products, and the
+	// script has something to find without knowing the page's structure. No
+	// class: the script finds it by the attribute, and a class nothing styles
+	// and nothing reads is markup that outlives its reason.
+	return sprintf(
+		'<span data-wpdc-price="%s">%s</span>',
+		esc_attr( $product ),
+		esc_html( $text )
+	);
 }
 
 function wpdc_render( $atts ): string {
@@ -463,6 +531,7 @@ function wpdc_enqueue(): void {
 		array(
 			'endpoint' => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/session' ) ),
 			'status'   => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/status' ) ),
+			'price'    => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/price' ) ),
 			'nonce'    => wp_create_nonce( 'wp_rest' ),
 			'busy'     => __( 'Opening checkout…', 'wp-dodo-checkout' ),
 			'failed'   => __( 'The checkout could not be opened. Please try again in a moment.', 'wp-dodo-checkout' ),

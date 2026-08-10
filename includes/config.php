@@ -103,7 +103,80 @@ function wpdc_format_price( ?int $minor, string $currency ): string {
 	if ( null === $minor ) {
 		return __( 'no price set', 'wp-dodo-checkout' );
 	}
-	return number_format_i18n( $minor / 100, 2 ) . ( '' !== $currency ? ' ' . $currency : '' );
+	$digits = wpdc_currency_digits( $currency );
+	$factor = 10 ** $digits;
+	return number_format_i18n( $minor / $factor, $digits ) . ( '' !== $currency ? ' ' . $currency : '' );
+}
+
+/**
+ * How many decimal places a currency has, because not every currency has two.
+ *
+ * Dodo stores every amount in the SMALLEST unit of its currency, and for the yen
+ * that unit is the yen itself. Dividing by a hundred is right for the euro and
+ * wrong for eight currencies, and the direction of the error is a hundredfold
+ * discount rather than a rounding difference.
+ *
+ * Not academic: at the time of writing, the yen price on both books is stored as
+ * `24`, which this function correctly reads as twenty-four yen. Fourteen cents.
+ * The old divide-by-a-hundred would have printed "0,24 JPY" and hidden a real
+ * mistake behind a plausible-looking number.
+ *
+ * The list is ISO 4217's zero- and three-decimal currencies. It is short because
+ * it is finite -- currencies do not appear weekly -- and anything unlisted is two
+ * decimals, which is the overwhelming majority and the right default.
+ */
+function wpdc_currency_digits( string $currency ): int {
+	$upper = strtoupper( $currency );
+
+	$none = array( 'BIF', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW', 'PYG', 'RWF', 'UGX', 'UYI', 'VND', 'VUV', 'XAF', 'XOF', 'XPF' );
+	if ( in_array( $upper, $none, true ) ) {
+		return 0;
+	}
+
+	$three = array( 'BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND' );
+	if ( in_array( $upper, $three, true ) ) {
+		return 3;
+	}
+
+	return 2;
+}
+
+/**
+ * Where the visitor is, according to the only party in the chain that knows.
+ *
+ * Cloudflare sits in front of this site and can be told to stamp `CF-IPCountry`
+ * on every request. That header is the whole geo story here, and the reasons for
+ * not doing it any other way are worth writing down once:
+ *
+ *   - Dodo's own `/api/country` answers by IP and would be the ideal source,
+ *     since it is the same judgement the checkout will make. It sends no
+ *     `access-control-allow-origin`, so a browser cannot read it, and calling it
+ *     from PHP would geolocate THIS SERVER rather than the visitor. Measured,
+ *     not assumed.
+ *   - `navigator.language` is not location. A German on holiday in Thailand
+ *     still says `de-DE` and is still charged in whatever currency Dodo picks
+ *     from his address.
+ *   - A third-party lookup service means a request per visitor, a consent
+ *     question, and one more thing that can be down.
+ *
+ * Empty when the header is absent, and an empty country means the base price.
+ * That is the honest failure: the shop shows what it has always shown.
+ */
+function wpdc_visitor_country(): string {
+	$raw = $_SERVER['HTTP_CF_IPCOUNTRY'] ?? '';
+	if ( ! is_string( $raw ) ) {
+		return '';
+	}
+	$code = strtoupper( trim( $raw ) );
+
+	// Cloudflare sends `XX` for anonymising proxies and `T1` for Tor. Neither is
+	// a country, and treating them as one would map them to nothing anyway --
+	// rejecting them here says so out loud.
+	if ( 1 !== preg_match( '/^[A-Z]{2}$/', $code ) || 'XX' === $code || 'T1' === $code ) {
+		return '';
+	}
+
+	return $code;
 }
 
 
