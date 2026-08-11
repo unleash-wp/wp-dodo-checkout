@@ -41,6 +41,16 @@ permissions:
 jobs:
   check:
     name: Lint + contracts
+    # Stays on GitHub-hosted runners, deliberately. This repository is PUBLIC,
+    # so a pull_request workflow runs a stranger's code -- and on a self-hosted
+    # runner that is our filesystem, our SSH agent and our deploy key. Only
+    # private repositories may use one.
+    #
+    # Do not add a `runs-on: ${{ vars.RUNNER_LABEL || ... }}` switch here. It
+    # would be inert while no variable is set, and that is the trap: the
+    # expression also reads ORGANISATION variables, so one org-wide value set
+    # later would move this repository along with the private ones -- no file
+    # edited, no review, a fork's pull request on the machine holding the key.
     runs-on: ubuntu-latest
     strategy:
       matrix:
