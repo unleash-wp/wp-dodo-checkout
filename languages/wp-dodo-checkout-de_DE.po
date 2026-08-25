@@ -42,8 +42,6 @@ msgstr "Die Kasse konnte nicht geöffnet werden. Bitte versuchen Sie es gleich n
 msgid "The checkout could not be opened. Please try again."
 msgstr "Die Kasse konnte nicht geöffnet werden. Bitte versuchen Sie es noch einmal."
 
-msgid "Please reload the page and try again."
-msgstr "Bitte laden Sie die Seite neu und versuchen Sie es noch einmal."
 
 msgid "Checkout is not available right now. This is a fault on our side."
 msgstr "Die Kasse ist gerade nicht verfügbar. Der Fehler liegt bei uns."
@@ -182,3 +180,6 @@ msgstr "wpdc_price: eine gültige Produkt-ID ist erforderlich."
 
 msgid "This product is not available."
 msgstr "Dieses Produkt ist nicht verfügbar."
+
+msgid "The shop is busy right now. Please try again in a minute."
+msgstr "Der Shop ist gerade stark ausgelastet. Bitte versuchen Sie es in einer Minute noch einmal."

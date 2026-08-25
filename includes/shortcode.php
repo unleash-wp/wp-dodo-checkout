@@ -535,7 +535,12 @@ function wpdc_enqueue(): void {
 			'endpoint' => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/session' ) ),
 			'status'   => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/status' ) ),
 			'price'    => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/price' ) ),
-			'nonce'    => wp_create_nonce( 'wp_rest' ),
+			// 'nonce' was here. Both POST routes sent it, one of them never
+			// checked it, and once it went stale WordPress core answered 403
+			// before either route ran -- killing the buy button and the poll
+			// that confirms a payment. Shipping it again would re-arm exactly
+			// that. See rest.php; the ceiling it pretended to be is
+			// WPDC_SESSION_CEILING in config.php.
 			'busy'     => __( 'Opening checkout…', 'wp-dodo-checkout' ),
 			'failed'   => __( 'The checkout could not be opened. Please try again in a moment.', 'wp-dodo-checkout' ),
 			'discountApplied' => __( 'Code applied.', 'wp-dodo-checkout' ),

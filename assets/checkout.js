@@ -234,8 +234,12 @@
 
     return fetch(cfg.endpoint, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-wp-nonce': cfg.nonce },
-      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      // No nonce, and no cookie. A stale nonce made WordPress core answer 403
+      // before either route ran -- it killed the buy button and the poll that
+      // confirms a payment. With no nonce header core sets user 0 and the
+      // request proceeds, which is what a public route wants. See rest.php.
+      credentials: 'omit',
       body: JSON.stringify(body),
     }).then(function (res) {
       return res.json().then(function (data) {
@@ -938,8 +942,11 @@
       // appending a query to the second one puts the session inside the ROUTE.
       fetch(cfg.status, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-wp-nonce': cfg.nonce },
-        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        // No nonce here either, and this one mattered most: the route never
+        // checked one, so all a stale nonce could do was make core refuse the
+        // poll that confirms a payment already taken. See rest.php.
+        credentials: 'omit',
         body: JSON.stringify({ session: session }),
       })
         .then(function (res) { return res.json(); })

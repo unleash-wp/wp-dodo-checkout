@@ -7,13 +7,32 @@
  * calls the server. This route is the only thing between a visitor and a real
  * object in the payment account, which is what shapes everything below.
  *
- * ── Why a nonce, on a public route ──────────────────────────────────────────
+ * ── Why there is NO nonce here, though there used to be ─────────────────────
  *
- * The route is public by necessity: buying does not require an account. The
- * nonce is not authentication and is not treated as such; it is what stops
- * another site from driving this endpoint from a visitor's browser. WordPress
- * issues one to logged-out visitors too, tied to the session cookie, which is
- * exactly the property wanted here.
+ * A nonce expires. Photographed on the live shop: the buy button answered a
+ * 403 and "Die Cookie-Pruefung ist fehlgeschlagen" -- and that sentence is not
+ * ours, it is WordPress core's. `rest_cookie_check_errors()` runs as an
+ * authentication filter BEFORE any route is dispatched, and its two branches
+ * decide everything:
+ *
+ *     no nonce at all       -> wp_set_current_user( 0 ), request proceeds
+ *     a nonce that is stale -> 403 rest_cookie_invalid_nonce, route never runs
+ *
+ * So on a public route a stale nonce is strictly WORSE than no nonce. Sending
+ * one could only ever break this; it could never let in anyone who was out.
+ * A tab open longer than the nonce lives, or an origin cache handing a signed
+ * -in reader the signed-out HTML, and a paying customer meets a dead button.
+ *
+ * And it broke more than the button. The status route sent the same nonce and
+ * never checked one, so the same staleness killed the poll that CONFIRMS a
+ * payment: money taken, error shown. The price route below already carried
+ * this reasoning in its own comment. It simply was not followed here.
+ *
+ * What the nonce did in substance was rate limiting, badly. That job now sits
+ * in `wpdc_rest_session()` as an explicit ceiling. It was never authentication
+ * either: no fact about a visitor reaches this route, because buying needs no
+ * account, and the answer is a fresh checkout URL for the caller's own session
+ * -- a cross-site call has no victim, only a wasted mint.
  *
  * ── Why the id is validated here as well as in the client ───────────────────
  *
@@ -109,16 +128,37 @@ function wpdc_register_rest(): void {
 }
 
 function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
-	$nonce = $request->get_header( 'x-wp-nonce' );
-	if ( ! is_string( $nonce ) || ! wp_verify_nonce( $nonce, 'wp_rest' ) ) {
+	/**
+	 * The ceiling that replaced the nonce.
+	 *
+	 * Removing the nonce (see the file header) left the one route that creates
+	 * real objects in the payment account with nothing in front of it, so the
+	 * brake it was pretending to be is now an actual brake.
+	 *
+	 * SITE-WIDE, NOT PER ADDRESS. `wpdc_rest_status()` below learned that the
+	 * expensive way: on most production WordPress `REMOTE_ADDR` is the proxy,
+	 * so a per-address bucket is one shared bucket, and the first symptom is
+	 * real customers refused. That route could key on a session id instead.
+	 * This one cannot -- minting the session is what it does -- so site-wide is
+	 * the only honest bucket left.
+	 *
+	 * The cost is stated rather than hidden: someone hammering this can hold
+	 * the shop shut a minute at a time. That is why the answer is 429 with a
+	 * retriable message that names the minute, and why the counter self-heals
+	 * -- once it latches nothing writes it, so it expires a minute after the
+	 * last request that got through.
+	 */
+	$minted = (int) get_transient( 'wpdc_session_all' );
+	if ( $minted >= WPDC_SESSION_CEILING ) {
 		return new WP_REST_Response(
 			array(
-				'message'   => __( 'Please reload the page and try again.', 'wp-dodo-checkout' ),
+				'message'   => __( 'The shop is busy right now. Please try again in a minute.', 'wp-dodo-checkout' ),
 				'retriable' => true,
 			),
-			403
+			429
 		);
 	}
+	set_transient( 'wpdc_session_all', $minted + 1, MINUTE_IN_SECONDS );
 
 	$result = wpdc_create_session(
 		(string) $request->get_param( 'product' ),
