@@ -52,6 +52,20 @@ const WPDC_TIMEOUT = 15;
 const WPDC_POLL_CEILING = 120;
 
 /**
+ * How many checkout sessions this site mints in a minute, all visitors together.
+ *
+ * The session route used to be braked by a nonce. That was never a brake -- it
+ * was a correctness bug wearing one, and rest.php records what it cost -- but
+ * taking it out left the one route that creates real objects in the payment
+ * account with nothing in front of it. This is the replacement.
+ *
+ * Sixty a minute is far past anything this shop sees and far below anything
+ * that would cost us Dodo's own rate limit. Why it cannot be per-address, and
+ * what a site-wide bucket costs, is argued where it is enforced.
+ */
+const WPDC_SESSION_CEILING = 60;
+
+/**
  * How long the product list is reused.
  *
  * The list IS the allow-list, and it changes when the shop owner edits Dodo --

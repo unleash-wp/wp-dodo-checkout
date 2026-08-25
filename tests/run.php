@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.18' );
+define( 'WPDC_VERSION', '0.7.19' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -649,8 +649,16 @@ check(
 	! str_contains( $js, 'pdt_' ) && ! str_contains( $js, 'product_id' )
 );
 check(
-	'BELL: the REST route verifies a nonce',
-	str_contains( $rest, 'wp_verify_nonce' )
+	// Was "the REST route verifies a nonce". That check outlived its reason: a
+	// stale nonce made WordPress core answer 403 before any route ran, killing
+	// the buy button and the poll that confirms a payment (rest.php records it).
+	//
+	// Replaced rather than deleted, by the thing that took the nonce's job.
+	// Deleting it would have left the one route that creates real objects in the
+	// payment account with no brake at all, and nothing in the suite saying so.
+	'BELL: the session route brakes on an explicit ceiling',
+	str_contains( $rest, 'WPDC_SESSION_CEILING' )
+		&& str_contains( source( $root . '/includes/config.php' ), 'const WPDC_SESSION_CEILING' )
 );
 check(
 	// Both args, counted rather than merely present: with one shared check
@@ -684,8 +692,21 @@ check(
 	} )( $rest )
 );
 check(
-	'BELL: the request is same-origin, so the nonce cookie is actually sent',
-	str_contains( $js, "credentials: 'same-origin'" )
+	// Was "the request is same-origin, so the nonce cookie is actually sent".
+	// Its premise died with the nonce -- and it would have kept passing on the
+	// price route's line alone, which is a check reporting on something it no
+	// longer describes.
+	//
+	// Pinned at the shipped bytes, on BOTH doors: the header cannot come back
+	// through the JavaScript, and the value cannot come back through what the
+	// shortcode hands the browser. Either one alone re-arms the 403.
+	'BELL: nothing ships a nonce to the browser any more',
+	! str_contains( $js, 'x-wp-nonce' )
+		&& ! str_contains( $js, 'cfg.nonce' )
+		&& ! str_contains( $shortcode, 'wp_create_nonce' )
+		// And both POSTs go out without a cookie, so core's cookie path is not
+		// entered at all rather than merely satisfied.
+		&& substr_count( $js, "credentials: 'omit'" ) >= 2
 );
 check(
 	'BELL: Apple Pay is served on init, before canonical redirects',
