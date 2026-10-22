@@ -54,12 +54,19 @@ function wpdc_register_shortcode(): void {
 }
 
 /**
- * Warm the connection to the CDN the SDK is loaded from.
+ * Warm the connections the checkout needs before the click asks for them.
  *
  * The SDK is no longer enqueued eagerly -- checkout.js injects it on the first
  * interaction with a buy control -- so the TLS handshake would otherwise start
  * only then. A preconnect makes the browser open that connection as soon as it
  * meets the shortcode, so the on-demand load is not slowed by the handshake.
+ *
+ * cdn.jsdelivr.net serves the SDK. The three dodopayments hosts serve what the
+ * click actually waits on: the inline checkout frame, its runtime and its
+ * assets. Measured on a real buy, the frame and its assets were the slowest
+ * part, and their TLS handshake started only after the click. Warming them here
+ * takes that handshake off the critical path. The session mint and Dodo's own
+ * render are theirs, not ours, and a preconnect cannot shorten those.
  *
  * Emitted once per page, in the body: a shortcode renders after wp_head has run,
  * and a browser honours a preconnect wherever it parses one.
@@ -70,7 +77,17 @@ function wpdc_preconnect(): string {
 		return '';
 	}
 	$done = true;
-	return '<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>' . "\n";
+	$hosts = array(
+		'https://cdn.jsdelivr.net',
+		'https://checkout.dodopayments.com',
+		'https://assets.dodopayments.com',
+		'https://sdk-v2.hs.dodopayments.com',
+	);
+	$links = '';
+	foreach ( $hosts as $host ) {
+		$links .= '<link rel="preconnect" href="' . esc_url( $host ) . '" crossorigin>' . "\n";
+	}
+	return $links;
 }
 
 /**

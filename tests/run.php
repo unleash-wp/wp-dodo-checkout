@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.8.0' );
+define( 'WPDC_VERSION', '0.8.1' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -655,6 +655,13 @@ check(
 	str_contains( $shortcode, 'rel="preconnect"' )
 		&& str_contains( $shortcode, 'cdn.jsdelivr.net' )
 		&& str_contains( $shortcode, 'function wpdc_preconnect' )
+);
+check(
+	// The click waits on the inline frame and its assets most of all, so their
+	// handshake is warmed here too, not just the SDK CDN's.
+	'BELL: the dodopayments hosts are preconnected, not only the CDN',
+	str_contains( $shortcode, 'checkout.dodopayments.com' )
+		&& str_contains( $shortcode, 'assets.dodopayments.com' )
 );
 check(
 	// The browser enforces the hash: a script injected without integrity +
