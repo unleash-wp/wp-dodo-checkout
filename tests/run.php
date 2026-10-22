@@ -56,6 +56,10 @@ function set_transient( string $k, $v, $t = 0 ): bool {
 	$GLOBALS['wpdc_test_transients'][ $k ] = $v;
 	return true;
 }
+function delete_transient( string $k ): bool {
+	unset( $GLOBALS['wpdc_test_transients'][ $k ] );
+	return true;
+}
 function load_textdomain( string $domain, string $file ): bool {
 	$GLOBALS['wpdc_test_domain'] = $file;
 	return true;
@@ -501,6 +505,54 @@ wpdc_create_session( 'pdt_pro' );
 check(
 	'BELL: the second sale costs one call, not another catalogue read',
 	count( $GLOBALS['wpdc_test_requests'] ) === $firstCount + 1
+);
+
+// ─── A render-time catalogue read protects the page from a slow or down API ──
+//
+// A `[wpdc_price]` is read while the page is built, so a slow Dodo there holds
+// the whole page. At render time the fetch uses the short timeout, a recent
+// failure is remembered, and the last good list is served instead of asking
+// again on every view. The on-click mint keeps the full budget and no fallback.
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+wpdc_catalog( false, true );
+check(
+	'BELL: a render-time fetch uses the short timeout, not the click budget',
+	WPDC_RENDER_TIMEOUT === last_request()['args']['timeout']
+);
+
+configure();
+catalogue( array( 'pdt_mint' ) );
+wpdc_catalog(); // the mint/default path
+check(
+	'BELL: the mint path keeps the full timeout',
+	WPDC_TIMEOUT === last_request()['args']['timeout']
+);
+
+// A good fetch leaves a stale copy behind; a later outage serves it instead of
+// hitting Dodo on every page view.
+configure();
+catalogue( array( 'pdt_pro' ) );            // warms the fresh + stale copies
+wpdc_catalog( false, true );
+$GLOBALS['wpdc_test_transients'][ wpdc_catalog_key() ] = false; // fresh copy expired
+$GLOBALS['wpdc_test_requests'] = array();
+$GLOBALS['wpdc_test_queue']    = array();
+$GLOBALS['wpdc_test_queue'][]  = new WP_Error( 'http_request_failed', 'cURL error 28: timeout' );
+$served = wpdc_catalog( false, true );
+check(
+	'BELL: a render-time outage serves the last good list, not an error',
+	is_array( $served ) && array( 'pdt_pro' ) === array_keys( $served ) && 1 === count( $GLOBALS['wpdc_test_requests'] )
+);
+check(
+	// The negative cache: having just failed, a second view does NOT ask again.
+	'BELL: a second view inside the failure window makes no fresh request',
+	( static function (): bool {
+		$GLOBALS['wpdc_test_requests'] = array();
+		$again = wpdc_catalog( false, true );
+		return is_array( $again ) && array( 'pdt_pro' ) === array_keys( $again )
+			&& array() === $GLOBALS['wpdc_test_requests'];
+	} )()
 );
 
 // ─── A refused key is ours, and never shown as the visitor\'s fault ──────────

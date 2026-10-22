@@ -36,6 +36,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 const WPDC_TIMEOUT = 15;
 
 /**
+ * The timeout for a call made while a page is rendering, as opposed to a click.
+ *
+ * A `[wpdc_price]` on a sales page reads the catalogue as the page is built, and
+ * a slow Dodo there holds the whole page hostage for the full click-time budget.
+ * Four seconds is long enough for a healthy API and short enough that a bad day
+ * at Dodo degrades to the base price instead of a hanging page. The 15s budget
+ * is kept for the on-click mint, where the visitor has already decided to buy
+ * and a longer wait beats a failed checkout.
+ */
+const WPDC_RENDER_TIMEOUT = 4;
+
+/**
  * How often one checkout may ask whether it finished.
  *
  * Named here rather than written into the route because it is half of a pair:
@@ -108,6 +120,38 @@ const WPDC_SESSION_MEMORY = 1800;
  * busy page costs one API call per ten minutes rather than one per visitor.
  */
 const WPDC_CATALOG_TTL = 600;
+
+/**
+ * How long a failed catalogue fetch is remembered, so an outage is not one call
+ * per page view.
+ *
+ * When Dodo is down or slow, a page carrying the price shortcode would otherwise
+ * hit the API on every single view. Instead the failure is cached for this long
+ * and the last good list is served in the meantime; the first request after it
+ * expires tries again.
+ */
+const WPDC_CATALOG_FAIL_TTL = 45;
+
+/**
+ * How long a stale copy of the catalogue is kept past its freshness, to serve
+ * while Dodo is unreachable.
+ *
+ * Six times the freshness window. Stale enough that a just-archived product
+ * might still be offered for a while during an outage -- acceptable, because the
+ * mint path checks Dodo live and refuses it there -- and present enough that a
+ * sales page keeps showing prices while the API is down.
+ */
+const WPDC_CATALOG_STALE_TTL = WPDC_CATALOG_TTL * 6;
+
+/**
+ * A short lock so a cold cache on a busy page is one fetch, not a thundering herd.
+ *
+ * Without it, every concurrent request that arrives during a cache miss starts
+ * its own Dodo call. The first to arrive takes the lock and fetches; the rest
+ * serve the stale copy for these few seconds. Short, because a held lock that
+ * outlives a crashed request must clear itself quickly.
+ */
+const WPDC_CATALOG_LOCK = 8;
 
 /**
  * The cache key carries the plugin version, and that is not cosmetic.

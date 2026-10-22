@@ -105,7 +105,10 @@ function wpdc_render_price( $atts ): string {
 		? wpdc_two_languages( trim( (string) $atts['lang'] ) )
 		: wpdc_page_language();
 
-	$catalog = wpdc_catalog();
+	// Render-time: a price shortcode is read as the page is built, so the
+	// catalogue is fetched with the short timeout and the stale-on-error
+	// fallback rather than the full click budget.
+	$catalog = wpdc_catalog( false, true );
 	$base    = is_array( $catalog ) && isset( $catalog[ $product ] ) ? $catalog[ $product ] : null;
 	$text    = is_array( $base )
 		? wpdc_format_price( is_int( $base['price'] ?? null ) ? $base['price'] : null, (string) ( $base['currency'] ?? '' ), $lang )
@@ -462,7 +465,8 @@ function wpdc_plain_text( string $markdown ): string {
  * right and this is stale, and that is the direction the mistake should fall.
  */
 function wpdc_render_item( string $product ): void {
-	$catalog = wpdc_catalog();
+	// Render-time, like the price shortcode: short timeout, stale-on-error.
+	$catalog = wpdc_catalog( false, true );
 	if ( wpdc_is_error( $catalog ) ) {
 		return; // the checkout itself will say what is wrong
 	}

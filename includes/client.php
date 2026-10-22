@@ -70,10 +70,10 @@ function wpdc_error( string $reason, bool $retriable, string $message ): array {
  * in a URL: query strings survive in access logs, proxy logs and browser
  * history, and this one can issue refunds.
  */
-function wpdc_dodo_request( string $method, string $path, ?array $body = null ) {
+function wpdc_dodo_request( string $method, string $path, ?array $body = null, int $timeout = WPDC_TIMEOUT ) {
 	$args = array(
 		'method'  => $method,
-		'timeout' => WPDC_TIMEOUT,
+		'timeout' => $timeout,
 		// The client contract, stated and enforced: never follow a redirect, and
 		// always verify TLS. A redirect from the payment host would carry this
 		// Bearer key to wherever it points, and a redirect is also how an answer
@@ -190,14 +190,53 @@ function wpdc_catalog_shape_ok( array $catalog ): bool {
  *
  * @return array<string, array{name: string, image: string, description: string, price: int|null, currency: string}>|array{ok: false}
  */
-function wpdc_catalog( bool $fresh = false ) {
-	$cached = $fresh ? false : get_transient( wpdc_catalog_key() );
+function wpdc_catalog( bool $fresh = false, bool $render = false ) {
+	$key      = wpdc_catalog_key();
+	$stale_key = $key . '_stale';
+
+	$cached = $fresh ? false : get_transient( $key );
 	if ( is_array( $cached ) && wpdc_catalog_shape_ok( $cached ) ) {
 		return $cached;
 	}
 
-	$result = wpdc_dodo_request( 'GET', '/products?page_size=100' );
+	/*
+	 * Render-time self-protection, and ONLY at render time.
+	 *
+	 * A `[wpdc_price]` page view reads the catalogue as the page is built, so a
+	 * slow or down Dodo there would hit the API on every single view and hold
+	 * each page hostage for the whole timeout. Three guards, all skipped for the
+	 * on-click mint below -- where the visitor has decided to buy and a hard,
+	 * live answer beats a stale one:
+	 *
+	 *   - a recent failure is remembered, and the last good list is served
+	 *     instead of asking again (stale-on-error),
+	 *   - a lock means one fetch per cold cache rather than one per concurrent
+	 *     request,
+	 *   - and the fetch itself uses the shorter render timeout.
+	 */
+	if ( $render ) {
+		if ( false !== get_transient( $key . '_fail' ) || false !== get_transient( $key . '_lock' ) ) {
+			$stale = get_transient( $stale_key );
+			if ( is_array( $stale ) && wpdc_catalog_shape_ok( $stale ) ) {
+				return $stale;
+			}
+		}
+		set_transient( $key . '_lock', 1, WPDC_CATALOG_LOCK );
+	}
+
+	$timeout = $render ? WPDC_RENDER_TIMEOUT : WPDC_TIMEOUT;
+	$result  = wpdc_dodo_request( 'GET', '/products?page_size=100', null, $timeout );
 	if ( wpdc_is_error( $result ) ) {
+		if ( $render ) {
+			// Remember the outage briefly and fall back to the last good list, so
+			// a sales page keeps showing prices instead of hammering a dead API.
+			set_transient( $key . '_fail', 1, WPDC_CATALOG_FAIL_TTL );
+			delete_transient( $key . '_lock' );
+			$stale = get_transient( $stale_key );
+			if ( is_array( $stale ) && wpdc_catalog_shape_ok( $stale ) ) {
+				return $stale;
+			}
+		}
 		return $result;
 	}
 
@@ -224,7 +263,15 @@ function wpdc_catalog( bool $fresh = false ) {
 		);
 	}
 
-	set_transient( wpdc_catalog_key(), $catalog, WPDC_CATALOG_TTL );
+	set_transient( $key, $catalog, WPDC_CATALOG_TTL );
+	// The stale copy outlives the fresh one, and both are written on every good
+	// fetch -- a mint keeps it warm for the next render, and a render for the
+	// next mint. On a later outage this is what a page falls back to.
+	set_transient( $stale_key, $catalog, WPDC_CATALOG_STALE_TTL );
+	if ( $render ) {
+		delete_transient( $key . '_fail' );
+		delete_transient( $key . '_lock' );
+	}
 	return $catalog;
 }
 
@@ -243,7 +290,7 @@ function wpdc_catalog( bool $fresh = false ) {
  *
  * @return array<int, array{currency: string, amount: int, country: string}>|array{ok: false}
  */
-function wpdc_localized_prices( string $product ) {
+function wpdc_localized_prices( string $product, bool $render = false ) {
 	if ( ! wpdc_is_product_id( $product ) ) {
 		return array();
 	}
@@ -254,7 +301,11 @@ function wpdc_localized_prices( string $product ) {
 		return $cached;
 	}
 
-	$result = wpdc_dodo_request( 'GET', '/products/' . rawurlencode( $product ) . '/localized-prices' );
+	// The per-visitor price runs while a page renders, so it uses the shorter
+	// render timeout: a slow localized-prices call must not hold the page, and
+	// the caller already falls back to the base price on any failure.
+	$timeout = $render ? WPDC_RENDER_TIMEOUT : WPDC_TIMEOUT;
+	$result  = wpdc_dodo_request( 'GET', '/products/' . rawurlencode( $product ) . '/localized-prices', null, $timeout );
 	if ( wpdc_is_error( $result ) ) {
 		// Not cached, because the next visitor deserves a fresh attempt -- but
 		// also not fatal: the caller falls back to the base price, which is what
@@ -340,7 +391,10 @@ function wpdc_country_currency( string $country ): string {
  * @return array{amount: int, currency: string, localized: bool}|array{ok: false}
  */
 function wpdc_price_for_country( string $product, string $country ) {
-	$catalog = wpdc_catalog();
+	// Render-time: this answers the /price route a sales page fires, so it uses
+	// the short timeout and the stale-on-error fallback rather than the full
+	// click budget.
+	$catalog = wpdc_catalog( false, true );
 	if ( wpdc_is_error( $catalog ) ) {
 		return $catalog;
 	}
@@ -364,7 +418,7 @@ function wpdc_price_for_country( string $product, string $country ) {
 		return $fallback;
 	}
 
-	$rules = wpdc_localized_prices( $product );
+	$rules = wpdc_localized_prices( $product, true );
 	if ( wpdc_is_error( $rules ) || ! is_array( $rules ) ) {
 		return $fallback;
 	}
