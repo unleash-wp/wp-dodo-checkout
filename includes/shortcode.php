@@ -54,6 +54,26 @@ function wpdc_register_shortcode(): void {
 }
 
 /**
+ * Warm the connection to the CDN the SDK is loaded from.
+ *
+ * The SDK is no longer enqueued eagerly -- checkout.js injects it on the first
+ * interaction with a buy control -- so the TLS handshake would otherwise start
+ * only then. A preconnect makes the browser open that connection as soon as it
+ * meets the shortcode, so the on-demand load is not slowed by the handshake.
+ *
+ * Emitted once per page, in the body: a shortcode renders after wp_head has run,
+ * and a browser honours a preconnect wherever it parses one.
+ */
+function wpdc_preconnect(): string {
+	static $done = false;
+	if ( $done ) {
+		return '';
+	}
+	$done = true;
+	return '<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>' . "\n";
+}
+
+/**
  * The price on the sales page, in the currency the visitor will actually pay.
  *
  * Until this existed the page said "24,99 €" to everybody while the checkout
@@ -135,7 +155,7 @@ function wpdc_render_price( $atts ): string {
 	// script has something to find without knowing the page's structure. No
 	// class: the script finds it by the attribute, and a class nothing styles
 	// and nothing reads is markup that outlives its reason.
-	return sprintf(
+	return wpdc_preconnect() . sprintf(
 		'<span data-wpdc-price="%s">%s</span>',
 		esc_attr( $product ),
 		esc_html( $text )
@@ -414,7 +434,7 @@ function wpdc_render( $atts ): string {
 		wpdc_restore_catalogue();
 	}
 
-	return $html;
+	return wpdc_preconnect() . $html;
 }
 
 /**
@@ -498,15 +518,21 @@ function wpdc_render_item( string $product ): void {
 /**
  * Scripts, and the one thing the browser is told.
  *
- * The Dodo SDK loads from a PINNED major version. A floating tag would mean a
- * third party can change what executes on a checkout page without anyone here
- * deploying anything, and would make a subresource integrity hash impossible
- * because the file behind the URL is allowed to change.
+ * The Dodo SDK is pinned to an EXACT version, with a subresource integrity hash.
+ * A floating `@1` tag let a third party change what executes on a checkout page
+ * with no deploy here, and it made an integrity hash impossible because the file
+ * behind the URL was allowed to change. An exact version plus `integrity`
+ * (sha384) means the browser refuses the file if a single byte differs from what
+ * was reviewed; the hash was computed once from the exact file `@1` resolved to,
+ * so behaviour is unchanged.
  *
- * It loads on every page carrying the shortcode, because the overlay is the
- * only mode. Card fields still never touch this origin: the overlay is Dodo's
- * own page in an iframe from Dodo's origin, so the PCI surface is the same as a
- * redirect.
+ * It is NOT enqueued eagerly. Loading a third-party script on every page that
+ * merely shows a price is a connection and a parse the visitor usually never
+ * needs, so the SDK url and its hash are handed to our own script, which injects
+ * it on the first interaction with a buy control (checkout.js: loadSdk). The
+ * handshake is warmed before that by a preconnect emitted with the markup. Card
+ * fields still never touch this origin: the frame is Dodo's own page in an
+ * iframe from Dodo's origin, so the PCI surface is the same as a redirect.
  */
 function wpdc_enqueue(): void {
 	wp_enqueue_style(
@@ -524,14 +550,6 @@ function wpdc_enqueue(): void {
 		true
 	);
 
-	wp_enqueue_script(
-		'dodo-checkout',
-		'https://cdn.jsdelivr.net/npm/dodopayments-checkout@1/dist/index.js',
-		array(),
-		null,
-		true
-	);
-
 	wp_localize_script(
 		'wp-dodo-checkout',
 		'wpdcCheckout',
@@ -539,6 +557,11 @@ function wpdc_enqueue(): void {
 			'endpoint' => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/session' ) ),
 			'status'   => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/status' ) ),
 			'price'    => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/price' ) ),
+			// The SDK, loaded by checkout.js on the first interaction rather than
+			// eagerly here. Pinned to the exact version `@1` resolved to, with the
+			// sha384 integrity the browser enforces on load.
+			'sdk'          => 'https://cdn.jsdelivr.net/npm/dodopayments-checkout@1.9.9/dist/index.js',
+			'sdkIntegrity' => 'sha384-H3xQrq3FWZky4TIOdapnx0RrlbUu42WVDeKVnFI5ESWP3rEijoYHP7YyK5hklN3b',
 			// 'nonce' was here. Both POST routes sent it, one of them never
 			// checked it, and once it went stale WordPress core answered 403
 			// before either route ran -- killing the buy button and the poll

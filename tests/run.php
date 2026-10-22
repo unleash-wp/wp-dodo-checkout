@@ -599,6 +599,49 @@ check(
 	str_contains( $shortcode, 'dodopayments-checkout@1' ) && ! str_contains( $shortcode, '@latest' )
 );
 check(
+	// An EXACT version, not a floating major. `@1` let the file behind the URL
+	// change with no deploy here and made an integrity hash impossible. The pin
+	// is a full semver and the hash rides beside it.
+	'BELL: the SDK is pinned to an exact version with an SRI hash',
+	1 === preg_match( '/dodopayments-checkout@\d+\.\d+\.\d+\//', $shortcode )
+		&& str_contains( $shortcode, "'sdkIntegrity' => 'sha384-" )
+);
+check(
+	// Loaded on demand, not on every page that merely shows a price. The URL is
+	// handed to our own script instead of enqueued, so the only enqueued script
+	// is ours.
+	'BELL: the SDK is handed to the browser, not enqueued on every page',
+	str_contains( $shortcode, "'sdk'" )
+		&& ! preg_match( "/wp_enqueue_script\(\s*'dodo/", $shortcode )
+		&& 1 === substr_count( $shortcode, 'wp_enqueue_script(' )
+);
+check(
+	// The connection to the CDN is warmed before the on-demand load needs it.
+	'BELL: a preconnect to the CDN is emitted with the markup',
+	str_contains( $shortcode, 'rel="preconnect"' )
+		&& str_contains( $shortcode, 'cdn.jsdelivr.net' )
+		&& str_contains( $shortcode, 'function wpdc_preconnect' )
+);
+check(
+	// The browser enforces the hash: a script injected without integrity +
+	// crossOrigin would load a tampered file silently.
+	'BELL: the injected SDK script carries its integrity and crossOrigin',
+	str_contains( $js, 'function loadSdk' )
+		&& str_contains( $js, "createElement('script')" )
+		&& str_contains( $js, 's.integrity = cfg.sdkIntegrity' )
+		&& str_contains( $js, "s.crossOrigin = 'anonymous'" )
+);
+check(
+	// The first interaction with a buy control starts the load, so a click lands
+	// on an SDK that is usually already there.
+	'BELL: the SDK is warmed on first interaction and awaited at open',
+	str_contains( $js, 'function warmSdk' )
+		&& str_contains( $js, "'pointerenter'" )
+		// open() waits for the load before falling back, rather than redirecting
+		// the instant the SDK is not yet present.
+		&& 1 === preg_match( '/function open\(root, url\)[\s\S]{0,400}loadSdk\(\)/', $js )
+);
+check(
 	// Operator decision: the checkout is embedded in the page, never a
 	// navigation away from it. So the SDK is unconditional and there is no
 	// display attribute left to get wrong.
