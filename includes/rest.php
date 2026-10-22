@@ -128,28 +128,66 @@ function wpdc_register_rest(): void {
 }
 
 function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
+	// Compared against null, not tested for truthiness. The route's own
+	// validator already guarantees the shape, and a truthy test is the kind of
+	// thing that silently drops a bump the customer ticked.
+	$product  = (string) $request->get_param( 'product' );
+	$bump     = null !== $request->get_param( 'bump' ) ? (string) $request->get_param( 'bump' ) : null;
+	$lang     = null !== $request->get_param( 'lang' ) ? (string) $request->get_param( 'lang' ) : null;
+	$discount = null !== $request->get_param( 'discount' ) ? (string) $request->get_param( 'discount' ) : null;
+
 	/**
-	 * The ceiling that replaced the nonce.
+	 * An id we already learned Dodo does not list is refused here, cheaply.
+	 *
+	 * The REST validator guarantees the SHAPE, so what reaches this callback is a
+	 * well-formed id that may or may not be on sale. The first unlisted one is
+	 * checked against Dodo (wpdc_create_session refreshes the catalogue for it);
+	 * after that the answer is remembered for WPDC_UNKNOWN_TTL, so a loop of
+	 * invented ids costs one fetch each rather than a fresh Dodo call every time.
+	 */
+	$unknown_key = 'wpdc_unknown_' . md5( $product . '|' . (string) $bump );
+	if ( false !== get_transient( $unknown_key ) ) {
+		return new WP_REST_Response(
+			array(
+				'message'   => __( 'That product is not available.', 'wp-dodo-checkout' ),
+				'reason'    => 'unknown_product',
+				'retriable' => false,
+			),
+			400
+		);
+	}
+
+	/**
+	 * The ceiling, and the bucket it is counted in.
 	 *
 	 * Removing the nonce (see the file header) left the one route that creates
 	 * real objects in the payment account with nothing in front of it, so the
-	 * brake it was pretending to be is now an actual brake.
+	 * brake it was pretending to be is now an actual brake. Two things shape how
+	 * it is applied:
 	 *
-	 * SITE-WIDE, NOT PER ADDRESS. `wpdc_rest_status()` below learned that the
-	 * expensive way: on most production WordPress `REMOTE_ADDR` is the proxy,
-	 * so a per-address bucket is one shared bucket, and the first symptom is
-	 * real customers refused. That route could key on a session id instead.
-	 * This one cannot -- minting the session is what it does -- so site-wide is
-	 * the only honest bucket left.
+	 *   - It is READ here but CHARGED only after the request clears the allow-list
+	 *     below. An anonymous caller sending well-formed but unlisted ids reaches
+	 *     this route freely, and charging before validation would let that junk
+	 *     exhaust the ceiling and shut the shop to real buyers.
+	 *   - A request carrying a discount code is counted in its OWN small bucket.
+	 *     A code is the only value a visitor supplies that Dodo judges, so testing
+	 *     codes is a probe; the shared bucket let it both run as an oracle and
+	 *     drain the mint ceiling. Separated, it does neither.
 	 *
-	 * The cost is stated rather than hidden: someone hammering this can hold
-	 * the shop shut a minute at a time. That is why the answer is 429 with a
-	 * retriable message that names the minute, and why the counter self-heals
-	 * -- once it latches nothing writes it, so it expires a minute after the
-	 * last request that got through.
+	 * SITE-WIDE, NOT PER ADDRESS. On most production WordPress `REMOTE_ADDR` is
+	 * the proxy, so a per-address bucket is one shared bucket and the first
+	 * symptom is real customers refused. Minting the session is what this route
+	 * does, so site-wide is the only honest bucket left. The cost is stated
+	 * rather than hidden: someone hammering a valid id can hold the shop shut a
+	 * minute at a time, which is why the answer is a 429 that names the minute and
+	 * why the counter self-heals a minute after the last request that got through.
 	 */
-	$minted = (int) get_transient( 'wpdc_session_all' );
-	if ( $minted >= WPDC_SESSION_CEILING ) {
+	$has_discount = null !== $discount;
+	$bucket       = $has_discount ? 'wpdc_discount_all' : 'wpdc_session_all';
+	$ceiling      = $has_discount ? WPDC_DISCOUNT_CEILING : WPDC_SESSION_CEILING;
+
+	$spent = (int) get_transient( $bucket );
+	if ( $spent >= $ceiling ) {
 		return new WP_REST_Response(
 			array(
 				'message'   => __( 'The shop is busy right now. Please try again in a minute.', 'wp-dodo-checkout' ),
@@ -158,24 +196,34 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 			429
 		);
 	}
-	set_transient( 'wpdc_session_all', $minted + 1, MINUTE_IN_SECONDS );
 
 	$result = wpdc_create_session(
-		(string) $request->get_param( 'product' ),
+		$product,
 		(int) ( $request->get_param( 'quantity' ) ?? 1 ),
-		// Compared against null, not tested for truthiness. The route's own
-		// validator already guarantees the shape, and a truthy test is the kind
-		// of thing that silently drops a bump the customer ticked.
-		null !== $request->get_param( 'bump' ) ? (string) $request->get_param( 'bump' ) : null,
-		null !== $request->get_param( 'lang' ) ? (string) $request->get_param( 'lang' ) : null,
-		null !== $request->get_param( 'discount' ) ? (string) $request->get_param( 'discount' ) : null
+		$bump,
+		$lang,
+		$discount
 	);
 
 	if ( ! $result['ok'] ) {
-		// The status mirrors retriable, so the browser does not have to read
-		// the reason to decide whether trying again could help. The reason is
-		// there for a developer looking at the network tab, and never
-		// rendered.
+		// An id the allow-list refused never reached the payment account, so it
+		// does not spend the ceiling -- and it is remembered briefly so the next
+		// identical request answers without a fetch.
+		if ( 'unknown_product' === $result['reason'] ) {
+			set_transient( $unknown_key, 1, WPDC_UNKNOWN_TTL );
+		}
+
+		// Everything that DID reach Dodo -- a mint attempt, a refused code, an
+		// outage -- charges the bucket, because that is the flood the ceiling
+		// guards against. A pure validation refusal (an unlisted product, no key
+		// configured) reached nothing and costs nothing.
+		if ( 'unknown_product' !== $result['reason'] && 'not_configured' !== $result['reason'] ) {
+			set_transient( $bucket, $spent + 1, MINUTE_IN_SECONDS );
+		}
+
+		// The status mirrors retriable, so the browser does not have to read the
+		// reason to decide whether trying again could help. The reason is there
+		// for a developer looking at the network tab, and never rendered.
 		$status = $result['retriable'] ? 503 : 400;
 		return new WP_REST_Response(
 			array(
@@ -186,6 +234,13 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 			$status
 		);
 	}
+
+	set_transient( $bucket, $spent + 1, MINUTE_IN_SECONDS );
+
+	// Remembered so the status route can tell a session this site actually minted
+	// from a well-formed but invented one, before it spends the shop's key
+	// confirming it.
+	wpdc_remember_session( $result['session_id'] );
 
 	// Dodo's name stays inside the client; the browser gets this route's own
 	// contract. Translating here is what stops a provider rename from reaching
@@ -272,6 +327,22 @@ function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
 		return new WP_REST_Response( array( 'finished' => false ), 200 );
 	}
 
+	$session = (string) $request->get_param( 'session' );
+
+	/**
+	 * An id this site never minted is refused before anything is spent.
+	 *
+	 * The session route records every id it mints (wpdc_remember_session); an id
+	 * not in that record is not ours to confirm. Checking it here -- before the
+	 * buckets below and before any outbound call -- is what stops a loop of
+	 * well-formed but invented ids from using this public route to burn the
+	 * shop's own rate limit at Dodo. The validator already proved the shape; this
+	 * proves it is a session this shop actually created.
+	 */
+	if ( ! wpdc_session_known( $session ) ) {
+		return new WP_REST_Response( array( 'finished' => false ), 200 );
+	}
+
 	/**
 	 * A ceiling, because this route spends the shop's API key on request.
 	 *
@@ -303,8 +374,7 @@ function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
 	 * the transient renews its life, and a checkout polls far more often than
 	 * once a minute, so the counter stands for one whole checkout.
 	 */
-	$session = (string) $request->get_param( 'session' );
-	$bucket  = 'wpdc_poll_' . md5( $session );
+	$bucket = 'wpdc_poll_' . md5( $session );
 	$spent   = (int) get_transient( $bucket );
 	if ( $spent >= WPDC_POLL_CEILING ) {
 		return new WP_REST_Response( array( 'finished' => false ), 200 );
@@ -360,4 +430,28 @@ function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
 		),
 		200
 	);
+}
+
+/**
+ * The record of session ids this site minted, so the status route can refuse
+ * anything else before it spends the shop's key.
+ *
+ * The session route calls wpdc_remember_session on every id it hands back; the
+ * status route calls wpdc_session_known before it does anything. The record is a
+ * transient per id, and md5 keeps the id out of an option name while staying a
+ * stable key. It lives WPDC_SESSION_MEMORY, set to outlast one slow checkout and
+ * nothing more.
+ */
+function wpdc_session_memory_key( string $session ): string {
+	return 'wpdc_seen_' . md5( $session );
+}
+
+function wpdc_remember_session( string $session ): void {
+	if ( wpdc_is_session_id( $session ) ) {
+		set_transient( wpdc_session_memory_key( $session ), 1, WPDC_SESSION_MEMORY );
+	}
+}
+
+function wpdc_session_known( string $session ): bool {
+	return false !== get_transient( wpdc_session_memory_key( $session ) );
 }

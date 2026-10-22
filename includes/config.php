@@ -36,6 +36,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 const WPDC_TIMEOUT = 15;
 
 /**
+ * The timeout for a call made while a page is rendering, as opposed to a click.
+ *
+ * A `[wpdc_price]` on a sales page reads the catalogue as the page is built, and
+ * a slow Dodo there holds the whole page hostage for the full click-time budget.
+ * Four seconds is long enough for a healthy API and short enough that a bad day
+ * at Dodo degrades to the base price instead of a hanging page. The 15s budget
+ * is kept for the on-click mint, where the visitor has already decided to buy
+ * and a longer wait beats a failed checkout.
+ */
+const WPDC_RENDER_TIMEOUT = 4;
+
+/**
  * How often one checkout may ask whether it finished.
  *
  * Named here rather than written into the route because it is half of a pair:
@@ -66,6 +78,40 @@ const WPDC_POLL_CEILING = 120;
 const WPDC_SESSION_CEILING = 60;
 
 /**
+ * How many of those a minute may carry a discount code, in a bucket of their own.
+ *
+ * A discount code is the one value a visitor supplies that Dodo judges -- a
+ * wrong code fails the mint, a right one does not -- so testing codes is a
+ * probe, and the shared mint bucket turned it into two problems at once: an
+ * anonymous caller could run a discount oracle at the mint rate, and in doing so
+ * drain the ceiling that real buyers depend on. A separate, smaller bucket bounds
+ * the oracle and keeps code-testing from shutting the ordinary checkout.
+ */
+const WPDC_DISCOUNT_CEILING = 20;
+
+/**
+ * How long a product id Dodo does not list is remembered as unlisted.
+ *
+ * The session route refreshes the catalogue the first time an unknown id
+ * arrives, in case the owner created it a minute ago. After that the answer is
+ * cached briefly, so a loop of invented ids is one fetch each rather than a
+ * fresh Dodo call per request. Short, because a product created during the
+ * window should become sellable soon after.
+ */
+const WPDC_UNKNOWN_TTL = 30;
+
+/**
+ * How long a minted checkout session id is remembered as one this site created.
+ *
+ * The status route is public and spends the shop's one API key per call, so it
+ * must refuse an id nobody here minted before it asks Dodo anything. This is how
+ * long that record lives -- long enough to outlast a slow checkout (a card sent
+ * through 3-D Secure, a window left open for a while) and no longer, because the
+ * only thing it protects is the brief life of one real checkout.
+ */
+const WPDC_SESSION_MEMORY = 1800;
+
+/**
  * How long the product list is reused.
  *
  * The list IS the allow-list, and it changes when the shop owner edits Dodo --
@@ -74,6 +120,38 @@ const WPDC_SESSION_CEILING = 60;
  * busy page costs one API call per ten minutes rather than one per visitor.
  */
 const WPDC_CATALOG_TTL = 600;
+
+/**
+ * How long a failed catalogue fetch is remembered, so an outage is not one call
+ * per page view.
+ *
+ * When Dodo is down or slow, a page carrying the price shortcode would otherwise
+ * hit the API on every single view. Instead the failure is cached for this long
+ * and the last good list is served in the meantime; the first request after it
+ * expires tries again.
+ */
+const WPDC_CATALOG_FAIL_TTL = 45;
+
+/**
+ * How long a stale copy of the catalogue is kept past its freshness, to serve
+ * while Dodo is unreachable.
+ *
+ * Six times the freshness window. Stale enough that a just-archived product
+ * might still be offered for a while during an outage -- acceptable, because the
+ * mint path checks Dodo live and refuses it there -- and present enough that a
+ * sales page keeps showing prices while the API is down.
+ */
+const WPDC_CATALOG_STALE_TTL = WPDC_CATALOG_TTL * 6;
+
+/**
+ * A short lock so a cold cache on a busy page is one fetch, not a thundering herd.
+ *
+ * Without it, every concurrent request that arrives during a cache miss starts
+ * its own Dodo call. The first to arrive takes the lock and fetches; the rest
+ * serve the stale copy for these few seconds. Short, because a held lock that
+ * outlives a crashed request must clear itself quickly.
+ */
+const WPDC_CATALOG_LOCK = 8;
 
 /**
  * The cache key carries the plugin version, and that is not cosmetic.
@@ -104,6 +182,43 @@ function wpdc_catalog_key(): string {
  */
 function wpdc_is_product_id( $value ): bool {
 	return is_string( $value ) && 1 === preg_match( '/^pdt_[A-Za-z0-9]{1,64}$/', $value );
+}
+
+/**
+ * An optional allow-list of product ids, from a wp-config constant.
+ *
+ * Dodo's live product list is the standing allow-list: it stops an archived or
+ * never-listed id from selling, but it does NOT stop a crafted request from
+ * naming a different LIVE product than the page shows. On a site with a cheap
+ * test product left live, that is a way to buy the wrong SKU. Defining
+ * WPDC_ALLOWED_PRODUCTS as a comma list of ids closes that: only those ids mint,
+ * price or ride as a bump. Unset, it returns null and nothing changes.
+ *
+ * An empty or whitespace-only constant yields an empty list, which sells
+ * nothing -- a deliberate, visible off switch rather than a silent no-op.
+ */
+function wpdc_allowed_products(): ?array {
+	if ( ! defined( 'WPDC_ALLOWED_PRODUCTS' ) || ! is_string( WPDC_ALLOWED_PRODUCTS ) ) {
+		return null;
+	}
+	$ids = array();
+	foreach ( explode( ',', WPDC_ALLOWED_PRODUCTS ) as $raw ) {
+		$id = trim( $raw );
+		if ( '' !== $id ) {
+			$ids[] = $id;
+		}
+	}
+	return $ids;
+}
+
+/**
+ * Is this product id one this site is permitted to sell?
+ *
+ * True when no allow-list is set (the default), or when the id is on it.
+ */
+function wpdc_product_allowed( string $product ): bool {
+	$allowed = wpdc_allowed_products();
+	return null === $allowed || in_array( $product, $allowed, true );
 }
 
 /**
@@ -375,6 +490,28 @@ function wpdc_is_session_id( $value ): bool {
 }
 
 /**
+ * Is this a checkout URL safe to hand a browser -- https, and on Dodo?
+ *
+ * The URL comes back from the create-checkout call and is passed straight to
+ * `location.assign` and the SDK. `sslverify` and `redirection => 0` already make
+ * a man-in-the-middle unlikely, but this is the cheap last check: a URL that is
+ * not https or not a `dodopayments.com` host is not one this plugin opens,
+ * whatever the API answered. test. and live. are subdomains, so a suffix match
+ * covers both without naming either.
+ */
+function wpdc_is_checkout_url( $url ): bool {
+	if ( ! is_string( $url ) || ! str_starts_with( $url, 'https://' ) ) {
+		return false;
+	}
+	$host = wp_parse_url( $url, PHP_URL_HOST );
+	if ( ! is_string( $host ) || '' === $host ) {
+		return false;
+	}
+	$host = strtolower( $host );
+	return 'dodopayments.com' === $host || str_ends_with( $host, '.dodopayments.com' );
+}
+
+/**
  * Is this an error rather than a result?
  *
  * Every function in the client answers either a result or `wpdc_error()`, and
@@ -411,6 +548,29 @@ function wpdc_mode(): string {
 		: (string) get_option( 'wpdc_mode', '' );
 
 	return 'live_mode' === trim( $value ) ? 'live_mode' : 'test_mode';
+}
+
+/**
+ * Does the API key's own prefix disagree with the configured mode?
+ *
+ * Dodo keys announce their environment: a `sk_live_` key only works in live, a
+ * `sk_test_` key only in test. Cross them and every checkout returns a 401 that
+ * the visitor reads as "a fault on our side", for a setup mistake the owner
+ * cannot see from the symptom. This is the check behind the admin warning and
+ * the log line; a key with neither prefix is left alone, since nothing can be
+ * said about it.
+ */
+function wpdc_api_key_mode_mismatch(): bool {
+	$key  = wpdc_api_key();
+	$mode = wpdc_mode();
+
+	if ( str_starts_with( $key, 'sk_live_' ) ) {
+		return 'live_mode' !== $mode;
+	}
+	if ( str_starts_with( $key, 'sk_test_' ) ) {
+		return 'test_mode' !== $mode;
+	}
+	return false;
 }
 
 /** Dodo's API host for the current mode. */

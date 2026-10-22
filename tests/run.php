@@ -56,6 +56,10 @@ function set_transient( string $k, $v, $t = 0 ): bool {
 	$GLOBALS['wpdc_test_transients'][ $k ] = $v;
 	return true;
 }
+function delete_transient( string $k ): bool {
+	unset( $GLOBALS['wpdc_test_transients'][ $k ] );
+	return true;
+}
 function load_textdomain( string $domain, string $file ): bool {
 	$GLOBALS['wpdc_test_domain'] = $file;
 	return true;
@@ -240,6 +244,13 @@ configure();
 respond( 200, array( 'checkout_url' => 'https://checkout.dodo/x' ) );
 $ok = wpdc_dodo_request( 'POST', '/checkouts', array() );
 check( 'SILENCE: a good response comes back decoded', 'https://checkout.dodo/x' === $ok['checkout_url'] );
+check(
+	// The client contract, enforced on the wire rather than only promised in a
+	// README: a redirect from the payment host would carry the Bearer key to
+	// wherever it points, and an unverified certificate is no protection at all.
+	'BELL: every Dodo request refuses redirects and verifies TLS',
+	0 === last_request()['args']['redirection'] && true === last_request()['args']['sslverify']
+);
 
 respond( 401, array() );
 $unauth = wpdc_dodo_request( 'GET', '/products' );
@@ -294,7 +305,7 @@ check( 'BELL: unconfigured makes no request at all', array() === $GLOBALS['wpdc_
 
 configure();
 catalogue( array( 'pdt_pro', 'pdt_book' ) );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_1' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_1' ) );
 
 $result = wpdc_create_session( 'pdt_pro', 20, 'pdt_book' );
 check( 'SILENCE: a listed product produces a checkout url', true === $result['ok'] && str_contains( $result['checkout_url'], 'cks_1' ) );
@@ -361,6 +372,17 @@ check(
 	false === $sent['feature_flags']['allow_phone_number_collection']
 );
 check(
+	// Contact, address and payment on one screen, so the pay button is in view
+	// at once rather than behind two next clicks.
+	'BELL: the checkout is one page, not a wizard',
+	true === $sent['feature_flags']['single_page']
+);
+check(
+	// Not read anywhere, and a wallet carries its own name.
+	'BELL: the cardholder name is not required',
+	false === $sent['feature_flags']['require_cardholder_name']
+);
+check(
 	'BELL: the api key travels in a header, never in the url or the body',
 	'Bearer sk_test_key' === $session['args']['headers']['authorization']
 		&& ! str_contains( $session['url'], 'sk_test_key' )
@@ -370,6 +392,43 @@ check(
 	// Live would take real money from a real card during a half-finished setup.
 	'BELL: the mode defaults to test, not live',
 	str_starts_with( $session['url'], 'https://test.dodopayments.com' )
+);
+
+// ─── A checkout URL on the wrong host never reaches the browser ──────────────
+//
+// The URL comes back from the create-checkout call and is handed straight to a
+// navigation. A compromised or confused upstream answering with a non-Dodo
+// host would turn this plugin into an open redirect the moment somebody clicks
+// Buy, so the host is checked before the URL leaves the server.
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://evil.example/session/cks_1' ) );
+$offHost = wpdc_create_session( 'pdt_pro' );
+check(
+	'BELL: a checkout url on a non-Dodo host is refused, not opened',
+	false === $offHost['ok'] && 'bad_checkout_url' === $offHost['reason'] && false === $offHost['retriable']
+);
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'http://checkout.dodopayments.com/session/cks_1' ) );
+$plainHttp = wpdc_create_session( 'pdt_pro' );
+check(
+	// https only: this becomes a navigation, and a plain-http one is a downgrade
+	// somebody on the wire can read.
+	'BELL: a plain-http checkout url is refused even on the right host',
+	false === $plainHttp['ok'] && 'bad_checkout_url' === $plainHttp['reason']
+);
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://test.dodopayments.com/session/cks_1' ) );
+$subdomain = wpdc_create_session( 'pdt_pro' );
+check(
+	// test. and live. are Dodo subdomains and must still pass.
+	'SILENCE: a Dodo subdomain is accepted',
+	true === $subdomain['ok'] && str_contains( $subdomain['checkout_url'], 'cks_1' )
 );
 
 // ─── An id Dodo does not list is refused, and no session is created ──────────
@@ -448,15 +507,63 @@ check(
 
 configure();
 catalogue( array( 'pdt_pro' ) );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_2' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_2' ) );
 wpdc_create_session( 'pdt_pro' );
 $firstCount = count( $GLOBALS['wpdc_test_requests'] );
 
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_3' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_3' ) );
 wpdc_create_session( 'pdt_pro' );
 check(
 	'BELL: the second sale costs one call, not another catalogue read',
 	count( $GLOBALS['wpdc_test_requests'] ) === $firstCount + 1
+);
+
+// ─── A render-time catalogue read protects the page from a slow or down API ──
+//
+// A `[wpdc_price]` is read while the page is built, so a slow Dodo there holds
+// the whole page. At render time the fetch uses the short timeout, a recent
+// failure is remembered, and the last good list is served instead of asking
+// again on every view. The on-click mint keeps the full budget and no fallback.
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+wpdc_catalog( false, true );
+check(
+	'BELL: a render-time fetch uses the short timeout, not the click budget',
+	WPDC_RENDER_TIMEOUT === last_request()['args']['timeout']
+);
+
+configure();
+catalogue( array( 'pdt_mint' ) );
+wpdc_catalog(); // the mint/default path
+check(
+	'BELL: the mint path keeps the full timeout',
+	WPDC_TIMEOUT === last_request()['args']['timeout']
+);
+
+// A good fetch leaves a stale copy behind; a later outage serves it instead of
+// hitting Dodo on every page view.
+configure();
+catalogue( array( 'pdt_pro' ) );            // warms the fresh + stale copies
+wpdc_catalog( false, true );
+$GLOBALS['wpdc_test_transients'][ wpdc_catalog_key() ] = false; // fresh copy expired
+$GLOBALS['wpdc_test_requests'] = array();
+$GLOBALS['wpdc_test_queue']    = array();
+$GLOBALS['wpdc_test_queue'][]  = new WP_Error( 'http_request_failed', 'cURL error 28: timeout' );
+$served = wpdc_catalog( false, true );
+check(
+	'BELL: a render-time outage serves the last good list, not an error',
+	is_array( $served ) && array( 'pdt_pro' ) === array_keys( $served ) && 1 === count( $GLOBALS['wpdc_test_requests'] )
+);
+check(
+	// The negative cache: having just failed, a second view does NOT ask again.
+	'BELL: a second view inside the failure window makes no fresh request',
+	( static function (): bool {
+		$GLOBALS['wpdc_test_requests'] = array();
+		$again = wpdc_catalog( false, true );
+		return is_array( $again ) && array( 'pdt_pro' ) === array_keys( $again )
+			&& array() === $GLOBALS['wpdc_test_requests'];
+	} )()
 );
 
 // ─── A refused key is ours, and never shown as the visitor\'s fault ──────────
@@ -469,6 +576,29 @@ check(
 	'BELL: and the visitor is not told it is their problem',
 	str_contains( $refused['message'], 'our side' )
 );
+
+// ─── A key whose prefix disagrees with the mode is flagged ───────────────────
+//
+// A sk_live_ key in test mode (or the reverse) makes every checkout 401, which
+// the visitor reads as our fault. Run BEFORE the constants below are defined,
+// while wpdc_api_key()/wpdc_mode() still read the options this sets. The key
+// literals are split so the CI secret gate, which matches a real key shape,
+// does not fire on a test fixture.
+
+$GLOBALS['wpdc_test_options'] = array( 'wpdc_api_key' => 'sk_live_' . 'seedkeyvalue', 'wpdc_mode' => 'test_mode' );
+check( 'BELL: a live key in test mode is a mismatch', true === wpdc_api_key_mode_mismatch() );
+
+$GLOBALS['wpdc_test_options'] = array( 'wpdc_api_key' => 'sk_test_' . 'seedkeyvalue', 'wpdc_mode' => 'live_mode' );
+check( 'BELL: a test key in live mode is a mismatch too', true === wpdc_api_key_mode_mismatch() );
+
+$GLOBALS['wpdc_test_options'] = array( 'wpdc_api_key' => 'sk_live_' . 'seedkeyvalue', 'wpdc_mode' => 'live_mode' );
+check( 'SILENCE: a live key in live mode is not a mismatch', false === wpdc_api_key_mode_mismatch() );
+
+$GLOBALS['wpdc_test_options'] = array( 'wpdc_api_key' => 'sk_test_' . 'seedkeyvalue', 'wpdc_mode' => 'test_mode' );
+check( 'SILENCE: a test key in test mode is not a mismatch', false === wpdc_api_key_mode_mismatch() );
+
+$GLOBALS['wpdc_test_options'] = array( 'wpdc_api_key' => 'some-other-key', 'wpdc_mode' => 'live_mode' );
+check( 'BELL: a key with no known prefix is never flagged, so nothing is guessed', false === wpdc_api_key_mode_mismatch() );
 
 // ─── Configuration precedence ────────────────────────────────────────────────
 
@@ -501,6 +631,49 @@ $config    = source( $root . '/includes/config.php' );
 check(
 	'BELL: the overlay SDK is version-pinned, never @latest',
 	str_contains( $shortcode, 'dodopayments-checkout@1' ) && ! str_contains( $shortcode, '@latest' )
+);
+check(
+	// An EXACT version, not a floating major. `@1` let the file behind the URL
+	// change with no deploy here and made an integrity hash impossible. The pin
+	// is a full semver and the hash rides beside it.
+	'BELL: the SDK is pinned to an exact version with an SRI hash',
+	1 === preg_match( '/dodopayments-checkout@\d+\.\d+\.\d+\//', $shortcode )
+		&& str_contains( $shortcode, "'sdkIntegrity' => 'sha384-" )
+);
+check(
+	// Loaded on demand, not on every page that merely shows a price. The URL is
+	// handed to our own script instead of enqueued, so the only enqueued script
+	// is ours.
+	'BELL: the SDK is handed to the browser, not enqueued on every page',
+	str_contains( $shortcode, "'sdk'" )
+		&& ! preg_match( "/wp_enqueue_script\(\s*'dodo/", $shortcode )
+		&& 1 === substr_count( $shortcode, 'wp_enqueue_script(' )
+);
+check(
+	// The connection to the CDN is warmed before the on-demand load needs it.
+	'BELL: a preconnect to the CDN is emitted with the markup',
+	str_contains( $shortcode, 'rel="preconnect"' )
+		&& str_contains( $shortcode, 'cdn.jsdelivr.net' )
+		&& str_contains( $shortcode, 'function wpdc_preconnect' )
+);
+check(
+	// The browser enforces the hash: a script injected without integrity +
+	// crossOrigin would load a tampered file silently.
+	'BELL: the injected SDK script carries its integrity and crossOrigin',
+	str_contains( $js, 'function loadSdk' )
+		&& str_contains( $js, "createElement('script')" )
+		&& str_contains( $js, 's.integrity = cfg.sdkIntegrity' )
+		&& str_contains( $js, "s.crossOrigin = 'anonymous'" )
+);
+check(
+	// The first interaction with a buy control starts the load, so a click lands
+	// on an SDK that is usually already there.
+	'BELL: the SDK is warmed on first interaction and awaited at open',
+	str_contains( $js, 'function warmSdk' )
+		&& str_contains( $js, "'pointerenter'" )
+		// open() waits for the load before falling back, rather than redirecting
+		// the instant the SDK is not yet present.
+		&& 1 === preg_match( '/function open\(root, url\)[\s\S]{0,400}loadSdk\(\)/', $js )
 );
 check(
 	// Operator decision: the checkout is embedded in the page, never a
@@ -1265,7 +1438,7 @@ check(
 // en_US while the customer was reading German.
 configure();
 catalogue( array( 'pdt_pro' ) );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_l' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_l' ) );
 wpdc_create_session( 'pdt_pro', 1, null, 'de' );
 $withLang = json_decode( last_request()['args']['body'], true );
 check(
@@ -1277,7 +1450,7 @@ check(
 // inspected the request just made and did not -- and `isset()` on an undefined
 // variable is false, so `!isset(...)` was true no matter what: it passed even
 // with the variable removed entirely. Probed.
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_n' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_n' ) );
 wpdc_create_session( 'pdt_pro', 1, null, null );
 $withoutLang = json_decode( last_request()['args']['body'], true );
 check(
@@ -1690,7 +1863,7 @@ foreach ( array( 'de' => 'de', 'de-AT' => 'de', 'de_CH' => 'de', 'DE' => 'de',
 
 configure();
 catalogue( array( 'pdt_pro' ) );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_f' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_f' ) );
 wpdc_create_session( 'pdt_pro', 1, null, 'fr' );
 $french = json_decode( last_request()['args']['body'], true );
 check(
@@ -1779,7 +1952,7 @@ check(
 configure();
 catalogue( array( 'pdt_pro' ) );
 $GLOBALS['wpdc_test_filters']['wpdc_customer'] = array( 'email' => 'k@example.com', 'name' => ' Kim ' );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_c' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_c' ) );
 wpdc_create_session( 'pdt_pro' );
 $known = json_decode( last_request()['args']['body'], true );
 check(
@@ -1790,7 +1963,7 @@ check(
 configure();
 catalogue( array( 'pdt_pro' ) );
 $GLOBALS['wpdc_test_filters']['wpdc_customer'] = array( 'email' => 'not-an-address', 'name' => 'X' );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_d' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_d' ) );
 wpdc_create_session( 'pdt_pro' );
 $bad = json_decode( last_request()['args']['body'], true );
 check(
@@ -1965,7 +2138,7 @@ check(
 
 configure();
 catalogue( array( 'pdt_pro' ) );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_disc' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_disc' ) );
 wpdc_create_session( 'pdt_pro', 1, null, null, 'BENNY' );
 $withCode = json_decode( last_request()['args']['body'], true );
 check(
@@ -1975,7 +2148,7 @@ check(
 
 configure();
 catalogue( array( 'pdt_pro' ) );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_nodisc' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_nodisc' ) );
 wpdc_create_session( 'pdt_pro' );
 $noCode = json_decode( last_request()['args']['body'], true );
 check(
@@ -1996,7 +2169,7 @@ check(
 
 configure();
 catalogue( array( 'pdt_pro' ) );
-respond( 200, array( 'checkout_url' => 'https://x/session/cks_x' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_x' ) );
 wpdc_create_session( 'pdt_pro', 1, null, null, 'not a code!!' );
 $bad = json_decode( last_request()['args']['body'], true );
 check(
@@ -2311,6 +2484,10 @@ check(
 
 /** One poll, scripted end to end. */
 function poll( string $session = 'cks_abcdefghijklmnopqrstuvwx' ): WP_REST_Response {
+	// In production every polled session is one this site minted, and the status
+	// route now refuses any it did not. Registering it keeps these cases
+	// exercising a real, known session rather than the new unknown-id refusal.
+	wpdc_remember_session( $session );
 	return wpdc_rest_status( new WP_REST_Request( array( 'session' => $session ) ) );
 }
 
@@ -3209,6 +3386,179 @@ check(
 	str_contains( $js, 'resolvedOptions().maximumFractionDigits' )
 		&& str_contains( $js, 'Math.pow(10, digits)' )
 		&& 1 === substr_count( $js, '/ 100' )
+);
+
+// ─── The session route charges its ceiling only after validation ─────────────
+//
+// The ceiling exists to brake real mints. Charging it BEFORE the allow-list let
+// an anonymous caller spend it on well-formed but unlisted ids -- junk that
+// never reaches the payment account -- and so hold the shop shut to real buyers
+// with requests that buy nothing. These exercise the route, not the client.
+
+/** One call to the public session route, scripted end to end. */
+function mint( array $params ): WP_REST_Response {
+	return wpdc_rest_session( new WP_REST_Request( $params ) );
+}
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+catalogue( array( 'pdt_pro' ) ); // the deliberate second look at an unknown id
+$junk = mint( array( 'product' => 'pdt_ghost' ) );
+check(
+	'BELL: a well-formed but unlisted id is refused with a 400',
+	400 === $junk->get_status() && 'unknown_product' === $junk->get_data()['reason']
+);
+check(
+	// THE reorder. Charging before validation is what let junk exhaust the
+	// ceiling; the counter must still be untouched after a refused id.
+	'BELL: and it did NOT charge the mint ceiling',
+	false === get_transient( 'wpdc_session_all' )
+);
+check(
+	// The negative cache. A second identical junk id answers from the record
+	// with no fresh Dodo call.
+	'BELL: a repeat of the same unlisted id makes no new request',
+	( static function (): bool {
+		$GLOBALS['wpdc_test_requests'] = array();
+		$again = mint( array( 'product' => 'pdt_ghost' ) );
+		return 400 === $again->get_status()
+			&& 'unknown_product' === $again->get_data()['reason']
+			&& array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_m', 'session_id' => 'cks_mint01' ) );
+$good = mint( array( 'product' => 'pdt_pro' ) );
+check(
+	'BELL: a listed product mints and the browser is given a url and a session',
+	200 === $good->get_status()
+		&& str_contains( $good->get_data()['url'], 'cks_m' )
+		&& 'cks_mint01' === $good->get_data()['session']
+);
+check(
+	// Charged now, because this one reached the payment account.
+	'BELL: a successful mint charges the mint ceiling, and only that bucket',
+	1 === (int) get_transient( 'wpdc_session_all' )
+		&& false === get_transient( 'wpdc_discount_all' )
+);
+check(
+	// Fix 2: a minted session is remembered, so the status route will confirm it.
+	'BELL: a minted session is recorded so the status route will own it',
+	true === wpdc_session_known( 'cks_mint01' )
+);
+
+configure();
+$GLOBALS['wpdc_test_transients']['wpdc_session_all'] = WPDC_SESSION_CEILING;
+$busy = mint( array( 'product' => 'pdt_pro' ) );
+check(
+	'BELL: at the ceiling the route answers 429 without a mint',
+	429 === $busy->get_status()
+		&& true === $busy->get_data()['retriable']
+		&& array() === $GLOBALS['wpdc_test_requests']
+);
+
+// ─── A discount-carrying request has its own, smaller bucket ─────────────────
+//
+// Testing codes is the one probe a visitor can run against this route, and the
+// shared bucket made it an oracle at the mint rate AND a way to drain the mint
+// ceiling. Its own bucket bounds both.
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_d', 'session_id' => 'cks_disc01' ) );
+$coded = mint( array( 'product' => 'pdt_pro', 'discount' => 'SAVE10' ) );
+check(
+	'BELL: a discounted mint spends the discount bucket, not the mint one',
+	200 === $coded->get_status()
+		&& 1 === (int) get_transient( 'wpdc_discount_all' )
+		&& false === get_transient( 'wpdc_session_all' )
+);
+
+configure();
+$GLOBALS['wpdc_test_transients']['wpdc_discount_all'] = WPDC_DISCOUNT_CEILING;
+$codeBusy = mint( array( 'product' => 'pdt_pro', 'discount' => 'SAVE10' ) );
+check(
+	// The oracle is bounded here, while an ordinary buyer who names no code is
+	// untouched: the mint bucket is still empty.
+	'BELL: a full discount bucket stops code-testing but not the ordinary checkout',
+	429 === $codeBusy->get_status()
+		&& array() === $GLOBALS['wpdc_test_requests']
+		&& false === get_transient( 'wpdc_session_all' )
+);
+
+// ─── The status route refuses a session this site never minted ───────────────
+//
+// It is public and spends the shop's one API key per call. An id it never
+// minted is not its to confirm, and asking Dodo about a loop of invented ids is
+// how this route becomes a way to burn the shop's rate limit.
+
+configure();
+$GLOBALS['wpdc_test_transients'] = array();
+$GLOBALS['wpdc_test_requests']   = array();
+$GLOBALS['wpdc_test_queue']      = array();
+respond( 200, array( 'session_id' => 'cks_x', 'status' => 'open' ) ); // must NOT be consumed
+$unregistered = wpdc_rest_status( new WP_REST_Request( array( 'session' => 'cks_neverminted0000000000' ) ) );
+check(
+	'BELL: an unknown session is answered "not yet" before any Dodo call',
+	200 === $unregistered->get_status()
+		&& false === $unregistered->get_data()['finished']
+		&& array() === $GLOBALS['wpdc_test_requests']
+);
+check(
+	// And a remembered one is let through: same id, now recorded, reaches Dodo.
+	'BELL: a remembered session is confirmed, spending exactly one call',
+	( static function (): bool {
+		wpdc_remember_session( 'cks_neverminted0000000000' );
+		$known = wpdc_rest_status( new WP_REST_Request( array( 'session' => 'cks_neverminted0000000000' ) ) );
+		return 200 === $known->get_status()
+			&& false === $known->get_data()['finished']
+			&& 1 === count( $GLOBALS['wpdc_test_requests'] );
+	} )()
+);
+
+// ─── An optional allow-list closes the "buy a different live SKU" gap ────────
+//
+// Dodo's live list stops archived and never-listed ids, but not a crafted
+// request naming a different LIVE product than the page shows. WPDC_ALLOWED_
+// PRODUCTS, when set, refuses anything off the list on the mint, bump and price
+// paths. Defined LAST so no earlier test runs under the restriction, and so the
+// default -- the constant unset -- is what every test above proved unchanged.
+// The ids are plain pdt_ values, which the secret gate does not match.
+
+define( 'WPDC_ALLOWED_PRODUCTS', 'pdt_allowed, pdt_bumpok' );
+
+configure();
+$blocked = wpdc_create_session( 'pdt_other' );
+check(
+	'BELL: a live-but-unlisted id is refused before any Dodo call when the allow-list is set',
+	'unknown_product' === $blocked['reason']
+		&& false === $blocked['retriable']
+		&& array() === $GLOBALS['wpdc_test_requests']
+);
+
+configure();
+catalogue( array( 'pdt_allowed' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_a', 'session_id' => 'cks_allow01' ) );
+$allowedOk = wpdc_create_session( 'pdt_allowed' );
+check(
+	'SILENCE: an allow-listed id still mints',
+	true === $allowedOk['ok'] && str_contains( $allowedOk['checkout_url'], 'cks_a' )
+);
+
+configure();
+$offBump = wpdc_create_session( 'pdt_allowed', 1, 'pdt_other' );
+check(
+	'BELL: a bump off the allow-list is refused, and no checkout is created around it',
+	'unknown_product' === $offBump['reason'] && array() === $GLOBALS['wpdc_test_requests']
+);
+
+configure();
+$offPrice = wpdc_price_for_country( 'pdt_other', 'DE' );
+check(
+	'BELL: the price path refuses a product off the allow-list',
+	wpdc_is_error( $offPrice ) && 'unknown_product' === $offPrice['reason']
 );
 
 if ( $failures ) {

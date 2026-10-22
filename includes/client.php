@@ -70,11 +70,19 @@ function wpdc_error( string $reason, bool $retriable, string $message ): array {
  * in a URL: query strings survive in access logs, proxy logs and browser
  * history, and this one can issue refunds.
  */
-function wpdc_dodo_request( string $method, string $path, ?array $body = null ) {
+function wpdc_dodo_request( string $method, string $path, ?array $body = null, int $timeout = WPDC_TIMEOUT ) {
 	$args = array(
 		'method'  => $method,
-		'timeout' => WPDC_TIMEOUT,
-		'headers' => array(
+		'timeout' => $timeout,
+		// The client contract, stated and enforced: never follow a redirect, and
+		// always verify TLS. A redirect from the payment host would carry this
+		// Bearer key to wherever it points, and a redirect is also how an answer
+		// gets turned into something that is not the answer -- so a non-2xx that
+		// is a redirect is refused rather than chased. `sslverify` is the default,
+		// pinned here so it cannot be lost to a copied array that omits it.
+		'redirection' => 0,
+		'sslverify'   => true,
+		'headers'     => array(
 			'authorization' => 'Bearer ' . wpdc_api_key(),
 			'accept'        => 'application/json',
 		),
@@ -110,7 +118,11 @@ function wpdc_dodo_request( string $method, string $path, ?array $body = null ) 
 		// the first did not, and a log that fills up is a log nobody reads.
 		if ( false === get_transient( 'wpdc_logged_refusal' ) ) {
 			set_transient( 'wpdc_logged_refusal', 1, MINUTE_IN_SECONDS );
-			error_log( 'wp-dodo-checkout: the Dodo API key was refused (' . $status . ')' );
+			// The mode is named because the commonest cause of a refusal is a key
+			// that belongs to the other one: a sk_live_ key in test mode, or the
+			// reverse. The line a developer reads should point straight at it.
+			$note = wpdc_api_key_mode_mismatch() ? ', key/mode mismatch' : '';
+			error_log( 'wp-dodo-checkout: the Dodo API key was refused (' . $status . ') in ' . wpdc_mode() . $note );
 		}
 		return wpdc_error(
 			'unauthorised',
@@ -182,14 +194,53 @@ function wpdc_catalog_shape_ok( array $catalog ): bool {
  *
  * @return array<string, array{name: string, image: string, description: string, price: int|null, currency: string}>|array{ok: false}
  */
-function wpdc_catalog( bool $fresh = false ) {
-	$cached = $fresh ? false : get_transient( wpdc_catalog_key() );
+function wpdc_catalog( bool $fresh = false, bool $render = false ) {
+	$key      = wpdc_catalog_key();
+	$stale_key = $key . '_stale';
+
+	$cached = $fresh ? false : get_transient( $key );
 	if ( is_array( $cached ) && wpdc_catalog_shape_ok( $cached ) ) {
 		return $cached;
 	}
 
-	$result = wpdc_dodo_request( 'GET', '/products?page_size=100' );
+	/*
+	 * Render-time self-protection, and ONLY at render time.
+	 *
+	 * A `[wpdc_price]` page view reads the catalogue as the page is built, so a
+	 * slow or down Dodo there would hit the API on every single view and hold
+	 * each page hostage for the whole timeout. Three guards, all skipped for the
+	 * on-click mint below -- where the visitor has decided to buy and a hard,
+	 * live answer beats a stale one:
+	 *
+	 *   - a recent failure is remembered, and the last good list is served
+	 *     instead of asking again (stale-on-error),
+	 *   - a lock means one fetch per cold cache rather than one per concurrent
+	 *     request,
+	 *   - and the fetch itself uses the shorter render timeout.
+	 */
+	if ( $render ) {
+		if ( false !== get_transient( $key . '_fail' ) || false !== get_transient( $key . '_lock' ) ) {
+			$stale = get_transient( $stale_key );
+			if ( is_array( $stale ) && wpdc_catalog_shape_ok( $stale ) ) {
+				return $stale;
+			}
+		}
+		set_transient( $key . '_lock', 1, WPDC_CATALOG_LOCK );
+	}
+
+	$timeout = $render ? WPDC_RENDER_TIMEOUT : WPDC_TIMEOUT;
+	$result  = wpdc_dodo_request( 'GET', '/products?page_size=100', null, $timeout );
 	if ( wpdc_is_error( $result ) ) {
+		if ( $render ) {
+			// Remember the outage briefly and fall back to the last good list, so
+			// a sales page keeps showing prices instead of hammering a dead API.
+			set_transient( $key . '_fail', 1, WPDC_CATALOG_FAIL_TTL );
+			delete_transient( $key . '_lock' );
+			$stale = get_transient( $stale_key );
+			if ( is_array( $stale ) && wpdc_catalog_shape_ok( $stale ) ) {
+				return $stale;
+			}
+		}
 		return $result;
 	}
 
@@ -216,7 +267,15 @@ function wpdc_catalog( bool $fresh = false ) {
 		);
 	}
 
-	set_transient( wpdc_catalog_key(), $catalog, WPDC_CATALOG_TTL );
+	set_transient( $key, $catalog, WPDC_CATALOG_TTL );
+	// The stale copy outlives the fresh one, and both are written on every good
+	// fetch -- a mint keeps it warm for the next render, and a render for the
+	// next mint. On a later outage this is what a page falls back to.
+	set_transient( $stale_key, $catalog, WPDC_CATALOG_STALE_TTL );
+	if ( $render ) {
+		delete_transient( $key . '_fail' );
+		delete_transient( $key . '_lock' );
+	}
 	return $catalog;
 }
 
@@ -235,7 +294,7 @@ function wpdc_catalog( bool $fresh = false ) {
  *
  * @return array<int, array{currency: string, amount: int, country: string}>|array{ok: false}
  */
-function wpdc_localized_prices( string $product ) {
+function wpdc_localized_prices( string $product, bool $render = false ) {
 	if ( ! wpdc_is_product_id( $product ) ) {
 		return array();
 	}
@@ -246,7 +305,11 @@ function wpdc_localized_prices( string $product ) {
 		return $cached;
 	}
 
-	$result = wpdc_dodo_request( 'GET', '/products/' . rawurlencode( $product ) . '/localized-prices' );
+	// The per-visitor price runs while a page renders, so it uses the shorter
+	// render timeout: a slow localized-prices call must not hold the page, and
+	// the caller already falls back to the base price on any failure.
+	$timeout = $render ? WPDC_RENDER_TIMEOUT : WPDC_TIMEOUT;
+	$result  = wpdc_dodo_request( 'GET', '/products/' . rawurlencode( $product ) . '/localized-prices', null, $timeout );
 	if ( wpdc_is_error( $result ) ) {
 		// Not cached, because the next visitor deserves a fresh attempt -- but
 		// also not fatal: the caller falls back to the base price, which is what
@@ -332,7 +395,16 @@ function wpdc_country_currency( string $country ): string {
  * @return array{amount: int, currency: string, localized: bool}|array{ok: false}
  */
 function wpdc_price_for_country( string $product, string $country ) {
-	$catalog = wpdc_catalog();
+	// Optional WPDC_ALLOWED_PRODUCTS, same as the mint path: a product not on the
+	// allow-list is not one this site answers a price about.
+	if ( ! wpdc_product_allowed( $product ) ) {
+		return wpdc_error( 'unknown_product', false, __( 'This product is not available.', 'wp-dodo-checkout' ) );
+	}
+
+	// Render-time: this answers the /price route a sales page fires, so it uses
+	// the short timeout and the stale-on-error fallback rather than the full
+	// click budget.
+	$catalog = wpdc_catalog( false, true );
 	if ( wpdc_is_error( $catalog ) ) {
 		return $catalog;
 	}
@@ -356,7 +428,7 @@ function wpdc_price_for_country( string $product, string $country ) {
 		return $fallback;
 	}
 
-	$rules = wpdc_localized_prices( $product );
+	$rules = wpdc_localized_prices( $product, true );
 	if ( wpdc_is_error( $rules ) || ! is_array( $rules ) ) {
 		return $fallback;
 	}
@@ -399,6 +471,19 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 			'not_configured',
 			false,
 			__( 'Checkout is not configured on this site.', 'wp-dodo-checkout' )
+		);
+	}
+
+	// Optional WPDC_ALLOWED_PRODUCTS, checked before any fetch: an id outside the
+	// allow-list is refused exactly like an unlisted one, so a crafted request
+	// cannot buy a live SKU the shop did not mean to put on this path. Unset, this
+	// is always true and nothing changes.
+	if ( ! wpdc_product_allowed( $product )
+		|| ( null !== $bump && '' !== $bump && ! wpdc_product_allowed( $bump ) ) ) {
+		return wpdc_error(
+			'unknown_product',
+			false,
+			__( 'That product is not available.', 'wp-dodo-checkout' )
 		);
 	}
 
@@ -479,6 +564,17 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 			 * checkout.dodopayments.com that this shop never wrote.
 			 */
 			'redirect_immediately'          => true,
+
+			// One screen, not a wizard. The contact, address and payment steps
+			// collapse into a single page, so the pay button is in view at once
+			// instead of behind two "next" clicks. The fields that remain are
+			// the ones VAT and the receipt still need, nothing more.
+			'single_page'                   => true,
+
+			// The name on the card is not read anywhere here, and a wallet
+			// (Apple Pay, Google Pay) carries its own. One less field typed by
+			// hand between the decision to buy and the money.
+			'require_cardholder_name'       => false,
 		),
 	);
 
@@ -643,6 +739,18 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		return wpdc_error(
 			'no_url',
 			true,
+			__( 'The checkout could not be opened. Please try again.', 'wp-dodo-checkout' )
+		);
+	}
+
+	// The last check before this URL becomes a navigation in a browser: https,
+	// and a Dodo host. Not retriable, because a URL on the wrong host will not
+	// become the right one on a retry -- and refusing is strictly safer than
+	// opening it.
+	if ( ! wpdc_is_checkout_url( $url ) ) {
+		return wpdc_error(
+			'bad_checkout_url',
+			false,
 			__( 'The checkout could not be opened. Please try again.', 'wp-dodo-checkout' )
 		);
 	}

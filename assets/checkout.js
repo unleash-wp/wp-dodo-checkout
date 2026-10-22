@@ -284,6 +284,71 @@
   }
 
   /**
+   * Load the SDK on demand, not on every page that shows a price.
+   *
+   * The script tag used to be enqueued on every shortcode page; most of those
+   * are sales pages where the SDK is a third-party connection and parse the
+   * visitor never needs. So it is injected here instead -- on the first
+   * interaction with a buy control, and again (a no-op) at click time -- with
+   * the exact version and the integrity hash the server handed over, so the
+   * browser refuses it if a byte differs. A preconnect in the markup has already
+   * warmed the handshake.
+   *
+   * Returns a promise so a click that arrives before the load finishes can wait
+   * for it rather than fall straight through to the redirect. Resolves when the
+   * SDK is present, rejects when it will not come -- blocked, offline, a bad
+   * hash -- and the caller falls back to Dodo's own hosted page.
+   */
+  var sdkPromise = null;
+  function loadSdk() {
+    if (sdk()) return Promise.resolve(sdk());
+    if (sdkPromise) return sdkPromise;
+    if (!cfg.sdk) return Promise.reject(new Error('no sdk url'));
+
+    sdkPromise = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = cfg.sdk;
+      s.async = true;
+      if (cfg.sdkIntegrity) {
+        s.integrity = cfg.sdkIntegrity;
+        s.crossOrigin = 'anonymous';
+      }
+      s.onload = function () {
+        var found = sdk();
+        if (found) resolve(found);
+        else reject(new Error('sdk loaded but global missing'));
+      };
+      s.onerror = function () {
+        // Let the next attempt try again rather than latching a failure.
+        sdkPromise = null;
+        reject(new Error('sdk failed to load'));
+      };
+      (document.head || document.documentElement).appendChild(s);
+    });
+    return sdkPromise;
+  }
+
+  // First interaction with a buy control starts the load, so the SDK is usually
+  // present by the time the click resolves a session url. Passive and once: a
+  // hover, a focus or a touch is enough, and there is nothing to do twice.
+  var warmed = false;
+  function warmSdk() {
+    if (warmed) return;
+    warmed = true;
+    loadSdk().catch(function () {});
+  }
+  ['pointerenter', 'focusin', 'touchstart'].forEach(function (type) {
+    document.addEventListener(
+      type,
+      function (event) {
+        var t = event.target;
+        if (t && t.closest && t.closest('[data-wpdc-open], .wpdc__button')) warmSdk();
+      },
+      { passive: true, capture: true },
+    );
+  });
+
+  /**
    * Which Dodo environment the SDK should talk to, read off the URL it is about
    * to open.
    *
@@ -1281,11 +1346,20 @@
   function open(root, url) {
     if (openFrame(root, url)) return;
 
-    // FALLBACK, not a mode. Reached only when the SDK is not on the page --
-    // blocked, cached wrong, CDN down. A customer who has decided to buy must
-    // not be stopped by our script loader, so they go to Dodo's own page, which
-    // sells the same thing at the same price.
-    window.location.assign(url);
+    // The SDK is not on the page yet -- it is loaded on demand now, so a click
+    // that beat the load lands here. Wait for the load, then open inline; only
+    // if it will not come do we fall back.
+    loadSdk()
+      .then(function () {
+        if (!openFrame(root, url)) window.location.assign(url);
+      })
+      .catch(function () {
+        // FALLBACK, not a mode. The SDK is blocked, offline or failed its
+        // integrity check. A customer who has decided to buy must not be stopped
+        // by our script loader, so they go to Dodo's own page, which sells the
+        // same thing at the same price.
+        window.location.assign(url);
+      });
   }
 
   // Escape and the backdrop are the dialog's own doing; this is the X, and the

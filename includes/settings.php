@@ -79,6 +79,30 @@ function wpdc_sanitise_mode( $value ): string {
 	return 'live_mode' === $value ? 'live_mode' : 'test_mode';
 }
 
+/**
+ * Warn, in wp-admin, when the key and the mode disagree.
+ *
+ * A live key in test mode (or the reverse) makes every checkout return a 401
+ * that the visitor reads as a fault on our side, for a configuration the owner
+ * cannot see from the symptom. Said here, where the owner can fix it, before a
+ * customer meets it.
+ */
+function wpdc_render_mode_mismatch_notice(): void {
+	if ( ! current_user_can( 'manage_options' ) || ! wpdc_api_key_mode_mismatch() ) {
+		return;
+	}
+
+	$live_key = str_starts_with( wpdc_api_key(), 'sk_live_' );
+	$message  = $live_key
+		? __( 'Your Dodo API key is a live key, but this site is in test mode. Every checkout will fail with a 401 until the mode matches the key.', 'wp-dodo-checkout' )
+		: __( 'Your Dodo API key is a test key, but this site is in live mode. Every checkout will fail with a 401 until the mode matches the key.', 'wp-dodo-checkout' );
+
+	printf(
+		'<div class="notice notice-error"><p>%s</p></div>',
+		esc_html( $message )
+	);
+}
+
 function wpdc_register_settings_page(): void {
 	add_options_page(
 		__( 'Dodo Checkout', 'wp-dodo-checkout' ),
