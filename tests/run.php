@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.8.3' );
+define( 'WPDC_VERSION', '0.8.4' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -662,6 +662,13 @@ check(
 	'BELL: the dodopayments hosts are preconnected, not only the CDN',
 	str_contains( $shortcode, 'checkout.dodopayments.com' )
 		&& str_contains( $shortcode, 'assets.dodopayments.com' )
+);
+check(
+	// The logo files keep one name across releases, so without a version on the
+	// url a cache serves yesterday's logo for months. Swapping the Dodo mark for
+	// ours did exactly that once. Both logo urls carry the version.
+	'BELL: the logo urls carry a version so a cache cannot pin an old file',
+	2 === substr_count( $shortcode, "add_query_arg( 'ver', WPDC_VERSION, plugins_url( 'assets/" )
 );
 check(
 	// The browser enforces the hash: a script injected without integrity +

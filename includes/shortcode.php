@@ -357,7 +357,7 @@ function wpdc_render( $atts ): string {
 					?>
 					<span class="wpdc__logo-plate">
 						<img class="wpdc__logo"
-							src="<?php echo esc_url( plugins_url( 'assets/brand-logo.svg', WPDC_DIR . 'wp-dodo-checkout.php' ) ); ?>"
+							src="<?php echo esc_url( add_query_arg( 'ver', WPDC_VERSION, plugins_url( 'assets/brand-logo.svg', WPDC_DIR . 'wp-dodo-checkout.php' ) ) ); ?>"
 							alt="UnleashWP" width="99" height="22" decoding="async">
 					</span>
 				<?php endif; ?>
@@ -419,7 +419,7 @@ function wpdc_render( $atts ): string {
 					// this, Dodo does, so their name carries the line. Falls back to
 					// the plain words when the logo file is not shipped.
 					$dodo_mark = file_exists( WPDC_DIR . 'assets/dodo-logo.svg' )
-						? '<img class="wpdc__legal-mark" src="' . esc_url( plugins_url( 'assets/dodo-logo.svg', WPDC_DIR . 'wp-dodo-checkout.php' ) ) . '" alt="Dodo Payments" width="90" height="18" decoding="async">'
+						? '<img class="wpdc__legal-mark" src="' . esc_url( add_query_arg( 'ver', WPDC_VERSION, plugins_url( 'assets/dodo-logo.svg', WPDC_DIR . 'wp-dodo-checkout.php' ) ) ) . '" alt="Dodo Payments" width="90" height="18" decoding="async">'
 						: esc_html__( 'Dodo Payments', 'wp-dodo-checkout' );
 					printf(
 						/* translators: %s: the Dodo Payments wordmark, linking to dodopayments.com */
