@@ -24,9 +24,9 @@
 #   findings on day one and end up behind enough --ignore flags to be
 #   decorative.
 #
-#   No release workflow. This plugin is installed on our own site, not
-#   distributed. A pipeline for a delivery that does not happen is a pipeline
-#   nobody maintains.
+#   The release workflow now lives in release.yml: the plugin is still
+#   installed by hand on our own site, and a ready zip under Releases is how
+#   that install gets its file. A tag builds and attaches it; this CI does not.
 
 name: CI
 

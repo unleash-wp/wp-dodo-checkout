@@ -1,0 +1,96 @@
+name: Release
+
+# A tag like `v0.8.0` builds the plugin zip and attaches it to the GitHub
+# Release, so the zip is one click to download under Releases. That is how the
+# file gets onto our own site: this plugin is installed by hand, not shipped to
+# wordpress.org. (ci.yml once said there was no release workflow; this is the
+# decision that reversed it.)
+#
+# `workflow_dispatch` builds the SAME zip and keeps it as a run artifact,
+# without creating a release, so a dry run produces a downloadable zip without
+# spending a version number.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+
+# Least privilege: the token may create a release and upload to it, nothing
+# else. The dry-run path needs none of this, but the job is one.
+permissions:
+  contents: write
+
+# A second tag push supersedes nothing here, but two releases racing on one ref
+# would both try to create it. Serialise per ref.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build the plugin zip
+    # Hosted, like ci.yml, and for the same reason stated there: a public repo
+    # must never run on a self-hosted runner that holds our keys.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag and the version must agree
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          # A release whose zip announces a different version than the tag is a
+          # support ticket waiting to happen: the dashboard shows one number and
+          # the file carries another. The header and the constant are the two
+          # places the version lives; both must match the tag.
+          tag="${GITHUB_REF_NAME#v}"
+          header=$(sed -n 's/^[[:space:]]*\*[[:space:]]*Version:[[:space:]]*\([0-9A-Za-z.-]*\).*/\1/p' wp-dodo-checkout.php | head -1)
+          constant=$(sed -n "s/.*WPDC_VERSION'[^']*'[[:space:]]*\([0-9A-Za-z.-]*\).*/\1/p" wp-dodo-checkout.php | head -1)
+          echo "tag=$tag header=$header constant=$constant"
+          if [ "$tag" != "$header" ] || [ "$tag" != "$constant" ]; then
+            echo "::error::the tag ($tag), the header ($header) and WPDC_VERSION ($constant) do not all agree"
+            exit 1
+          fi
+
+      - name: Build the zip
+        run: |
+          set -euo pipefail
+          slug=wp-dodo-checkout
+          rm -rf dist
+          mkdir -p "dist/$slug"
+          # An allow-list, not an exclude-list: the zip holds exactly what the
+          # plugin needs to run, and anything new has to be added here on
+          # purpose rather than shipping because nobody remembered to exclude
+          # it. tests/, .github/, README.md and the dotfiles never run on a
+          # customer site, so none of them go in.
+          cp wp-dodo-checkout.php "dist/$slug/"
+          cp -R includes assets languages "dist/$slug/"
+          # The top-level folder is the plugin SLUG, so the zip unpacks straight
+          # into wp-content/plugins/wp-dodo-checkout/ the way WordPress expects.
+          ( cd dist && zip -rq "$slug.zip" "$slug" )
+          echo "built dist/$slug.zip"
+          unzip -l "dist/$slug.zip"
+
+      - name: Attach the zip to the Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Create the release for this tag if it is not there yet, otherwise
+          # just add the file. `--clobber` so re-running the job replaces the
+          # asset instead of failing on a name that already exists.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/wp-dodo-checkout.zip --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/wp-dodo-checkout.zip \
+              --title "$GITHUB_REF_NAME" --generate-notes
+          fi
+
+      - name: Keep the zip as a dry-run artifact
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: wp-dodo-checkout-zip
+          path: dist/wp-dodo-checkout.zip
+          if-no-files-found: error
