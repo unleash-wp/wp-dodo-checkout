@@ -66,6 +66,40 @@ const WPDC_POLL_CEILING = 120;
 const WPDC_SESSION_CEILING = 60;
 
 /**
+ * How many of those a minute may carry a discount code, in a bucket of their own.
+ *
+ * A discount code is the one value a visitor supplies that Dodo judges -- a
+ * wrong code fails the mint, a right one does not -- so testing codes is a
+ * probe, and the shared mint bucket turned it into two problems at once: an
+ * anonymous caller could run a discount oracle at the mint rate, and in doing so
+ * drain the ceiling that real buyers depend on. A separate, smaller bucket bounds
+ * the oracle and keeps code-testing from shutting the ordinary checkout.
+ */
+const WPDC_DISCOUNT_CEILING = 20;
+
+/**
+ * How long a product id Dodo does not list is remembered as unlisted.
+ *
+ * The session route refreshes the catalogue the first time an unknown id
+ * arrives, in case the owner created it a minute ago. After that the answer is
+ * cached briefly, so a loop of invented ids is one fetch each rather than a
+ * fresh Dodo call per request. Short, because a product created during the
+ * window should become sellable soon after.
+ */
+const WPDC_UNKNOWN_TTL = 30;
+
+/**
+ * How long a minted checkout session id is remembered as one this site created.
+ *
+ * The status route is public and spends the shop's one API key per call, so it
+ * must refuse an id nobody here minted before it asks Dodo anything. This is how
+ * long that record lives -- long enough to outlast a slow checkout (a card sent
+ * through 3-D Secure, a window left open for a while) and no longer, because the
+ * only thing it protects is the brief life of one real checkout.
+ */
+const WPDC_SESSION_MEMORY = 1800;
+
+/**
  * How long the product list is reused.
  *
  * The list IS the allow-list, and it changes when the shop owner edits Dodo --

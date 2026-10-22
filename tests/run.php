@@ -2311,6 +2311,10 @@ check(
 
 /** One poll, scripted end to end. */
 function poll( string $session = 'cks_abcdefghijklmnopqrstuvwx' ): WP_REST_Response {
+	// In production every polled session is one this site minted, and the status
+	// route now refuses any it did not. Registering it keeps these cases
+	// exercising a real, known session rather than the new unknown-id refusal.
+	wpdc_remember_session( $session );
 	return wpdc_rest_status( new WP_REST_Request( array( 'session' => $session ) ) );
 }
 
@@ -3209,6 +3213,136 @@ check(
 	str_contains( $js, 'resolvedOptions().maximumFractionDigits' )
 		&& str_contains( $js, 'Math.pow(10, digits)' )
 		&& 1 === substr_count( $js, '/ 100' )
+);
+
+// ─── The session route charges its ceiling only after validation ─────────────
+//
+// The ceiling exists to brake real mints. Charging it BEFORE the allow-list let
+// an anonymous caller spend it on well-formed but unlisted ids -- junk that
+// never reaches the payment account -- and so hold the shop shut to real buyers
+// with requests that buy nothing. These exercise the route, not the client.
+
+/** One call to the public session route, scripted end to end. */
+function mint( array $params ): WP_REST_Response {
+	return wpdc_rest_session( new WP_REST_Request( $params ) );
+}
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+catalogue( array( 'pdt_pro' ) ); // the deliberate second look at an unknown id
+$junk = mint( array( 'product' => 'pdt_ghost' ) );
+check(
+	'BELL: a well-formed but unlisted id is refused with a 400',
+	400 === $junk->get_status() && 'unknown_product' === $junk->get_data()['reason']
+);
+check(
+	// THE reorder. Charging before validation is what let junk exhaust the
+	// ceiling; the counter must still be untouched after a refused id.
+	'BELL: and it did NOT charge the mint ceiling',
+	false === get_transient( 'wpdc_session_all' )
+);
+check(
+	// The negative cache. A second identical junk id answers from the record
+	// with no fresh Dodo call.
+	'BELL: a repeat of the same unlisted id makes no new request',
+	( static function (): bool {
+		$GLOBALS['wpdc_test_requests'] = array();
+		$again = mint( array( 'product' => 'pdt_ghost' ) );
+		return 400 === $again->get_status()
+			&& 'unknown_product' === $again->get_data()['reason']
+			&& array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_m', 'session_id' => 'cks_mint01' ) );
+$good = mint( array( 'product' => 'pdt_pro' ) );
+check(
+	'BELL: a listed product mints and the browser is given a url and a session',
+	200 === $good->get_status()
+		&& str_contains( $good->get_data()['url'], 'cks_m' )
+		&& 'cks_mint01' === $good->get_data()['session']
+);
+check(
+	// Charged now, because this one reached the payment account.
+	'BELL: a successful mint charges the mint ceiling, and only that bucket',
+	1 === (int) get_transient( 'wpdc_session_all' )
+		&& false === get_transient( 'wpdc_discount_all' )
+);
+check(
+	// Fix 2: a minted session is remembered, so the status route will confirm it.
+	'BELL: a minted session is recorded so the status route will own it',
+	true === wpdc_session_known( 'cks_mint01' )
+);
+
+configure();
+$GLOBALS['wpdc_test_transients']['wpdc_session_all'] = WPDC_SESSION_CEILING;
+$busy = mint( array( 'product' => 'pdt_pro' ) );
+check(
+	'BELL: at the ceiling the route answers 429 without a mint',
+	429 === $busy->get_status()
+		&& true === $busy->get_data()['retriable']
+		&& array() === $GLOBALS['wpdc_test_requests']
+);
+
+// ─── A discount-carrying request has its own, smaller bucket ─────────────────
+//
+// Testing codes is the one probe a visitor can run against this route, and the
+// shared bucket made it an oracle at the mint rate AND a way to drain the mint
+// ceiling. Its own bucket bounds both.
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_d', 'session_id' => 'cks_disc01' ) );
+$coded = mint( array( 'product' => 'pdt_pro', 'discount' => 'SAVE10' ) );
+check(
+	'BELL: a discounted mint spends the discount bucket, not the mint one',
+	200 === $coded->get_status()
+		&& 1 === (int) get_transient( 'wpdc_discount_all' )
+		&& false === get_transient( 'wpdc_session_all' )
+);
+
+configure();
+$GLOBALS['wpdc_test_transients']['wpdc_discount_all'] = WPDC_DISCOUNT_CEILING;
+$codeBusy = mint( array( 'product' => 'pdt_pro', 'discount' => 'SAVE10' ) );
+check(
+	// The oracle is bounded here, while an ordinary buyer who names no code is
+	// untouched: the mint bucket is still empty.
+	'BELL: a full discount bucket stops code-testing but not the ordinary checkout',
+	429 === $codeBusy->get_status()
+		&& array() === $GLOBALS['wpdc_test_requests']
+		&& false === get_transient( 'wpdc_session_all' )
+);
+
+// ─── The status route refuses a session this site never minted ───────────────
+//
+// It is public and spends the shop's one API key per call. An id it never
+// minted is not its to confirm, and asking Dodo about a loop of invented ids is
+// how this route becomes a way to burn the shop's rate limit.
+
+configure();
+$GLOBALS['wpdc_test_transients'] = array();
+$GLOBALS['wpdc_test_requests']   = array();
+$GLOBALS['wpdc_test_queue']      = array();
+respond( 200, array( 'session_id' => 'cks_x', 'status' => 'open' ) ); // must NOT be consumed
+$unregistered = wpdc_rest_status( new WP_REST_Request( array( 'session' => 'cks_neverminted0000000000' ) ) );
+check(
+	'BELL: an unknown session is answered "not yet" before any Dodo call',
+	200 === $unregistered->get_status()
+		&& false === $unregistered->get_data()['finished']
+		&& array() === $GLOBALS['wpdc_test_requests']
+);
+check(
+	// And a remembered one is let through: same id, now recorded, reaches Dodo.
+	'BELL: a remembered session is confirmed, spending exactly one call',
+	( static function (): bool {
+		wpdc_remember_session( 'cks_neverminted0000000000' );
+		$known = wpdc_rest_status( new WP_REST_Request( array( 'session' => 'cks_neverminted0000000000' ) ) );
+		return 200 === $known->get_status()
+			&& false === $known->get_data()['finished']
+			&& 1 === count( $GLOBALS['wpdc_test_requests'] );
+	} )()
 );
 
 if ( $failures ) {
