@@ -3507,6 +3507,49 @@ check(
 	} )()
 );
 
+// ─── An optional allow-list closes the "buy a different live SKU" gap ────────
+//
+// Dodo's live list stops archived and never-listed ids, but not a crafted
+// request naming a different LIVE product than the page shows. WPDC_ALLOWED_
+// PRODUCTS, when set, refuses anything off the list on the mint, bump and price
+// paths. Defined LAST so no earlier test runs under the restriction, and so the
+// default -- the constant unset -- is what every test above proved unchanged.
+// The ids are plain pdt_ values, which the secret gate does not match.
+
+define( 'WPDC_ALLOWED_PRODUCTS', 'pdt_allowed, pdt_bumpok' );
+
+configure();
+$blocked = wpdc_create_session( 'pdt_other' );
+check(
+	'BELL: a live-but-unlisted id is refused before any Dodo call when the allow-list is set',
+	'unknown_product' === $blocked['reason']
+		&& false === $blocked['retriable']
+		&& array() === $GLOBALS['wpdc_test_requests']
+);
+
+configure();
+catalogue( array( 'pdt_allowed' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_a', 'session_id' => 'cks_allow01' ) );
+$allowedOk = wpdc_create_session( 'pdt_allowed' );
+check(
+	'SILENCE: an allow-listed id still mints',
+	true === $allowedOk['ok'] && str_contains( $allowedOk['checkout_url'], 'cks_a' )
+);
+
+configure();
+$offBump = wpdc_create_session( 'pdt_allowed', 1, 'pdt_other' );
+check(
+	'BELL: a bump off the allow-list is refused, and no checkout is created around it',
+	'unknown_product' === $offBump['reason'] && array() === $GLOBALS['wpdc_test_requests']
+);
+
+configure();
+$offPrice = wpdc_price_for_country( 'pdt_other', 'DE' );
+check(
+	'BELL: the price path refuses a product off the allow-list',
+	wpdc_is_error( $offPrice ) && 'unknown_product' === $offPrice['reason']
+);
+
 if ( $failures ) {
 	echo count( $failures ) . " of $checks checks FAILED\n";
 	foreach ( $failures as $name ) {

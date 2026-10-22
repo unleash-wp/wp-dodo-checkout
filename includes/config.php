@@ -185,6 +185,43 @@ function wpdc_is_product_id( $value ): bool {
 }
 
 /**
+ * An optional allow-list of product ids, from a wp-config constant.
+ *
+ * Dodo's live product list is the standing allow-list: it stops an archived or
+ * never-listed id from selling, but it does NOT stop a crafted request from
+ * naming a different LIVE product than the page shows. On a site with a cheap
+ * test product left live, that is a way to buy the wrong SKU. Defining
+ * WPDC_ALLOWED_PRODUCTS as a comma list of ids closes that: only those ids mint,
+ * price or ride as a bump. Unset, it returns null and nothing changes.
+ *
+ * An empty or whitespace-only constant yields an empty list, which sells
+ * nothing -- a deliberate, visible off switch rather than a silent no-op.
+ */
+function wpdc_allowed_products(): ?array {
+	if ( ! defined( 'WPDC_ALLOWED_PRODUCTS' ) || ! is_string( WPDC_ALLOWED_PRODUCTS ) ) {
+		return null;
+	}
+	$ids = array();
+	foreach ( explode( ',', WPDC_ALLOWED_PRODUCTS ) as $raw ) {
+		$id = trim( $raw );
+		if ( '' !== $id ) {
+			$ids[] = $id;
+		}
+	}
+	return $ids;
+}
+
+/**
+ * Is this product id one this site is permitted to sell?
+ *
+ * True when no allow-list is set (the default), or when the id is on it.
+ */
+function wpdc_product_allowed( string $product ): bool {
+	$allowed = wpdc_allowed_products();
+	return null === $allowed || in_array( $product, $allowed, true );
+}
+
+/**
  * Minor units to something readable, said plainly when there is no price.
  *
  * Two callers: the settings catalogue, and the item line a customer reads in

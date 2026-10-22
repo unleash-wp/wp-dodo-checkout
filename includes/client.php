@@ -395,6 +395,12 @@ function wpdc_country_currency( string $country ): string {
  * @return array{amount: int, currency: string, localized: bool}|array{ok: false}
  */
 function wpdc_price_for_country( string $product, string $country ) {
+	// Optional WPDC_ALLOWED_PRODUCTS, same as the mint path: a product not on the
+	// allow-list is not one this site answers a price about.
+	if ( ! wpdc_product_allowed( $product ) ) {
+		return wpdc_error( 'unknown_product', false, __( 'This product is not available.', 'wp-dodo-checkout' ) );
+	}
+
 	// Render-time: this answers the /price route a sales page fires, so it uses
 	// the short timeout and the stale-on-error fallback rather than the full
 	// click budget.
@@ -465,6 +471,19 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 			'not_configured',
 			false,
 			__( 'Checkout is not configured on this site.', 'wp-dodo-checkout' )
+		);
+	}
+
+	// Optional WPDC_ALLOWED_PRODUCTS, checked before any fetch: an id outside the
+	// allow-list is refused exactly like an unlisted one, so a crafted request
+	// cannot buy a live SKU the shop did not mean to put on this path. Unset, this
+	// is always true and nothing changes.
+	if ( ! wpdc_product_allowed( $product )
+		|| ( null !== $bump && '' !== $bump && ! wpdc_product_allowed( $bump ) ) ) {
+		return wpdc_error(
+			'unknown_product',
+			false,
+			__( 'That product is not available.', 'wp-dodo-checkout' )
 		);
 	}
 
