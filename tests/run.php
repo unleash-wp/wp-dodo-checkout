@@ -566,6 +566,29 @@ check(
 	str_contains( $refused['message'], 'our side' )
 );
 
+// ─── A key whose prefix disagrees with the mode is flagged ───────────────────
+//
+// A sk_live_ key in test mode (or the reverse) makes every checkout 401, which
+// the visitor reads as our fault. Run BEFORE the constants below are defined,
+// while wpdc_api_key()/wpdc_mode() still read the options this sets. The key
+// literals are split so the CI secret gate, which matches a real key shape,
+// does not fire on a test fixture.
+
+$GLOBALS['wpdc_test_options'] = array( 'wpdc_api_key' => 'sk_live_' . 'seedkeyvalue', 'wpdc_mode' => 'test_mode' );
+check( 'BELL: a live key in test mode is a mismatch', true === wpdc_api_key_mode_mismatch() );
+
+$GLOBALS['wpdc_test_options'] = array( 'wpdc_api_key' => 'sk_test_' . 'seedkeyvalue', 'wpdc_mode' => 'live_mode' );
+check( 'BELL: a test key in live mode is a mismatch too', true === wpdc_api_key_mode_mismatch() );
+
+$GLOBALS['wpdc_test_options'] = array( 'wpdc_api_key' => 'sk_live_' . 'seedkeyvalue', 'wpdc_mode' => 'live_mode' );
+check( 'SILENCE: a live key in live mode is not a mismatch', false === wpdc_api_key_mode_mismatch() );
+
+$GLOBALS['wpdc_test_options'] = array( 'wpdc_api_key' => 'sk_test_' . 'seedkeyvalue', 'wpdc_mode' => 'test_mode' );
+check( 'SILENCE: a test key in test mode is not a mismatch', false === wpdc_api_key_mode_mismatch() );
+
+$GLOBALS['wpdc_test_options'] = array( 'wpdc_api_key' => 'some-other-key', 'wpdc_mode' => 'live_mode' );
+check( 'BELL: a key with no known prefix is never flagged, so nothing is guessed', false === wpdc_api_key_mode_mismatch() );
+
 // ─── Configuration precedence ────────────────────────────────────────────────
 
 define( 'WPDC_API_KEY', 'from-wp-config' );

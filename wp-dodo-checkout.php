@@ -69,3 +69,4 @@ add_action( 'init', 'wpdc_serve_apple_pay_association' );
 add_action( 'rest_api_init', 'wpdc_register_rest' );
 add_action( 'admin_init', 'wpdc_register_settings' );
 add_action( 'admin_menu', 'wpdc_register_settings_page' );
+add_action( 'admin_notices', 'wpdc_render_mode_mismatch_notice' );

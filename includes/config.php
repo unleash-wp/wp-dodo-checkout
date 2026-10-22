@@ -513,6 +513,29 @@ function wpdc_mode(): string {
 	return 'live_mode' === trim( $value ) ? 'live_mode' : 'test_mode';
 }
 
+/**
+ * Does the API key's own prefix disagree with the configured mode?
+ *
+ * Dodo keys announce their environment: a `sk_live_` key only works in live, a
+ * `sk_test_` key only in test. Cross them and every checkout returns a 401 that
+ * the visitor reads as "a fault on our side", for a setup mistake the owner
+ * cannot see from the symptom. This is the check behind the admin warning and
+ * the log line; a key with neither prefix is left alone, since nothing can be
+ * said about it.
+ */
+function wpdc_api_key_mode_mismatch(): bool {
+	$key  = wpdc_api_key();
+	$mode = wpdc_mode();
+
+	if ( str_starts_with( $key, 'sk_live_' ) ) {
+		return 'live_mode' !== $mode;
+	}
+	if ( str_starts_with( $key, 'sk_test_' ) ) {
+		return 'test_mode' !== $mode;
+	}
+	return false;
+}
+
 /** Dodo's API host for the current mode. */
 function wpdc_api_base(): string {
 	return 'live_mode' === wpdc_mode()

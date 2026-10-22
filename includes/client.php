@@ -118,7 +118,11 @@ function wpdc_dodo_request( string $method, string $path, ?array $body = null, i
 		// the first did not, and a log that fills up is a log nobody reads.
 		if ( false === get_transient( 'wpdc_logged_refusal' ) ) {
 			set_transient( 'wpdc_logged_refusal', 1, MINUTE_IN_SECONDS );
-			error_log( 'wp-dodo-checkout: the Dodo API key was refused (' . $status . ')' );
+			// The mode is named because the commonest cause of a refusal is a key
+			// that belongs to the other one: a sk_live_ key in test mode, or the
+			// reverse. The line a developer reads should point straight at it.
+			$note = wpdc_api_key_mode_mismatch() ? ', key/mode mismatch' : '';
+			error_log( 'wp-dodo-checkout: the Dodo API key was refused (' . $status . ') in ' . wpdc_mode() . $note );
 		}
 		return wpdc_error(
 			'unauthorised',
