@@ -74,7 +74,15 @@ function wpdc_dodo_request( string $method, string $path, ?array $body = null ) 
 	$args = array(
 		'method'  => $method,
 		'timeout' => WPDC_TIMEOUT,
-		'headers' => array(
+		// The client contract, stated and enforced: never follow a redirect, and
+		// always verify TLS. A redirect from the payment host would carry this
+		// Bearer key to wherever it points, and a redirect is also how an answer
+		// gets turned into something that is not the answer -- so a non-2xx that
+		// is a redirect is refused rather than chased. `sslverify` is the default,
+		// pinned here so it cannot be lost to a copied array that omits it.
+		'redirection' => 0,
+		'sslverify'   => true,
+		'headers'     => array(
 			'authorization' => 'Bearer ' . wpdc_api_key(),
 			'accept'        => 'application/json',
 		),
@@ -643,6 +651,18 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		return wpdc_error(
 			'no_url',
 			true,
+			__( 'The checkout could not be opened. Please try again.', 'wp-dodo-checkout' )
+		);
+	}
+
+	// The last check before this URL becomes a navigation in a browser: https,
+	// and a Dodo host. Not retriable, because a URL on the wrong host will not
+	// become the right one on a retry -- and refusing is strictly safer than
+	// opening it.
+	if ( ! wpdc_is_checkout_url( $url ) ) {
+		return wpdc_error(
+			'bad_checkout_url',
+			false,
 			__( 'The checkout could not be opened. Please try again.', 'wp-dodo-checkout' )
 		);
 	}

@@ -240,6 +240,13 @@ configure();
 respond( 200, array( 'checkout_url' => 'https://checkout.dodo/x' ) );
 $ok = wpdc_dodo_request( 'POST', '/checkouts', array() );
 check( 'SILENCE: a good response comes back decoded', 'https://checkout.dodo/x' === $ok['checkout_url'] );
+check(
+	// The client contract, enforced on the wire rather than only promised in a
+	// README: a redirect from the payment host would carry the Bearer key to
+	// wherever it points, and an unverified certificate is no protection at all.
+	'BELL: every Dodo request refuses redirects and verifies TLS',
+	0 === last_request()['args']['redirection'] && true === last_request()['args']['sslverify']
+);
 
 respond( 401, array() );
 $unauth = wpdc_dodo_request( 'GET', '/products' );
@@ -294,7 +301,7 @@ check( 'BELL: unconfigured makes no request at all', array() === $GLOBALS['wpdc_
 
 configure();
 catalogue( array( 'pdt_pro', 'pdt_book' ) );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_1' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_1' ) );
 
 $result = wpdc_create_session( 'pdt_pro', 20, 'pdt_book' );
 check( 'SILENCE: a listed product produces a checkout url', true === $result['ok'] && str_contains( $result['checkout_url'], 'cks_1' ) );
@@ -370,6 +377,43 @@ check(
 	// Live would take real money from a real card during a half-finished setup.
 	'BELL: the mode defaults to test, not live',
 	str_starts_with( $session['url'], 'https://test.dodopayments.com' )
+);
+
+// ─── A checkout URL on the wrong host never reaches the browser ──────────────
+//
+// The URL comes back from the create-checkout call and is handed straight to a
+// navigation. A compromised or confused upstream answering with a non-Dodo
+// host would turn this plugin into an open redirect the moment somebody clicks
+// Buy, so the host is checked before the URL leaves the server.
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://evil.example/session/cks_1' ) );
+$offHost = wpdc_create_session( 'pdt_pro' );
+check(
+	'BELL: a checkout url on a non-Dodo host is refused, not opened',
+	false === $offHost['ok'] && 'bad_checkout_url' === $offHost['reason'] && false === $offHost['retriable']
+);
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'http://checkout.dodopayments.com/session/cks_1' ) );
+$plainHttp = wpdc_create_session( 'pdt_pro' );
+check(
+	// https only: this becomes a navigation, and a plain-http one is a downgrade
+	// somebody on the wire can read.
+	'BELL: a plain-http checkout url is refused even on the right host',
+	false === $plainHttp['ok'] && 'bad_checkout_url' === $plainHttp['reason']
+);
+
+configure();
+catalogue( array( 'pdt_pro' ) );
+respond( 200, array( 'checkout_url' => 'https://test.dodopayments.com/session/cks_1' ) );
+$subdomain = wpdc_create_session( 'pdt_pro' );
+check(
+	// test. and live. are Dodo subdomains and must still pass.
+	'SILENCE: a Dodo subdomain is accepted',
+	true === $subdomain['ok'] && str_contains( $subdomain['checkout_url'], 'cks_1' )
 );
 
 // ─── An id Dodo does not list is refused, and no session is created ──────────
@@ -448,11 +492,11 @@ check(
 
 configure();
 catalogue( array( 'pdt_pro' ) );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_2' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_2' ) );
 wpdc_create_session( 'pdt_pro' );
 $firstCount = count( $GLOBALS['wpdc_test_requests'] );
 
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_3' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_3' ) );
 wpdc_create_session( 'pdt_pro' );
 check(
 	'BELL: the second sale costs one call, not another catalogue read',
@@ -1265,7 +1309,7 @@ check(
 // en_US while the customer was reading German.
 configure();
 catalogue( array( 'pdt_pro' ) );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_l' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_l' ) );
 wpdc_create_session( 'pdt_pro', 1, null, 'de' );
 $withLang = json_decode( last_request()['args']['body'], true );
 check(
@@ -1277,7 +1321,7 @@ check(
 // inspected the request just made and did not -- and `isset()` on an undefined
 // variable is false, so `!isset(...)` was true no matter what: it passed even
 // with the variable removed entirely. Probed.
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_n' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_n' ) );
 wpdc_create_session( 'pdt_pro', 1, null, null );
 $withoutLang = json_decode( last_request()['args']['body'], true );
 check(
@@ -1690,7 +1734,7 @@ foreach ( array( 'de' => 'de', 'de-AT' => 'de', 'de_CH' => 'de', 'DE' => 'de',
 
 configure();
 catalogue( array( 'pdt_pro' ) );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_f' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_f' ) );
 wpdc_create_session( 'pdt_pro', 1, null, 'fr' );
 $french = json_decode( last_request()['args']['body'], true );
 check(
@@ -1779,7 +1823,7 @@ check(
 configure();
 catalogue( array( 'pdt_pro' ) );
 $GLOBALS['wpdc_test_filters']['wpdc_customer'] = array( 'email' => 'k@example.com', 'name' => ' Kim ' );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_c' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_c' ) );
 wpdc_create_session( 'pdt_pro' );
 $known = json_decode( last_request()['args']['body'], true );
 check(
@@ -1790,7 +1834,7 @@ check(
 configure();
 catalogue( array( 'pdt_pro' ) );
 $GLOBALS['wpdc_test_filters']['wpdc_customer'] = array( 'email' => 'not-an-address', 'name' => 'X' );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_d' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_d' ) );
 wpdc_create_session( 'pdt_pro' );
 $bad = json_decode( last_request()['args']['body'], true );
 check(
@@ -1965,7 +2009,7 @@ check(
 
 configure();
 catalogue( array( 'pdt_pro' ) );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_disc' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_disc' ) );
 wpdc_create_session( 'pdt_pro', 1, null, null, 'BENNY' );
 $withCode = json_decode( last_request()['args']['body'], true );
 check(
@@ -1975,7 +2019,7 @@ check(
 
 configure();
 catalogue( array( 'pdt_pro' ) );
-respond( 200, array( 'checkout_url' => 'https://checkout.example/session/cks_nodisc' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_nodisc' ) );
 wpdc_create_session( 'pdt_pro' );
 $noCode = json_decode( last_request()['args']['body'], true );
 check(
@@ -1996,7 +2040,7 @@ check(
 
 configure();
 catalogue( array( 'pdt_pro' ) );
-respond( 200, array( 'checkout_url' => 'https://x/session/cks_x' ) );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_x' ) );
 wpdc_create_session( 'pdt_pro', 1, null, null, 'not a code!!' );
 $bad = json_decode( last_request()['args']['body'], true );
 check(

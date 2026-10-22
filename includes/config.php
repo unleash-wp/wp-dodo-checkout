@@ -409,6 +409,28 @@ function wpdc_is_session_id( $value ): bool {
 }
 
 /**
+ * Is this a checkout URL safe to hand a browser -- https, and on Dodo?
+ *
+ * The URL comes back from the create-checkout call and is passed straight to
+ * `location.assign` and the SDK. `sslverify` and `redirection => 0` already make
+ * a man-in-the-middle unlikely, but this is the cheap last check: a URL that is
+ * not https or not a `dodopayments.com` host is not one this plugin opens,
+ * whatever the API answered. test. and live. are subdomains, so a suffix match
+ * covers both without naming either.
+ */
+function wpdc_is_checkout_url( $url ): bool {
+	if ( ! is_string( $url ) || ! str_starts_with( $url, 'https://' ) ) {
+		return false;
+	}
+	$host = wp_parse_url( $url, PHP_URL_HOST );
+	if ( ! is_string( $host ) || '' === $host ) {
+		return false;
+	}
+	$host = strtolower( $host );
+	return 'dodopayments.com' === $host || str_ends_with( $host, '.dodopayments.com' );
+}
+
+/**
  * Is this an error rather than a result?
  *
  * Every function in the client answers either a result or `wpdc_error()`, and
