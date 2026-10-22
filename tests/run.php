@@ -372,6 +372,17 @@ check(
 	false === $sent['feature_flags']['allow_phone_number_collection']
 );
 check(
+	// Contact, address and payment on one screen, so the pay button is in view
+	// at once rather than behind two next clicks.
+	'BELL: the checkout is one page, not a wizard',
+	true === $sent['feature_flags']['single_page']
+);
+check(
+	// Not read anywhere, and a wallet carries its own name.
+	'BELL: the cardholder name is not required',
+	false === $sent['feature_flags']['require_cardholder_name']
+);
+check(
 	'BELL: the api key travels in a header, never in the url or the body',
 	'Bearer sk_test_key' === $session['args']['headers']['authorization']
 		&& ! str_contains( $session['url'], 'sk_test_key' )

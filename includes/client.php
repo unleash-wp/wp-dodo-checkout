@@ -564,6 +564,17 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 			 * checkout.dodopayments.com that this shop never wrote.
 			 */
 			'redirect_immediately'          => true,
+
+			// One screen, not a wizard. The contact, address and payment steps
+			// collapse into a single page, so the pay button is in view at once
+			// instead of behind two "next" clicks. The fields that remain are
+			// the ones VAT and the receipt still need, nothing more.
+			'single_page'                   => true,
+
+			// The name on the card is not read anywhere here, and a wallet
+			// (Apple Pay, Google Pay) carries its own. One less field typed by
+			// hand between the decision to buy and the money.
+			'require_cardholder_name'       => false,
 		),
 	);
 
