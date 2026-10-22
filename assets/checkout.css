@@ -336,12 +336,24 @@
   font-family: Ubuntu, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   overflow-y: auto;
 }
+/* The brand mark is navy and yellow, drawn for white, so it sits on a light
+   plate to read on this dark panel. The plate hugs the logo (inline-flex), it
+   does not stretch the column. */
+.wpdc__logo-plate {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  background: #fff;
+  border-radius: 8px;
+  padding: 7px 11px;
+  margin: 0 0 1.1rem;
+  box-shadow: 0 1px 3px rgb(13 13 13 / .18);
+}
 .wpdc__logo {
   display: block;
   width: auto;
-  height: 28px;
+  height: 22px;
   max-width: 100%;
-  margin: 0 0 .5rem;
 }
 
 .wpdc__item {
@@ -847,23 +859,38 @@
 /* Quiet, at the foot: the panel scrolls as one, so margin-top: auto pins it to
    the bottom when the content is short and lets it follow the content when not. */
 .wpdc__legal {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
   margin: auto 0 0;
   padding-top: .5rem;
   font-size: 11px;
   line-height: 1.5;
   color: rgb(255 255 255 / .55);
 }
-.wpdc__legal a {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+/* The Dodo wordmark as the link. It is white and lime, so it reads on the
+   navy as is, no plate. Dimmed a touch to sit as a footnote, full strength on
+   hover and focus. */
+.wpdc__legal-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
-.wpdc__legal a:hover {
-  color: var(--wpdc-panel-fg);
+.wpdc__legal-mark {
+  display: block;
+  height: 16px;
+  width: auto;
+  opacity: .7;
 }
-.wpdc__legal a:focus-visible {
+.wpdc__legal-link:hover .wpdc__legal-mark,
+.wpdc__legal-link:focus-visible .wpdc__legal-mark {
+  opacity: 1;
+}
+.wpdc__legal-link:focus-visible {
   outline: 2px solid var(--wpdc-panel-accent);
   outline-offset: 2px;
+  border-radius: 3px;
 }
 
 /* ── Dodo's frame, and the wait before it ────────────────────────────────── */
@@ -1005,7 +1032,7 @@
   }
   /* The strip has room for the cover, name and total and nothing else; Dodo's
      frame names the processor itself. */
-  .wpdc__logo,
+  .wpdc__logo-plate,
   .wpdc__legal {
     display: none;
   }

@@ -349,14 +349,17 @@ function wpdc_render( $atts ): string {
 			<div class="wpdc__scroll">
 			<aside class="wpdc__panel">
 				<?php
-				// The wordmark is white, made for this navy. Only rendered when the
-				// file shipped, so a missing asset leaves no broken-image box and
-				// no alt text standing where a logo should be.
+				// The mark is navy and yellow, drawn for a white background, so on
+				// this dark panel it sits on a light plate to stay legible. Only
+				// rendered when the file shipped, so a missing asset leaves no
+				// broken-image box and no alt text standing where a logo should be.
 				if ( file_exists( WPDC_DIR . 'assets/brand-logo.svg' ) ) :
 					?>
-					<img class="wpdc__logo"
-						src="<?php echo esc_url( plugins_url( 'assets/brand-logo.svg', WPDC_DIR . 'wp-dodo-checkout.php' ) ); ?>"
-						alt="UnleashWP" width="136" height="28" decoding="async">
+					<span class="wpdc__logo-plate">
+						<img class="wpdc__logo"
+							src="<?php echo esc_url( plugins_url( 'assets/brand-logo.svg', WPDC_DIR . 'wp-dodo-checkout.php' ) ); ?>"
+							alt="UnleashWP" width="99" height="22" decoding="async">
+					</span>
 				<?php endif; ?>
 
 				<?php wpdc_render_item( $atts['product'] ); ?>
@@ -412,10 +415,16 @@ function wpdc_render( $atts ): string {
 				?>
 				<p class="wpdc__legal">
 					<?php
+					// The Dodo wordmark itself, small, as the link: we do not sell
+					// this, Dodo does, so their name carries the line. Falls back to
+					// the plain words when the logo file is not shipped.
+					$dodo_mark = file_exists( WPDC_DIR . 'assets/dodo-logo.svg' )
+						? '<img class="wpdc__legal-mark" src="' . esc_url( plugins_url( 'assets/dodo-logo.svg', WPDC_DIR . 'wp-dodo-checkout.php' ) ) . '" alt="Dodo Payments" width="90" height="18" decoding="async">'
+						: esc_html__( 'Dodo Payments', 'wp-dodo-checkout' );
 					printf(
-						/* translators: %s: link to Dodo Payments */
+						/* translators: %s: the Dodo Payments wordmark, linking to dodopayments.com */
 						esc_html__( 'Payment processed by %s', 'wp-dodo-checkout' ),
-						'<a href="' . esc_url( 'https://dodopayments.com' ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Dodo Payments', 'wp-dodo-checkout' ) . '</a>'
+						'<a class="wpdc__legal-link" href="' . esc_url( 'https://dodopayments.com' ) . '" target="_blank" rel="noopener noreferrer">' . $dodo_mark . '</a>'
 					);
 					?>
 				</p>
