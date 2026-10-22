@@ -348,6 +348,17 @@ function wpdc_render( $atts ): string {
 			?>
 			<div class="wpdc__scroll">
 			<aside class="wpdc__panel">
+				<?php
+				// The wordmark is white, made for this navy. Only rendered when the
+				// file shipped, so a missing asset leaves no broken-image box and
+				// no alt text standing where a logo should be.
+				if ( file_exists( WPDC_DIR . 'assets/brand-logo.svg' ) ) :
+					?>
+					<img class="wpdc__logo"
+						src="<?php echo esc_url( plugins_url( 'assets/brand-logo.svg', WPDC_DIR . 'wp-dodo-checkout.php' ) ); ?>"
+						alt="UnleashWP" width="136" height="28" decoding="async">
+				<?php endif; ?>
+
 				<?php wpdc_render_item( $atts['product'] ); ?>
 
 				<?php
@@ -393,6 +404,21 @@ function wpdc_render( $atts ): string {
 						<dt><?php echo esc_html__( 'Total', 'wp-dodo-checkout' ); ?></dt><dd></dd>
 					</div>
 				</dl>
+
+				<?php
+				// Who takes the money, said plainly. The frame is Dodo's, and a
+				// customer who sees a payment form from a name they do not know
+				// should find it named here.
+				?>
+				<p class="wpdc__legal">
+					<?php
+					printf(
+						/* translators: %s: link to Dodo Payments */
+						esc_html__( 'Payment processed by %s', 'wp-dodo-checkout' ),
+						'<a href="' . esc_url( 'https://dodopayments.com' ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Dodo Payments', 'wp-dodo-checkout' ) . '</a>'
+					);
+					?>
+				</p>
 
 			</aside>
 
