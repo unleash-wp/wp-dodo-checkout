@@ -2569,6 +2569,22 @@ check(
 	'BELL: an upstream failure is reported as "not yet", never as finished',
 	200 === $broken->get_status() && false === $broken->get_data()['finished']
 );
+check(
+	// Audit 2026-10-23: a finished answer carries download links and keys.
+	'BELL: every status answer is private, no-store',
+	( static function () use ( $open, $broken ): bool {
+		$unknown = wpdc_rest_status( new WP_REST_Request( array( 'session' => 'cks_nevermintedcache000000' ) ) );
+		$GLOBALS['wpdc_test_options'] = array();
+		$off = wpdc_rest_status( new WP_REST_Request( array( 'session' => 'cks_nevermintedcache000000' ) ) );
+		configure();
+		foreach ( array( $open, $broken, $unknown, $off ) as $r ) {
+			if ( 'private, no-store' !== ( $r->headers['cache-control'] ?? '' ) ) {
+				return false;
+			}
+		}
+		return true;
+	} )()
+);
 
 $GLOBALS['wpdc_test_transients'] = array();
 $GLOBALS['wpdc_test_requests']   = array();
@@ -3452,7 +3468,10 @@ check(
 	// One price cached at the edge and handed to the next country is the exact
 	// mismatch this feature exists to remove.
 	'BELL: a per-visitor price is never cached anywhere',
-	2 === substr_count( $rest, "header( 'cache-control', 'private, no-store' )" )
+	2 === substr_count(
+		(string) strstr( (string) strstr( $rest, 'function wpdc_rest_price(' ), 'function wpdc_rest_status(', true ),
+		"header( 'cache-control', 'private, no-store' )"
+	)
 );
 check(
 	// The shortcode renders the BASE price and the script replaces it. A

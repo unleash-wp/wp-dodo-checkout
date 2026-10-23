@@ -360,6 +360,13 @@ function wpdc_rest_price( WP_REST_Request $request ): WP_REST_Response {
  * The API key is spent per call, so the ceiling below is not optional.
  */
 function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
+	// A finished answer carries download links and a licence key: no shared cache keeps it.
+	$response = wpdc_rest_status_answer( $request );
+	$response->header( 'cache-control', 'private, no-store' );
+	return $response;
+}
+
+function wpdc_rest_status_answer( WP_REST_Request $request ): WP_REST_Response {
 	if ( ! wpdc_is_configured() ) {
 		return new WP_REST_Response( array( 'finished' => false ), 200 );
 	}
