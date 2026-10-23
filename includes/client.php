@@ -465,7 +465,7 @@ function wpdc_price_for_country( string $product, string $country ) {
  * @param int         $quantity How many.
  * @param string|null $bump     Optional second product id, one copy.
  */
-function wpdc_create_session( string $product, int $quantity = 1, ?string $bump = null, ?string $lang = null, ?string $discount = null ): array {
+function wpdc_create_session( string $product, int $quantity = 1, ?string $bump = null, ?string $lang = null, ?string $discount = null, ?array $prefill = null ): array {
 	if ( ! wpdc_is_configured() ) {
 		return wpdc_error(
 			'not_configured',
@@ -647,12 +647,17 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	 *       'name'  => $session->name,
 	 *   ) );
 	 */
-	$customer = apply_filters( 'wpdc_customer', null );
+	// The browser's prefill from the UnleashWP account is only the starting value:
+	// a site that answers this filter itself still decides.
+	$customer = apply_filters( 'wpdc_customer', $prefill );
 	if ( is_array( $customer ) && is_string( $customer['email'] ?? null ) && is_email( $customer['email'] ) ) {
 		$body['customer'] = array( 'email' => $customer['email'] );
 		if ( is_string( $customer['name'] ?? null ) && '' !== trim( $customer['name'] ) ) {
 			$body['customer']['name'] = trim( $customer['name'] );
 		}
+		// Prefilled, never locked: somebody buying for a colleague changes the address.
+		$body['feature_flags']['allow_customer_editing_email'] = true;
+		$body['feature_flags']['allow_customer_editing_name']  = true;
 	}
 
 	/**

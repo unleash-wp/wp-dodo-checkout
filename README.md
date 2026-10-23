@@ -136,6 +136,13 @@ define( 'WPDC_ACCOUNT_URL', 'https://account.unleash-wp.com' ); // optional, htt
 Without the secret, or when anything on the way fails, the modal opens at the
 email field instead. The order is never affected.
 
+**In the checkout.** A visitor already signed in to the account gets Dodo's
+form prefilled with their address and name, both still editable. Asked once,
+when the buy button is first touched, and never waited on for more than 0.8 s.
+Anybody else sees "Already a customer? Sign in" in the panel; signing in there
+re-opens the checkout prefilled. A site answering `wpdc_customer` itself still
+decides.
+
 **In the header.** `[wpdc_account]` prints a person icon named "My account"
 ("Mein Konto") that opens the modal. `label="Konto"` adds visible text,
 `size="20"` sets the icon (12 to 48 px). It takes the colour of the header.

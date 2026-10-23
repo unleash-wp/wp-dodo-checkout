@@ -207,6 +207,24 @@
     if (el) el.textContent = text;
   }
 
+  // Who is signed in to the UnleashWP account, asked once: it prefills Dodo's form.
+  var whoAsked = null;
+  function who() {
+    var login = window.wpdcAccountLogin;
+    if (!login || !login.account) return Promise.resolve(null);
+    if (!whoAsked) {
+      whoAsked = fetch(login.account + '/api/sso/session', { credentials: 'include' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; });
+    }
+    return whoAsked;
+  }
+
+  // Never more than a moment: a slow account must not slow down a purchase.
+  function whoSoon() {
+    return Promise.race([who(), new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 800); })]);
+  }
+
   function requestUrl(root) {
     var bump = part(root, '.wpdc__bump-input');
     var body = {
@@ -232,32 +250,38 @@
     // settled on Dodo's page, where a browser cannot reach it.
     if (bump && bump.checked) body.bump = bump.value;
 
-    return fetch(cfg.endpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      // No nonce, and no cookie. A stale nonce made WordPress core answer 403
-      // before either route ran -- it killed the buy button and the poll that
-      // confirms a payment. With no nonce header core sets user 0 and the
-      // request proceeds, which is what a public route wants. See rest.php.
-      credentials: 'omit',
-      body: JSON.stringify(body),
-    }).then(function (res) {
-      return res.json().then(function (data) {
-        if (res.ok && data.url) {
-          // Kept so this checkout can be asked about later. Written on the
-          // root rather than closed over, because a re-mint replaces it.
-          if (data.session) root.dataset.session = data.session;
-          return data.url;
-        }
-        // The server's sentence when it sent one; it is written for a
-        // visitor. The generic line only when there was none.
-        // Only a sentence the SERVER wrote. A parse failure or a browser
-        // network error carries text nobody wrote for a customer, and
-        // client.php takes care never to pass one on -- this is the other
-        // end of the same rule.
-        const err = new Error(typeof data?.message === 'string' ? data.message : cfg.failed);
-        err.wpdcFromServer = typeof data?.message === 'string';
-        throw err;
+    return whoSoon().then(function (me) {
+      if (me && me.signedIn && me.email) {
+        body.email = me.email;
+        if (me.name) body.name = me.name;
+      }
+      return fetch(cfg.endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        // No nonce, and no cookie. A stale nonce made WordPress core answer 403
+        // before either route ran -- it killed the buy button and the poll that
+        // confirms a payment. With no nonce header core sets user 0 and the
+        // request proceeds, which is what a public route wants. See rest.php.
+        credentials: 'omit',
+        body: JSON.stringify(body),
+      }).then(function (res) {
+        return res.json().then(function (data) {
+          if (res.ok && data.url) {
+            // Kept so this checkout can be asked about later. Written on the
+            // root rather than closed over, because a re-mint replaces it.
+            if (data.session) root.dataset.session = data.session;
+            return data.url;
+          }
+          // The server's sentence when it sent one; it is written for a
+          // visitor. The generic line only when there was none.
+          // Only a sentence the SERVER wrote. A parse failure or a browser
+          // network error carries text nobody wrote for a customer, and
+          // client.php takes care never to pass one on -- this is the other
+          // end of the same rule.
+          const err = new Error(typeof data?.message === 'string' ? data.message : cfg.failed);
+          err.wpdcFromServer = typeof data?.message === 'string';
+          throw err;
+        });
       });
     });
   }
@@ -342,7 +366,10 @@
       type,
       function (event) {
         var t = event.target;
-        if (t && t.closest && t.closest('[data-wpdc-open], .wpdc__button')) warmSdk();
+        if (t && t.closest && t.closest('[data-wpdc-open], .wpdc__button')) {
+          warmSdk();
+          who();
+        }
       },
       { passive: true, capture: true },
     );
@@ -1343,7 +1370,17 @@
     });
   }
 
+  // Offered only to somebody the account does not know yet.
+  function offerSignin(root) {
+    var signin = part(root, '.wpdc__signin');
+    if (!signin) return;
+    who().then(function (me) {
+      signin.hidden = !window.wpdcAccountLogin || !!(me && me.signedIn);
+    });
+  }
+
   function open(root, url) {
+    offerSignin(root);
     if (openFrame(root, url)) return;
 
     // The SDK is not on the page yet -- it is loaded on demand now, so a click
@@ -1422,6 +1459,24 @@
       .then(function (r) { return r.json(); })
       .then(function (d) { show(d && d.sent && typeof d.email === 'string' ? d.email : ''); })
       .catch(function () { show(''); });
+  });
+
+  // "Already a customer? Sign in": the modal signs in, then this checkout is
+  // minted again with the account's address and name filled in.
+  document.addEventListener('click', function (event) {
+    var btn = event.target.closest && event.target.closest('[data-wpdc-signin]');
+    var login = window.wpdcAccountLogin;
+    if (!btn || !login || !login.show) return;
+    var root = btn.closest('.wp-dodo-checkout');
+    if (!root) return;
+    login.show(btn, { onDone: function () {
+      whoAsked = null;
+      var signin = part(root, '.wpdc__signin');
+      if (signin) signin.hidden = true;
+      var note = part(root, '.wpdc__discount-note');
+      var controls = [part(root, '.wpdc__discount-input'), part(root, '.wpdc__discount-apply')];
+      if (note) remintWith(root, root.dataset.discount || '', note, controls).catch(function () { say(root, cfg.failed); });
+    } });
   });
 
   document.addEventListener('close', function (event) {
