@@ -51,10 +51,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 function wpdc_register_rest(): void {
 	register_rest_route(
 		'wp-dodo-checkout/v1',
-		'/handoff',
+		'/account-code',
 		array(
 			'methods'             => 'POST',
-			'callback'            => 'wpdc_rest_handoff',
+			'callback'            => 'wpdc_rest_account_code',
 			'permission_callback' => '__return_true',
 			'args'                => array(
 				'session' => array(

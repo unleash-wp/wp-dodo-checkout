@@ -3599,125 +3599,121 @@ check(
 		&& 1 === preg_match( '/\.wpdc__legal-mark\s*\{[^}]*height:\s*28px/', $css )
 );
 
-// ─── Handoff into the account ────────────────────────────────────────────────
+// ─── A sign-in code to the paying address ────────────────────────────────────
 
-$routes = $GLOBALS['wpdc_test_routes'];
 wpdc_register_rest();
 $routes = $GLOBALS['wpdc_test_routes'];
 check(
-	'BELL: the handoff route is POST and validates the session id',
-	'POST' === ( $routes['wp-dodo-checkout/v1/handoff']['methods'] ?? '' )
-		&& 'wpdc_is_session_id' === ( $routes['wp-dodo-checkout/v1/handoff']['args']['session']['validate_callback'] ?? '' )
+	'BELL: the account-code route is POST and validates the session id',
+	'POST' === ( $routes['wp-dodo-checkout/v1/account-code']['methods'] ?? '' )
+		&& 'wpdc_is_session_id' === ( $routes['wp-dodo-checkout/v1/account-code']['args']['session']['validate_callback'] ?? '' )
 );
 
-$handoff_session = 'cks_handoffabcdefghijklmno';
-$downloads       = 'https://account.unleash-wp.com/downloads';
+$code_session = 'cks_handoffabcdefghijklmno';
 
 configure();
-wpdc_remember_session( $handoff_session );
+wpdc_remember_session( $code_session );
 check(
-	'BELL: without a shared secret the handoff asks nobody and opens Downloads',
-	$downloads === wpdc_account_handoff( $handoff_session ) && array() === $GLOBALS['wpdc_test_requests']
+	'BELL: without a shared secret nobody is asked and the modal asks for the address',
+	'' === wpdc_account_code( $code_session, 'de' ) && array() === $GLOBALS['wpdc_test_requests']
 );
 
 define( 'WPDC_ACCOUNT_SECRET', 'test-checkout-secret' );
-$ticket = str_repeat( 'A', 43 );
-$minted = 'https://account.unleash-wp.com/api/auth/handoff/redeem?t=' . $ticket;
 
 /** A paid checkout followed by the account's answer. */
-function handoff_scripted( string $session, int $status, array $answer, string $paid = 'succeeded' ): string {
+function code_scripted( string $session, int $status, array $answer, string $paid = 'succeeded' ): string {
 	configure();
 	wpdc_remember_session( $session );
-	respond( 200, array( 'payment_status' => $paid, 'payment_id' => 'pay_0Test123', 'customer' => array( 'email' => 'buyer@example.com' ) ) );
+	respond( 200, array( 'payment_status' => $paid, 'payment_id' => 'pay_0Test123', 'customer' => array( 'email' => 'typed@example.com' ) ) );
 	respond( $status, $answer );
-	return wpdc_account_handoff( $session );
+	return wpdc_account_code( $session, 'de' );
 }
 
 check(
-	'BELL: an unknown session is sent to Downloads without spending a call',
-	( function () use ( $downloads ): bool {
+	'BELL: an unknown session spends no call',
+	( function (): bool {
 		configure();
-		return $downloads === wpdc_account_handoff( 'cks_neverminted0000000000' ) && array() === $GLOBALS['wpdc_test_requests'];
+		return '' === wpdc_account_code( 'cks_neverminted0000000000', 'de' ) && array() === $GLOBALS['wpdc_test_requests'];
 	} )()
 );
 
 check(
-	'BELL: a paid checkout comes back as the account redeem link',
-	$minted === handoff_scripted( $handoff_session, 200, array( 'url' => $minted ) )
+	'BELL: a paid checkout comes back as the address the account mailed',
+	'buyer@example.com' === code_scripted( $code_session, 200, array( 'email' => 'Buyer@Example.com' ) )
 );
 
-$mint_call = $GLOBALS['wpdc_test_requests'][1] ?? array();
+$code_call = $GLOBALS['wpdc_test_requests'][1] ?? array();
 check(
-	'BELL: the account is asked with the secret, the payment id only, no redirects, TLS verified',
-	'https://account.unleash-wp.com/api/handoff/mint' === ( $mint_call['url'] ?? '' )
-		&& 'Bearer test-checkout-secret' === ( $mint_call['args']['headers']['authorization'] ?? '' )
-		&& '{"payment_id":"pay_0Test123"}' === ( $mint_call['args']['body'] ?? '' )
-		&& 0 === ( $mint_call['args']['redirection'] ?? null )
-		&& true === ( $mint_call['args']['sslverify'] ?? null )
+	'BELL: the account is asked with the secret and the payment id, never an address from here',
+	'https://account.unleash-wp.com/api/handoff/code' === ( $code_call['url'] ?? '' )
+		&& 'Bearer test-checkout-secret' === ( $code_call['args']['headers']['authorization'] ?? '' )
+		&& '{"payment_id":"pay_0Test123","lang":"de"}' === ( $code_call['args']['body'] ?? '' )
+		&& 0 === ( $code_call['args']['redirection'] ?? null )
+		&& true === ( $code_call['args']['sslverify'] ?? null )
 );
 
 check(
 	'BELL: a checkout that has not succeeded never asks the account',
-	$downloads === handoff_scripted( $handoff_session, 200, array( 'url' => $minted ), 'processing' )
+	'' === code_scripted( $code_session, 200, array( 'email' => 'buyer@example.com' ), 'processing' )
 		&& 1 === count( $GLOBALS['wpdc_test_requests'] )
 );
 
 check(
-	'BELL: an account answer pointing anywhere else is refused',
-	$downloads === handoff_scripted( $handoff_session, 200, array( 'url' => 'https://evil.example/api/auth/handoff/redeem?t=' . $ticket ) )
-		&& $downloads === handoff_scripted( $handoff_session, 200, array( 'url' => $minted . '&next=https://evil.example' ) )
-		// Same length as the real prefix, so only the prefix check can catch it.
-		&& $downloads === handoff_scripted( $handoff_session, 200, array( 'url' => str_pad( 'https://evil.example/', strlen( $minted ) - 43, 'x' ) . $ticket ) )
+	'BELL: an answer that is not an address is dropped',
+	'' === code_scripted( $code_session, 200, array( 'email' => 'not an address' ) )
+		&& '' === code_scripted( $code_session, 200, array( 'url' => 'https://evil.example' ) )
 );
 
 foreach ( array( 401, 409, 429, 503 ) as $refusal ) {
 	check(
-		"BELL: account $refusal still leaves the buyer a way in",
-		$downloads === handoff_scripted( $handoff_session, $refusal, array( 'error' => 'x' ) )
+		"BELL: account $refusal leaves the modal asking for the address",
+		'' === code_scripted( $code_session, $refusal, array( 'error' => 'x' ) )
 	);
 }
 
 check(
-	'BELL: a third handoff for one checkout does not reach the account',
-	( function () use ( $handoff_session, $minted, $downloads ): bool {
-		handoff_scripted( $handoff_session, 200, array( 'url' => $minted ) );
-		$GLOBALS['wpdc_test_requests'] = array();
+	'BELL: a third code for one checkout does not reach the account',
+	( function () use ( $code_session ): bool {
+		code_scripted( $code_session, 200, array( 'email' => 'buyer@example.com' ) );
 		respond( 200, array( 'payment_status' => 'succeeded', 'payment_id' => 'pay_0Test123' ) );
-		respond( 200, array( 'url' => $minted ) );
-		wpdc_account_handoff( $handoff_session );
+		respond( 200, array( 'email' => 'buyer@example.com' ) );
+		wpdc_account_code( $code_session, 'de' );
 		$GLOBALS['wpdc_test_requests'] = array();
-		return $downloads === wpdc_account_handoff( $handoff_session ) && array() === $GLOBALS['wpdc_test_requests'];
+		return '' === wpdc_account_code( $code_session, 'de' ) && array() === $GLOBALS['wpdc_test_requests'];
 	} )()
 );
 
 check(
-	'BELL: the handoff answer carries the url and nothing about the buyer',
-	( function () use ( $handoff_session, $minted ): bool {
+	'BELL: the route answers with the address and nothing about the payment',
+	( function () use ( $code_session ): bool {
 		configure();
-		wpdc_remember_session( $handoff_session );
-		respond( 200, array( 'payment_status' => 'succeeded', 'payment_id' => 'pay_0Test123', 'customer' => array( 'email' => 'buyer@example.com' ) ) );
-		respond( 200, array( 'url' => $minted ) );
-		$r = wpdc_rest_handoff( new WP_REST_Request( array( 'session' => $handoff_session ) ) );
-		$json = json_encode( $r->get_data() );
-		return array( 'url' => $minted ) === $r->get_data() && ! str_contains( $json, 'buyer@' ) && ! str_contains( $json, 'pay_' )
+		wpdc_remember_session( $code_session );
+		respond( 200, array( 'payment_status' => 'succeeded', 'payment_id' => 'pay_0Test123' ) );
+		respond( 200, array( 'email' => 'buyer@example.com' ) );
+		$r = wpdc_rest_account_code( new WP_REST_Request( array( 'session' => $code_session ) ) );
+		return array( 'sent' => true, 'email' => 'buyer@example.com' ) === $r->get_data()
+			&& ! str_contains( (string) json_encode( $r->get_data() ), 'pay_' )
 			&& 'private, no-store' === ( $r->headers['cache-control'] ?? '' );
 	} )()
 );
 
 check(
-	'BELL: the completed panel offers the account, one click, and says how it signs in',
+	'BELL: the completed panel offers the account and says how it signs in',
 	str_contains( $shortcode, 'class="wpdc__account" data-wpdc-account' )
 		&& str_contains( $shortcode, "'Open my account'" )
-		&& str_contains( $shortcode, "'Downloads, keys and invoices. Signed in with your purchase email, no password.'" )
-		&& str_contains( $shortcode, "'handoff'  => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/handoff' ) )" )
+		&& str_contains( $shortcode, "'Downloads, keys and invoices. We send a sign-in code to your purchase email, no password.'" )
+		&& str_contains( $shortcode, "'accountCode' => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/account-code' ) )" )
 		&& str_contains( $shortcode, "'account'  => wpdc_account_downloads_url()" )
 );
 check(
-	'BELL: the account tab is opened inside the click and loses its opener',
+	'BELL: the account button opens the sign-in modal at the code, and still works without it',
 	( function () use ( $root ): bool {
 		$js = (string) file_get_contents( $root . '/assets/checkout.js' );
-		return str_contains( $js, "window.open('', '_blank')" ) && str_contains( $js, 'tab.opener = null' )
-			&& str_contains( $js, 'cfg.handoff' ) && str_contains( $js, "credentials: 'omit'" );
+		$modal = (string) file_get_contents( $root . '/assets/account-login.js' );
+		return str_contains( $js, 'cfg.accountCode' ) && str_contains( $js, "credentials: 'omit'" )
+			&& str_contains( $js, 'login.show(btn, email ? { email: email } : null)' )
+			&& str_contains( $js, "window.open(cfg.account, '_blank', 'noopener')" )
+			&& str_contains( $modal, "opts && opts.email" ) && str_contains( $modal, "c.s.sentTo.replace('%s', email)" );
 	} )()
 );
 
@@ -3760,7 +3756,8 @@ check(
 			&& str_contains( $js, "credentials: 'include'" )
 			&& str_contains( $js, "autocomplete: 'one-time-code'" )
 			&& str_contains( $js, "inputmode: 'numeric'" )
-			&& 1 === substr_count( $js, "step('code')" );
+			// Two ways to the code step: after this modal sent one, or after the account mailed one for a purchase.
+			&& 2 === substr_count( $js, "step('code')" );
 	} )()
 );
 check(

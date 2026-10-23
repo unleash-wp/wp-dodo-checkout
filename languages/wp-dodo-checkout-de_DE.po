@@ -193,8 +193,8 @@ msgstr "Dodo Payments"
 msgid "Open my account"
 msgstr "Zu meinem Konto"
 
-msgid "Downloads, keys and invoices. Signed in with your purchase email, no password."
-msgstr "Downloads, Schlüssel und Rechnungen. Angemeldet mit deiner Kauf-E-Mail, ohne Passwort."
+msgid "Downloads, keys and invoices. We send a sign-in code to your purchase email, no password."
+msgstr "Downloads, Schlüssel und Rechnungen. Wir schicken einen Anmeldecode an deine Kauf-E-Mail, ohne Passwort."
 
 msgid "Sign in to UnleashWP"
 msgstr "Bei UnleashWP anmelden"
@@ -256,3 +256,7 @@ msgstr "Meine Downloads öffnen"
 
 msgid "Close"
 msgstr "Schließen"
+
+#, php-format
+msgid "We sent a code to %s. It lasts ten minutes and works once."
+msgstr "Wir haben einen Code an %s geschickt. Er ist zehn Minuten gültig und nur einmal verwendbar."

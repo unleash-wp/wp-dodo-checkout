@@ -120,20 +120,21 @@ Archiving in Dodo is also the off switch: nothing on the site needs changing.
 
 ## Into the account
 
-**After a purchase.** The completed panel shows "Open my account". One click
-opens a new tab that is already signed in on `account.unleash-wp.com/downloads`:
-this site turns the browser's session id into the Dodo payment id, and the
-account checks that payment with Dodo itself (succeeded, at most an hour old,
-two tickets per payment, each valid once for sixty seconds) before it signs the
-buyer in. No email ever passes through this site or the browser for it.
+**After a purchase.** The completed panel shows "Open my account". This site
+turns the browser's session id into the Dodo payment id; the account checks
+that payment with Dodo itself (succeeded, at most an hour old, two codes per
+payment) and mails the normal sign-in code to the address that paid. The modal
+opens at the code with that address filled in. A purchase alone never opens an
+account: Dodo does not verify the address a buyer types, the code proves the
+inbox.
 
 ```php
 define( 'WPDC_ACCOUNT_SECRET', '...' ); // same value as UWP_CHECKOUT_SECRET on the account
 define( 'WPDC_ACCOUNT_URL', 'https://account.unleash-wp.com' ); // optional, https only
 ```
 
-Without the secret, or when anything on the way fails, the button opens the
-account's Downloads page, which asks for a sign-in. The order is never affected.
+Without the secret, or when anything on the way fails, the modal opens at the
+email field instead. The order is never affected.
 
 **Anywhere else.** Every link to the account (for the Impreza header icon:
 link it to `https://account.unleash-wp.com/downloads`) and any element with

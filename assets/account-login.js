@@ -167,10 +167,20 @@
     document.body.appendChild(dialog);
   }
 
-  window.wpdcAccountLogin.open = function (from) {
+  window.wpdcAccountLogin.open = function (from, opts) {
     opener = from || null;
     if (!dialog) build();
     dialog.showModal();
-    step(c.signedIn ? 'done' : 'email');
+    if (c.signedIn) { step('done'); return; }
+    // After a purchase the account has already mailed the code to the paying address.
+    if (opts && opts.email) {
+      email = opts.email;
+      dialog.querySelector('#uwp-login-email').value = email;
+      dialog.querySelector('.uwp-login__sent').textContent = c.s.sentTo.replace('%s', email);
+      resendAt = Date.now() + 30000;
+      step('code');
+      return;
+    }
+    step('email');
   };
 })();

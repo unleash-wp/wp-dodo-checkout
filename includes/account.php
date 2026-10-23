@@ -3,8 +3,9 @@
  * The way from a finished checkout into the UnleashWP account.
  *
  * The browser only ever holds its own session id. This file turns it into a
- * payment id on the server and asks the account for a one-click sign-in; the
- * account checks that payment with Dodo itself and never takes an email from us.
+ * payment id on the server and asks the account to mail a sign-in code to the
+ * address that paid. The code proves the inbox: Dodo does not verify the
+ * address a buyer types, so a purchase alone must never open an account.
  */
 
 declare(strict_types=1);
@@ -13,8 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const WPDC_ACCOUNT_DEFAULT  = 'https://account.unleash-wp.com';
-const WPDC_HANDOFF_PER_SALE = 2;
+const WPDC_ACCOUNT_DEFAULT    = 'https://account.unleash-wp.com';
+const WPDC_ACCOUNT_CODES_SALE = 2;
 
 function wpdc_account_url(): string {
 	if ( defined( 'WPDC_ACCOUNT_URL' ) && is_string( WPDC_ACCOUNT_URL ) ) {
@@ -26,7 +27,7 @@ function wpdc_account_url(): string {
 	return WPDC_ACCOUNT_DEFAULT;
 }
 
-/** Where a customer goes when the one-click way is not available: the account signs them in there. */
+/** Where a customer goes when there is no modal: the account signs them in there. */
 function wpdc_account_downloads_url(): string {
 	return wpdc_account_url() . '/downloads';
 }
@@ -36,38 +37,37 @@ function wpdc_account_secret(): string {
 }
 
 /**
- * The address to open for this checkout: a one-click sign-in when every check
- * passes, the plain Downloads page otherwise. Never an error, because the order
- * is done either way and the customer still needs a way in.
+ * Ask the account to mail a sign-in code to the address that paid for this
+ * checkout. Returns that address, which the browser holding the session may
+ * see like it sees the licence key, or '' when the modal should ask for it.
  */
-function wpdc_account_handoff( string $session ): string {
-	$fallback = wpdc_account_downloads_url();
-	$secret   = wpdc_account_secret();
+function wpdc_account_code( string $session, string $lang ): string {
+	$secret = wpdc_account_secret();
 	if ( '' === $secret || ! wpdc_is_session_id( $session ) || ! wpdc_session_known( $session ) ) {
-		return $fallback;
+		return '';
 	}
 
-	$bucket = 'wpdc_handoff_' . md5( $session );
+	$bucket = 'wpdc_account_code_' . md5( $session );
 	$spent  = (int) get_transient( $bucket );
-	if ( $spent >= WPDC_HANDOFF_PER_SALE ) {
-		return $fallback;
+	if ( $spent >= WPDC_ACCOUNT_CODES_SALE ) {
+		return '';
 	}
 	set_transient( $bucket, $spent + 1, HOUR_IN_SECONDS );
 
 	$checkout = wpdc_dodo_request( 'GET', '/checkouts/' . rawurlencode( $session ), null );
 	if ( wpdc_is_error( $checkout ) || 'succeeded' !== ( $checkout['payment_status'] ?? '' ) ) {
-		return $fallback;
+		return '';
 	}
 	$payment = $checkout['payment_id'] ?? '';
 	if ( ! is_string( $payment ) || 1 !== preg_match( '/^pay_[A-Za-z0-9]+$/', $payment ) ) {
-		return $fallback;
+		return '';
 	}
 
 	$response = wp_remote_request(
-		wpdc_account_url() . '/api/handoff/mint',
+		wpdc_account_url() . '/api/handoff/code',
 		array(
 			'method'      => 'POST',
-			'timeout'     => 5,
+			'timeout'     => 8,
 			'redirection' => 0,
 			'sslverify'   => true,
 			'headers'     => array(
@@ -75,25 +75,26 @@ function wpdc_account_handoff( string $session ): string {
 				'content-type'  => 'application/json',
 				'accept'        => 'application/json',
 			),
-			'body'        => wp_json_encode( array( 'payment_id' => $payment ) ),
+			'body'        => wp_json_encode(
+				array(
+					'payment_id' => $payment,
+					'lang'       => 'de' === $lang ? 'de' : 'en',
+				)
+			),
 		)
 	);
 	if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
-		return $fallback;
+		return '';
 	}
 
-	$body = json_decode( (string) wp_remote_retrieve_body( $response ), true );
-	$url  = is_array( $body ) && is_string( $body['url'] ?? null ) ? $body['url'] : '';
-
-	// Checked rather than trusted: whatever this says becomes the page a buyer lands on.
-	$prefix = wpdc_account_url() . '/api/auth/handoff/redeem?t=';
-	return str_starts_with( $url, $prefix ) && 1 === preg_match( '/^[A-Za-z0-9_-]{43}$/', substr( $url, strlen( $prefix ) ) )
-		? $url
-		: $fallback;
+	$body  = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+	$email = is_array( $body ) && is_string( $body['email'] ?? null ) ? strtolower( trim( $body['email'] ) ) : '';
+	return is_email( $email ) ? $email : '';
 }
 
-function wpdc_rest_handoff( WP_REST_Request $request ): WP_REST_Response {
-	$response = new WP_REST_Response( array( 'url' => wpdc_account_handoff( (string) $request->get_param( 'session' ) ) ), 200 );
+function wpdc_rest_account_code( WP_REST_Request $request ): WP_REST_Response {
+	$email = wpdc_account_code( (string) $request->get_param( 'session' ), wpdc_page_language() );
+	$response = new WP_REST_Response( '' === $email ? array( 'sent' => false ) : array( 'sent' => true, 'email' => $email ), 200 );
 	$response->header( 'cache-control', 'private, no-store' );
 	return $response;
 }
@@ -119,6 +120,8 @@ function wpdc_account_login_config(): array {
 			'send'        => __( 'Send code', 'wp-dodo-checkout' ),
 			'sending'     => __( 'Sending…', 'wp-dodo-checkout' ),
 			'sent'        => __( 'If that address can sign in, a code is on its way. It lasts ten minutes and works once.', 'wp-dodo-checkout' ),
+			/* translators: %s: the purchase email address */
+			'sentTo'      => __( 'We sent a code to %s. It lasts ten minutes and works once.', 'wp-dodo-checkout' ),
 			'code'        => __( '6-digit code', 'wp-dodo-checkout' ),
 			'signIn'      => __( 'Sign in', 'wp-dodo-checkout' ),
 			'checking'    => __( 'Checking…', 'wp-dodo-checkout' ),
@@ -145,10 +148,11 @@ const WPDC_ACCOUNT_LOGIN_LOADER = <<<'JS'
 (function(c){var asked=0;
 function hit(t){var a=t&&t.closest&&t.closest('a[href],[data-uwp-login]');if(!a)return null;if(a.hasAttribute('data-uwp-login'))return a;var h=a.href||'';return h===c.account||h.indexOf(c.account+'/')===0?a:null}
 function ask(){if(asked)return;asked=1;fetch(c.account+'/api/sso/session',{credentials:'include'}).then(function(r){return r.json()}).then(function(d){c.signedIn=!!(d&&d.signedIn)}).catch(function(){})}
-function load(a){if(c.open){c.open(a);return}var n=2,go=function(){if(--n===0&&c.open)c.open(a)};var l=document.createElement('link');l.rel='stylesheet';l.href=c.style;l.onload=l.onerror=go;document.head.appendChild(l);var s=document.createElement('script');s.src=c.script;s.onload=go;document.head.appendChild(s)}
+function load(a,o){if(c.open){c.open(a,o);return}var n=2,go=function(){if(--n===0&&c.open)c.open(a,o)};var l=document.createElement('link');l.rel='stylesheet';l.href=c.style;l.onload=l.onerror=go;document.head.appendChild(l);var s=document.createElement('script');s.src=c.script;s.onload=go;document.head.appendChild(s)}
 document.addEventListener('pointerover',function(e){if(hit(e.target))ask()},{passive:true});
 document.addEventListener('focusin',function(e){if(hit(e.target))ask()});
 document.addEventListener('click',function(e){var a=hit(e.target);if(!a||e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();if(c.signedIn){window.open(a.href||c.account+'/downloads','_blank','noopener');return}load(a)});
+c.show=load;
 })(window.wpdcAccountLogin);
 JS;
 
