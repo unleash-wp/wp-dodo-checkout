@@ -85,7 +85,7 @@
       .then(function (r) {
         busy(button, false);
         if (r.ok) { step('done'); return; }
-        say(r.status === 429 ? c.s.tooMany : c.s.wrong);
+        say(r.status === 403 ? c.s.locked : r.status === 429 ? c.s.tooMany : c.s.wrong);
         var input = dialog.querySelector('.uwp-login__code');
         input.value = '';
         input.focus();

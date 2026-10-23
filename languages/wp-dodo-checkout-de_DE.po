@@ -260,3 +260,6 @@ msgstr "Schließen"
 #, php-format
 msgid "We sent a code to %s. It lasts ten minutes and works once."
 msgstr "Wir haben einen Code an %s geschickt. Er ist zehn Minuten gültig und nur einmal verwendbar."
+
+msgid "Too many wrong codes. Send yourself a new one."
+msgstr "Zu viele falsche Codes. Lass dir einen neuen schicken."
