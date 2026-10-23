@@ -153,6 +153,13 @@ enabled pay button takes `text_primary`, so a yellow pay button would need yello
 text everywhere. Change it with the `wpdc_theme_config` filter;
 `WPDC_CHECKOUT_FONT_URL` overrides the font.
 
+**Larger fields in Chromium.** `font_size` never reaches the card block, the
+payment provider's own frame. In Chromium browsers (Chrome, Edge, Brave, Opera;
+detected by `navigator.userAgentData`, which Safari and Firefox do not have) the
+whole frame is zoomed by 1.15 in the two-column window, so labels, fields and
+buttons grow too. Real clicks and typing were checked at the visible positions;
+Safari and Firefox keep the frame unzoomed until they are checked the same way.
+
 **In the header.** `[wpdc_account]` prints a person icon named "My account"
 ("Mein Konto") that opens the modal. `label="Konto"` adds visible text,
 `size="20"` sets the icon (12 to 48 px). It takes the colour of the header.

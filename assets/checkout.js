@@ -18,6 +18,13 @@
 
   var cfg = window.wpdcCheckout || {};
 
+  // Larger labels and fields in Dodo's frame, where only a zoom reaches the
+  // payment provider's block. Proven with real clicks in Chromium; Safari and
+  // Firefox keep the frame as it is.
+  if (navigator.userAgentData && navigator.userAgentData.brands.some(function (b) { return /Chromium/.test(b.brand); })) {
+    document.documentElement.classList.add('wpdc-zoom');
+  }
+
   /**
    * The window is moved to <body>, and the reason is measured rather than
    * defensive.

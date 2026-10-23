@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.15.1' );
+define( 'WPDC_VERSION', '0.16.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -4159,6 +4159,16 @@ check(
 	'Zahlungspflichtig bestellen' === ( ticket_sent( null, null )['customization']['theme_config']['pay_button_text'] ?? '' )
 		&& 'Place order and pay' === ( wpdc_theme_config( 'en' )['pay_button_text'] ?? '' )
 		&& ! isset( wpdc_theme_config( '' )['pay_button_text'] )
+);
+
+check(
+	// Dodo's type size never reaches the card block, the provider's own frame;
+	// zooming the frame does. Proven with real clicks in Chromium only, so only
+	// Chromium gets it: navigator.userAgentData exists there and nowhere else.
+	'BELL: only Chromium, and only the two-column window, zooms Dodo\'s frame',
+	str_contains( $checkoutJs = (string) file_get_contents( $root . '/assets/checkout.js' ), "navigator.userAgentData.brands.some(function (b) { return /Chromium/.test(b.brand); })" )
+		&& str_contains( $checkoutJs, "document.documentElement.classList.add('wpdc-zoom')" )
+		&& 1 === preg_match( '/@media \(min-width: 901px\) \{\s*\.wpdc-zoom \.wpdc__dialog \.wpdc__frame \{\s*zoom: 1\.15;\s*\}/', $css = (string) file_get_contents( $root . '/assets/checkout.css' ) )
 );
 
 if ( $failures ) {
