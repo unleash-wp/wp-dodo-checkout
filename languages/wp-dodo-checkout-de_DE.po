@@ -189,3 +189,9 @@ msgstr "Zahlung abgewickelt über %s"
 
 msgid "Dodo Payments"
 msgstr "Dodo Payments"
+
+msgid "Open my account"
+msgstr "Zu meinem Konto"
+
+msgid "Downloads, keys and invoices. Signed in with your purchase email, no password."
+msgstr "Downloads, Schlüssel und Rechnungen. Angemeldet mit deiner Kauf-E-Mail, ohne Passwort."

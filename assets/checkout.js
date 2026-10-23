@@ -1401,6 +1401,33 @@
     if (dismiss) closeFrame(sdk());
   });
 
+  // The tab is opened inside the click, before the ticket exists, because a
+  // window.open after an await is what popup blockers stop.
+  document.addEventListener('click', function (event) {
+    var btn = event.target.closest && event.target.closest('[data-wpdc-account]');
+    if (!btn || btn.disabled) return;
+    var root = btn.closest('.wp-dodo-checkout');
+    var session = (root && root.dataset.session) || '';
+    var tab = window.open('', '_blank');
+    btn.disabled = true;
+    var go = function (url) {
+      btn.disabled = false;
+      if (!tab) { window.location.href = url; return; }
+      tab.opener = null;
+      tab.location.replace(url);
+    };
+    if (!session || !cfg.handoff) { go(cfg.account); return; }
+    fetch(cfg.handoff, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session: session })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { go(d && typeof d.url === 'string' ? d.url : cfg.account); })
+      .catch(function () { go(cfg.account); });
+  });
+
   document.addEventListener('close', function (event) {
     if (event.target.classList && event.target.classList.contains('wpdc__dialog')) {
       closeFrame(sdk());

@@ -2139,9 +2139,9 @@ check(
 	// header instead of a button sitting on it.
 	'BELL: every corner uses the one radius, and only the ring and the button are round',
 	1 === substr_count( $css, '--wpdc-radius: 5px' )
-		// Ten: the download button, the key field, the copy button beside it, and
-		// the labelled way out -- all four in the completion panel.
-		&& 10 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
+		// Eleven: the download button, the key field, the copy button beside it,
+		// the account button and the labelled way out in the completion panel.
+		&& 11 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
 		// Four circles: the frame's spinner ring, the close button, the done
 		// mark, and the spinner that waits inside the done panel.
 		&& 4 === substr_count( $css, 'border-radius: 50%' )
@@ -3691,6 +3691,23 @@ check(
 		$json = json_encode( $r->get_data() );
 		return array( 'url' => $minted ) === $r->get_data() && ! str_contains( $json, 'buyer@' ) && ! str_contains( $json, 'pay_' )
 			&& 'private, no-store' === ( $r->headers['cache-control'] ?? '' );
+	} )()
+);
+
+check(
+	'BELL: the completed panel offers the account, one click, and says how it signs in',
+	str_contains( $shortcode, 'class="wpdc__account" data-wpdc-account' )
+		&& str_contains( $shortcode, "'Open my account'" )
+		&& str_contains( $shortcode, "'Downloads, keys and invoices. Signed in with your purchase email, no password.'" )
+		&& str_contains( $shortcode, "'handoff'  => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/handoff' ) )" )
+		&& str_contains( $shortcode, "'account'  => wpdc_account_downloads_url()" )
+);
+check(
+	'BELL: the account tab is opened inside the click and loses its opener',
+	( function () use ( $root ): bool {
+		$js = (string) file_get_contents( $root . '/assets/checkout.js' );
+		return str_contains( $js, "window.open('', '_blank')" ) && str_contains( $js, 'tab.opener = null' )
+			&& str_contains( $js, 'cfg.handoff' ) && str_contains( $js, "credentials: 'omit'" );
 	} )()
 );
 
