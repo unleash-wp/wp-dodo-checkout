@@ -312,6 +312,13 @@ function wpdc_localized_prices( string $product, bool $render = false ) {
 	// The per-visitor price runs while a page renders, so it uses the shorter
 	// render timeout: a slow localized-prices call must not hold the page, and
 	// the caller already falls back to the base price on any failure.
+	// Site-wide, and only calls that reach Dodo count: a busy page answered from cache is never turned away.
+	$spent = (int) get_transient( 'wpdc_price_lookups' );
+	if ( $spent >= WPDC_PRICE_LOOKUPS_MINUTE ) {
+		return wpdc_error( 'busy', true, '' );
+	}
+	set_transient( 'wpdc_price_lookups', $spent + 1, MINUTE_IN_SECONDS );
+
 	$timeout = $render ? WPDC_RENDER_TIMEOUT : WPDC_TIMEOUT;
 	$result  = wpdc_dodo_request( 'GET', '/products/' . rawurlencode( $product ) . '/localized-prices', null, $timeout );
 	if ( wpdc_is_error( $result ) ) {

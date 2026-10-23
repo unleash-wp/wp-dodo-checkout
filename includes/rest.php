@@ -303,14 +303,7 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 function wpdc_rest_price( WP_REST_Request $request ): WP_REST_Response {
 	$product = (string) $request->get_param( 'product' );
 
-	// Site-wide like the mint bucket; over it the page keeps the base price it shows.
-	$spent = (int) get_transient( 'wpdc_price_all' );
-	if ( $spent >= WPDC_PRICE_CEILING ) {
-		$price = wpdc_error( 'busy', true, '' );
-	} else {
-		set_transient( 'wpdc_price_all', $spent + 1, MINUTE_IN_SECONDS );
-		$price = wpdc_price_for_country( $product, wpdc_visitor_country() );
-	}
+	$price = wpdc_price_for_country( $product, wpdc_visitor_country() );
 
 	if ( wpdc_is_error( $price ) ) {
 		// Silent by design. The page already shows a price; saying "we could not

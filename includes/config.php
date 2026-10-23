@@ -93,12 +93,11 @@ const WPDC_SESSION_CEILING = 60;
 const WPDC_DISCOUNT_CEILING = 20;
 
 /**
- * How many /price answers this site gives in a minute, all visitors together.
+ * How many localized-price lookups reach Dodo in a minute, all visitors together.
  *
- * The route is public and a cache miss or a failed lookup spends the shop's key.
- * Past this the page keeps its base price, which is what it already shows.
+ * Cached answers do not count. Past this the page keeps its base price.
  */
-const WPDC_PRICE_CEILING = 600;
+const WPDC_PRICE_LOOKUPS_MINUTE = 60;
 
 /**
  * How long a product id Dodo does not list is remembered as unlisted.

@@ -3510,23 +3510,28 @@ check(
 	} )()
 );
 check(
-	'BELL: at the price ceiling the route answers the silent fallback and asks nobody',
-	( static function (): bool {
-		configure();
-		$GLOBALS['wpdc_test_transients']['wpdc_price_all'] = WPDC_PRICE_CEILING;
-		$r = wpdc_rest_price( new WP_REST_Request( array( 'product' => 'pdt_book' ) ) );
-		return array( 'ok' => false ) === $r->get_data()
-			&& 'private, no-store' === ( $r->headers['cache-control'] ?? '' )
-			&& array() === $GLOBALS['wpdc_test_requests'];
-	} )()
-);
-check(
-	'BELL: a price request below the ceiling is counted',
+	'BELL: at the lookup ceiling the price falls back to the base and Dodo is not asked',
 	( static function (): bool {
 		configure();
 		catalogue( array( 'pdt_book' ) );
+		$GLOBALS['wpdc_test_transients']['wpdc_price_lookups'] = WPDC_PRICE_LOOKUPS_MINUTE;
+		$GLOBALS['wpdc_test_requests'] = array();
+		$p = wpdc_price_for_country( 'pdt_book', 'US' );
+		$asked = array_filter( $GLOBALS['wpdc_test_requests'], static fn( $r ) => str_contains( $r['url'], 'localized-prices' ) );
+		return ! wpdc_is_error( $p ) && false === $p['localized'] && array() === $asked;
+	} )()
+);
+check(
+	// A busy page served from cache must never reach the ceiling.
+	'BELL: only lookups that reach Dodo are counted, cached answers are free',
+	( static function (): bool {
+		configure();
+		catalogue( array( 'pdt_book' ) );
+		respond( 200, array( 'items' => array( array( 'currency' => 'USD', 'amount' => 1999 ) ) ) );
+		wpdc_price_for_country( 'pdt_book', 'US' );
+		wpdc_price_for_country( 'pdt_book', 'US' );
 		wpdc_rest_price( new WP_REST_Request( array( 'product' => 'pdt_book' ) ) );
-		return 1 === (int) get_transient( 'wpdc_price_all' );
+		return 1 === (int) get_transient( 'wpdc_price_lookups' );
 	} )()
 );
 
