@@ -1112,8 +1112,9 @@ function wpdc_theme_config( string $language = '' ): array {
 		'light'       => array(
 			'bg_primary'             => '#ffffff',
 			'bg_secondary'           => '#f4f6fb',
-			'border_primary'         => '#d7deec',
-			'border_secondary'       => '#e6eaf3',
+			// Field edges at 3:1 against white (WCAG 1.4.11); dividers a step lighter.
+			'border_primary'         => '#8794b0',
+			'border_secondary'       => '#b8c2d6',
 			'input_focus_border'     => '#203159',
 			'text_primary'           => '#203159',
 			'text_secondary'         => '#3d4a6e',
