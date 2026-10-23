@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.16.0' );
+define( 'WPDC_VERSION', '0.16.1' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -4169,6 +4169,14 @@ check(
 	str_contains( $checkoutJs = (string) file_get_contents( $root . '/assets/checkout.js' ), "navigator.userAgentData.brands.some(function (b) { return /Chromium/.test(b.brand); })" )
 		&& str_contains( $checkoutJs, "document.documentElement.classList.add('wpdc-zoom')" )
 		&& 1 === preg_match( '/@media \(min-width: 901px\) \{\s*\.wpdc-zoom \.wpdc__dialog \.wpdc__frame \{\s*zoom: 1\.15;\s*\}/', $css = (string) file_get_contents( $root . '/assets/checkout.css' ) )
+);
+
+check(
+	// WCAG 1.4.11: a field's edge needs 3:1 against white. #d7deec was 1.35:1 and the
+	// owner could not see the fields; #8794b0 is 3.05:1.
+	'BELL: field borders are dark enough to see, dividers a step lighter',
+	'#8794b0' === ( wpdc_theme_config( 'de' )['light']['border_primary'] ?? '' )
+		&& '#b8c2d6' === ( wpdc_theme_config( 'de' )['light']['border_secondary'] ?? '' )
 );
 
 if ( $failures ) {
