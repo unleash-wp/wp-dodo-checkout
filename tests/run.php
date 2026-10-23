@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.11.0' );
+define( 'WPDC_VERSION', '0.11.1' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -3978,6 +3978,16 @@ check(
 		&& str_contains( $checkoutJs, 'remintWith(root, root.dataset.discount || ' )
 		&& str_contains( $modal = (string) file_get_contents( $root . '/assets/account-login.js' ), 'if (onDone) { var next = onDone; onDone = null; dialog.close(); next(); return; }' )
 		&& str_contains( (string) file_get_contents( $root . '/includes/account.php' ), "'continue'    => __( 'Continue to checkout'" )
+);
+
+check(
+	// Measured live: the lifted dialog carries the class too, so a bare closest()
+	// found the dialog, not the block with the session. The account button and
+	// the sign-in link both lost their checkout that way.
+	'BELL: every handler finds its checkout through rootFor, which survives the lift',
+	1 === substr_count( $checkoutJs = (string) file_get_contents( $root . '/assets/checkout.js' ), "closest('.wp-dodo-checkout')" )
+		&& 1 === preg_match( "/data-wpdc-account\]'\)[\s\S]{0,400}var root = rootFor\(btn\);/", $checkoutJs )
+		&& 1 === preg_match( "/data-wpdc-signin\]'\)[\s\S]{0,300}var root = rootFor\(btn\);/", $checkoutJs )
 );
 
 if ( $failures ) {

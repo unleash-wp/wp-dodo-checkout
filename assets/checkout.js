@@ -1445,7 +1445,7 @@
     if (!btn || btn.disabled) return;
     var login = window.wpdcAccountLogin;
     if (!login || !login.show) { window.open(cfg.account, '_blank', 'noopener'); return; }
-    var root = btn.closest('.wp-dodo-checkout');
+    var root = rootFor(btn);
     var session = (root && root.dataset.session) || '';
     var show = function (email) { btn.disabled = false; login.show(btn, email ? { email: email } : null); };
     btn.disabled = true;
@@ -1467,7 +1467,7 @@
     var btn = event.target.closest && event.target.closest('[data-wpdc-signin]');
     var login = window.wpdcAccountLogin;
     if (!btn || !login || !login.show) return;
-    var root = btn.closest('.wp-dodo-checkout');
+    var root = rootFor(btn);
     if (!root) return;
     login.show(btn, { onDone: function () {
       whoAsked = null;
