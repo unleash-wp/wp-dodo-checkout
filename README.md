@@ -143,6 +143,13 @@ Anybody else sees "Already a customer? Sign in" in the panel; signing in there
 re-opens the checkout prefilled. A site answering `wpdc_customer` itself still
 decides.
 
+**The look.** Dodo's form is dressed as UnleashWP on every session: larger
+type (`lg`), medium weight, the 5px corner, navy text and the yellow pay
+button. Change it with the `wpdc_theme_config` filter. A font is sent only when
+`WPDC_CHECKOUT_FONT_URL` names an https file the shop hosts itself (never
+Google), and the server must answer that file with CORS for
+`https://checkout.dodopayments.com`, or the frame falls back to its own font.
+
 **In the header.** `[wpdc_account]` prints a person icon named "My account"
 ("Mein Konto") that opens the modal. `label="Konto"` adds visible text,
 `size="20"` sets the icon (12 to 48 px). It takes the colour of the header.

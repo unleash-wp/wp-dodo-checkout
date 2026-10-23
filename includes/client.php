@@ -593,11 +593,10 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		$body['metadata'] = array( 'uwp_lang' => (string) $lang );
 	}
 
-	// Deliberately NOT sent: `customization.theme_config`. Dodo's dashboard has
-	// a Design page that does the same thing visually and applies it to the
-	// checkout, the customer portal AND the storefront at once, with test and
-	// live held separately. Branding from here would cover one of those three
-	// and disagree with the other two the first time somebody used the page.
+	// Dodo's form dressed as UnleashWP, per session. Owner's choice (2026-10-23)
+	// over the dashboard's Design page: the shop's checkout is set here, in code.
+	$body['customization']['theme']        = 'light';
+	$body['customization']['theme_config'] = apply_filters( 'wpdc_theme_config', wpdc_theme_config() );
 
 	// ONE language for the whole window.
 	//
@@ -622,7 +621,7 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		? wpdc_two_languages( trim( $lang ) )
 		: '';
 	if ( '' !== $language ) {
-		$body['customization'] = array( 'force_language' => $language );
+		$body['customization']['force_language'] = $language;
 	}
 
 	/**
@@ -1096,4 +1095,47 @@ function wpdc_return_url(): string {
 		}
 	}
 	return '';
+}
+
+/**
+ * The UnleashWP look for Dodo's checkout form: navy text, the yellow button,
+ * the one 5px corner, larger type. A font only when the shop names its own
+ * https file (WPDC_CHECKOUT_FONT_URL); never Google, whose fonts would take
+ * every buyer's address with them.
+ */
+function wpdc_theme_config(): array {
+	$config = array(
+		'font_size'   => 'lg',
+		'font_weight' => 'medium',
+		'radius'      => '5px',
+		'light'       => array(
+			'bg_primary'             => '#ffffff',
+			'bg_secondary'           => '#f4f6fb',
+			'border_primary'         => '#d7deec',
+			'border_secondary'       => '#e6eaf3',
+			'input_focus_border'     => '#203159',
+			'text_primary'           => '#203159',
+			'text_secondary'         => '#3d4a6e',
+			'text_placeholder'       => '#6b7591',
+			'text_error'             => '#b42318',
+			'text_success'           => '#1a7f4b',
+			'button_primary'         => '#fcbe00',
+			'button_primary_hover'   => '#e6ab00',
+			'button_text_primary'    => '#203159',
+			'button_secondary'       => '#f4f6fb',
+			'button_secondary_hover' => '#e6eaf3',
+			'button_text_secondary'  => '#203159',
+		),
+	);
+	if ( defined( 'WPDC_CHECKOUT_FONT_URL' ) && wpdc_is_font_url( WPDC_CHECKOUT_FONT_URL ) ) {
+		$config['font_primary_url'] = WPDC_CHECKOUT_FONT_URL;
+	}
+	return $config;
+}
+
+/** https only, and never Google's font service. */
+function wpdc_is_font_url( $url ): bool {
+	return is_string( $url )
+		&& 1 === preg_match( '#^https://[^/\s]+/\S+$#', $url )
+		&& 1 !== preg_match( '#^https://(fonts\.googleapis\.com|fonts\.gstatic\.com)/#i', $url );
 }
