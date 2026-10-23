@@ -144,7 +144,7 @@ re-opens the checkout prefilled. A site answering `wpdc_customer` itself still
 decides.
 
 **The look.** Dodo's form is dressed as UnleashWP on every session: the
-largest type (`2xl`), Ubuntu loaded from `account.unleash-wp.com/fonts/ubuntu.css?family=Ubuntu`
+moderate type (`md`; headings and error lines grow with it), Ubuntu loaded from `account.unleash-wp.com/fonts/ubuntu.css?family=Ubuntu`
 (our own server, CORS open for `/fonts/*`, never Google; Dodo reads the family
 from `family=`), the 5px corner, navy text, radios, focus and pay button, and the
 pay button reading "Zahlungspflichtig bestellen" or "Place order and pay"

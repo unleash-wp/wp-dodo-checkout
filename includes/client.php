@@ -1104,9 +1104,9 @@ function wpdc_return_url(): string {
  */
 function wpdc_theme_config( string $language = '' ): array {
 	$config = array(
-		// The card block is the payment provider's own frame and keeps its size;
-		// everything Dodo themes takes this one.
-		'font_size'   => '2xl',
+		// Headings and error lines take this size; at 2xl they were far too large
+		// (owner, 2026-10-23). The card block is the provider's frame and ignores it.
+		'font_size'   => 'md',
 		'font_weight' => 'medium',
 		'radius'      => '5px',
 		'light'       => array(
