@@ -49,6 +49,9 @@ function wp_remote_request( string $url, array $args ) {
 	// which is a fact about the test rather than about the code. Said loudly.
 	return $next ?? new WP_Error( 'wpdc_test', 'no scripted response left' );
 }
+function wp_remote_get( string $url, array $args = array() ) {
+	return wp_remote_request( $url, $args + array( 'method' => 'GET' ) );
+}
 function get_transient( string $k ) {
 	return $GLOBALS['wpdc_test_transients'][ $k ] ?? false;
 }
@@ -4257,6 +4260,29 @@ check(
 	'BELL: field borders are visible but softened, dividers a step lighter',
 	'#939fb8' === ( wpdc_theme_config( 'de' )['light']['border_primary'] ?? '' )
 		&& '#bfc8da' === ( wpdc_theme_config( 'de' )['light']['border_secondary'] ?? '' )
+);
+
+check(
+	// Audit 2026-10-23: the key goes in a header, so a redirect must not carry it on.
+	'BELL: the direct-link lookups follow no redirect and cap what they read',
+	( static function (): bool {
+		configure();
+		respond( 200, array( 'artifacts' => array( 'easy-svg-pro.zip' ) ) );
+		respond( 200, array( 'url' => 'https://downloads.example/f/easy-svg-pro.zip?sig=1' ) );
+		$url  = wpdc_direct_link( 'https://downloads.example/', 'key_1' );
+		$sent = $GLOBALS['wpdc_test_requests'];
+		if ( 'https://downloads.example/f/easy-svg-pro.zip?sig=1' !== $url || 2 !== count( $sent ) ) {
+			return false;
+		}
+		foreach ( $sent as $call ) {
+			if ( 0 !== ( $call['args']['redirection'] ?? null )
+				|| true !== ( $call['args']['sslverify'] ?? null )
+				|| WPDC_LINK_RESPONSE_LIMIT !== ( $call['args']['limit_response_size'] ?? null ) ) {
+				return false;
+			}
+		}
+		return true;
+	} )()
 );
 
 // Defined last, because a constant cannot be undefined for the tests above.

@@ -1054,9 +1054,16 @@ function wpdc_direct_link( string $page, string $key ): string {
 		return '';
 	}
 
-	$headers = array( 'Authorization' => 'Bearer ' . $key );
+	// The key rides in a header, so a redirect must not carry it anywhere else.
+	$args = array(
+		'timeout'             => WPDC_TIMEOUT,
+		'redirection'         => 0,
+		'sslverify'           => true,
+		'limit_response_size' => WPDC_LINK_RESPONSE_LIMIT,
+		'headers'             => array( 'Authorization' => 'Bearer ' . $key ),
+	);
 
-	$listed = wp_remote_get( $origin . '/artifacts', array( 'timeout' => WPDC_TIMEOUT, 'headers' => $headers ) );
+	$listed = wp_remote_get( $origin . '/artifacts', $args );
 	if ( is_wp_error( $listed ) || 200 !== wp_remote_retrieve_response_code( $listed ) ) {
 		return '';
 	}
@@ -1070,7 +1077,7 @@ function wpdc_direct_link( string $page, string $key ): string {
 
 	$minted = wp_remote_get(
 		$origin . '/link?artifact=' . rawurlencode( $artifacts[0] ),
-		array( 'timeout' => WPDC_TIMEOUT, 'headers' => $headers )
+		$args
 	);
 	if ( is_wp_error( $minted ) || 200 !== wp_remote_retrieve_response_code( $minted ) ) {
 		return '';

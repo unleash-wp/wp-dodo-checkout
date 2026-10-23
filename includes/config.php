@@ -35,6 +35,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 /** A visitor is waiting on a page. Long enough for a slow API, short enough to fail. */
 const WPDC_TIMEOUT = 15;
 
+/** The most the download host's artifact list or link answer may be: a few hundred bytes of JSON. */
+const WPDC_LINK_RESPONSE_LIMIT = 65536;
+
 /**
  * The timeout for a call made while a page is rendering, as opposed to a click.
  *
