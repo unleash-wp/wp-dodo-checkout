@@ -69,7 +69,7 @@ jobs:
       - name: Lint every PHP file
         run: |
           set -euo pipefail
-          for f in wp-dodo-checkout.php includes/*.php tests/*.php; do
+          for f in wp-dodo-checkout.php uninstall.php includes/*.php tests/*.php; do
             php -l "$f"
           done
 

@@ -112,6 +112,9 @@ msgstr "Dodo kennt keine eingeschränkten API-Schlüssel: dieser kann Erstattung
 msgid "Set in wp-config.php as WPDC_API_KEY, which is why this field is disabled: saving here would copy the key into the database, and keeping it out is the whole point of the constant."
 msgstr "In der wp-config.php als WPDC_API_KEY gesetzt – deshalb ist dieses Feld gesperrt: Speichern würde den Schlüssel in die Datenbank kopieren, und genau das soll die Konstante verhindern."
 
+msgid "A key is saved. Leave this field empty to keep it."
+msgstr "Ein Schlüssel ist gespeichert. Feld leer lassen, um ihn zu behalten."
+
 msgid "wpdc_checkout: a product attribute holding a Dodo product id (pdt_...) is required."
 msgstr "wpdc_checkout: Es wird ein Attribut product mit einer Dodo-Produkt-ID (pdt_…) benötigt."
 

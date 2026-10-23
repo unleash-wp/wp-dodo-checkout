@@ -645,6 +645,75 @@ check( 'SILENCE: a test key in test mode is not a mismatch', false === wpdc_api_
 $GLOBALS['wpdc_test_options'] = array( 'wpdc_api_key' => 'some-other-key', 'wpdc_mode' => 'live_mode' );
 check( 'BELL: a key with no known prefix is never flagged, so nothing is guessed', false === wpdc_api_key_mode_mismatch() );
 
+// ─── The settings page keeps the stored key to itself ───────────────────────
+//
+// Before WPDC_API_KEY is defined below, so the page renders the option path.
+
+// Enough wp-admin to render the page. Audit 2026-10-23: the stored key was
+// echoed into the HTML, so anyone who could view the page source had it.
+function current_user_can( string $cap ): bool {
+	return true;
+}
+function esc_html__( string $text, string $domain = '' ): string {
+	return esc_html( $text );
+}
+function esc_attr__( string $text, string $domain = '' ): string {
+	return esc_attr( $text );
+}
+function settings_fields( string $group ): void {}
+function submit_button(): void {}
+function disabled( $value ): void {
+	echo $value ? ' disabled="disabled"' : '';
+}
+function selected( $a, $b ): void {
+	echo $a === $b ? ' selected="selected"' : '';
+}
+function sanitize_text_field( $value ): string {
+	return trim( (string) $value );
+}
+function delete_option( string $name ): bool {
+	unset( $GLOBALS['wpdc_test_options'][ $name ] );
+	return true;
+}
+require_once $root . '/includes/settings.php';
+
+check(
+	'BELL: the settings page never prints the stored key, only that one is set',
+	( static function (): bool {
+		configure();
+		$GLOBALS['wpdc_test_options']['wpdc_api_key'] = 'stored-secret-value-abc';
+		respond( 200, array( 'items' => array() ) );
+		ob_start();
+		wpdc_render_settings_page();
+		$html = (string) ob_get_clean();
+		return ! str_contains( $html, 'stored-secret-value-abc' )
+			&& str_contains( $html, 'value=""' )
+			&& str_contains( $html, 'A key is saved. Leave this field empty to keep it.' );
+	} )()
+);
+check(
+	'BELL: saving with the key field empty keeps the stored key, a new one replaces it',
+	( static function (): bool {
+		configure();
+		$GLOBALS['wpdc_test_options']['wpdc_api_key'] = 'stored-secret-value-abc';
+		return 'stored-secret-value-abc' === wpdc_sanitise_api_key( '' )
+			&& 'fresh-key' === wpdc_sanitise_api_key( ' fresh-key ' );
+	} )()
+);
+check(
+	'BELL: uninstalling removes the stored API key',
+	( static function () use ( $root ): bool {
+		configure();
+		$GLOBALS['wpdc_test_options']['wpdc_api_key'] = 'stored-secret-value-abc';
+		if ( ! is_readable( $root . '/uninstall.php' ) ) {
+			return false;
+		}
+		defined( 'WP_UNINSTALL_PLUGIN' ) || define( 'WP_UNINSTALL_PLUGIN', 'wp-dodo-checkout/wp-dodo-checkout.php' );
+		include $root . '/uninstall.php';
+		return ! isset( $GLOBALS['wpdc_test_options']['wpdc_api_key'] );
+	} )()
+);
+
 // ─── Configuration precedence ────────────────────────────────────────────────
 
 define( 'WPDC_API_KEY', 'from-wp-config' );
@@ -1177,8 +1246,8 @@ check(
 	str_contains( $settings, 'disabled( $from_constant )' )
 );
 check(
-	'BELL: and it renders the stored option, never the resolved key',
-	str_contains( $settings, '$from_constant ? \'\' : esc_attr( $stored )' )
+	'BELL: and it renders neither the resolved key nor the stored option',
+	! str_contains( $settings, 'esc_attr( $stored )' )
 		&& ! str_contains( $settings, 'esc_attr( wpdc_api_key() )' )
 );
 check(

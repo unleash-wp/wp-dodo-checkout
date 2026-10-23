@@ -63,7 +63,7 @@ jobs:
           # purpose rather than shipping because nobody remembered to exclude
           # it. tests/, .github/, README.md and the dotfiles never run on a
           # customer site, so none of them go in.
-          cp wp-dodo-checkout.php "dist/$slug/"
+          cp wp-dodo-checkout.php uninstall.php "dist/$slug/"
           cp -R includes assets languages "dist/$slug/"
           # The top-level folder is the plugin SLUG, so the zip unpacks straight
           # into wp-content/plugins/wp-dodo-checkout/ the way WordPress expects.
