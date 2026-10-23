@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.13.0' );
+define( 'WPDC_VERSION', '0.14.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -4105,7 +4105,7 @@ $tc     = $themed['customization']['theme_config'] ?? array();
 check(
 	'BELL: Dodo\'s form is dressed as UnleashWP: larger type, the 5px corner, yellow pay button with navy text',
 	'light' === ( $themed['customization']['theme'] ?? '' )
-		&& 'lg' === ( $tc['font_size'] ?? '' )
+		&& 'xl' === ( $tc['font_size'] ?? '' )
 		&& 'medium' === ( $tc['font_weight'] ?? '' )
 		&& '5px' === ( $tc['radius'] ?? '' )
 		&& '#fcbe00' === ( $tc['light']['button_primary'] ?? '' )
@@ -4146,6 +4146,14 @@ check(
 		&& ! wpdc_is_font_url( 'https://fonts.googleapis.com/css2?family=Ubuntu' )
 		&& ! wpdc_is_font_url( 'https://fonts.gstatic.com/s/ubuntu/v20/x.woff2' )
 		&& ! wpdc_is_font_url( 'javascript:alert(1)' )
+);
+
+check(
+	// § 312j BGB: the button that closes a paid order must say so unmistakably.
+	'BELL: the pay button says what it does, in the checkout\'s language',
+	'Zahlungspflichtig bestellen' === ( ticket_sent( null, null )['customization']['theme_config']['pay_button_text'] ?? '' )
+		&& 'Place order and pay' === ( wpdc_theme_config( 'en' )['pay_button_text'] ?? '' )
+		&& ! isset( wpdc_theme_config( '' )['pay_button_text'] )
 );
 
 if ( $failures ) {
