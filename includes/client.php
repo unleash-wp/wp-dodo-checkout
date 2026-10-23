@@ -304,6 +304,10 @@ function wpdc_localized_prices( string $product, bool $render = false ) {
 	if ( is_array( $cached ) ) {
 		return $cached;
 	}
+	// A recent failure answers from memory, so an outage is not one call per view.
+	if ( false !== get_transient( $key . '_fail' ) ) {
+		return wpdc_error( 'unreachable', true, __( 'The payment provider could not be reached. Please try again in a moment.', 'wp-dodo-checkout' ) );
+	}
 
 	// The per-visitor price runs while a page renders, so it uses the shorter
 	// render timeout: a slow localized-prices call must not hold the page, and
@@ -311,9 +315,9 @@ function wpdc_localized_prices( string $product, bool $render = false ) {
 	$timeout = $render ? WPDC_RENDER_TIMEOUT : WPDC_TIMEOUT;
 	$result  = wpdc_dodo_request( 'GET', '/products/' . rawurlencode( $product ) . '/localized-prices', null, $timeout );
 	if ( wpdc_is_error( $result ) ) {
-		// Not cached, because the next visitor deserves a fresh attempt -- but
-		// also not fatal: the caller falls back to the base price, which is what
-		// the page showed before this feature existed.
+		// Remembered briefly, then retried; not fatal either: the caller falls
+		// back to the base price, which is what the page showed before this existed.
+		set_transient( $key . '_fail', 1, WPDC_CATALOG_FAIL_TTL );
 		return $result;
 	}
 

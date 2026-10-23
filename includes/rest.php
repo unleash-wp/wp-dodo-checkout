@@ -90,8 +90,8 @@ function wpdc_register_rest(): void {
 		array(
 			// GET, and no nonce, unlike its neighbours. Both follow from what this
 			// route is: it reads a price out of a catalogue the shop publishes on
-			// its own sales pages anyway. It creates nothing, it spends nothing
-			// per call -- the Dodo lookup behind it is cached per product -- and
+			// its own sales pages anyway. It creates nothing, it spends little --
+			// the Dodo lookup behind it is cached per product, failures too -- and
 			// it answers only about ids Dodo currently lists. A nonce here would
 			// buy nothing and would break the one case this exists for: a page
 			// served from a full-page cache, where no fresh nonce is available.
@@ -302,7 +302,15 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
  */
 function wpdc_rest_price( WP_REST_Request $request ): WP_REST_Response {
 	$product = (string) $request->get_param( 'product' );
-	$price   = wpdc_price_for_country( $product, wpdc_visitor_country() );
+
+	// Site-wide like the mint bucket; over it the page keeps the base price it shows.
+	$spent = (int) get_transient( 'wpdc_price_all' );
+	if ( $spent >= WPDC_PRICE_CEILING ) {
+		$price = wpdc_error( 'busy', true, '' );
+	} else {
+		set_transient( 'wpdc_price_all', $spent + 1, MINUTE_IN_SECONDS );
+		$price = wpdc_price_for_country( $product, wpdc_visitor_country() );
+	}
 
 	if ( wpdc_is_error( $price ) ) {
 		// Silent by design. The page already shows a price; saying "we could not

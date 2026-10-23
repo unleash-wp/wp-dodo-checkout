@@ -3407,6 +3407,35 @@ check(
 		&& 'EUR' === $outage['currency']
 		&& false === $outage['localized']
 );
+check(
+	// Audit 2026-10-23: a failure was never remembered, so every view asked again.
+	'BELL: a failed price lookup is remembered briefly, the next view asks nobody',
+	( static function (): bool {
+		$GLOBALS['wpdc_test_requests'] = array();
+		$again = wpdc_price_for_country( 'pdt_book', 'US' );
+		return ! wpdc_is_error( $again ) && 2499 === $again['amount'] && array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+check(
+	'BELL: at the price ceiling the route answers the silent fallback and asks nobody',
+	( static function (): bool {
+		configure();
+		$GLOBALS['wpdc_test_transients']['wpdc_price_all'] = WPDC_PRICE_CEILING;
+		$r = wpdc_rest_price( new WP_REST_Request( array( 'product' => 'pdt_book' ) ) );
+		return array( 'ok' => false ) === $r->get_data()
+			&& 'private, no-store' === ( $r->headers['cache-control'] ?? '' )
+			&& array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+check(
+	'BELL: a price request below the ceiling is counted',
+	( static function (): bool {
+		configure();
+		catalogue( array( 'pdt_book' ) );
+		wpdc_rest_price( new WP_REST_Request( array( 'product' => 'pdt_book' ) ) );
+		return 1 === (int) get_transient( 'wpdc_price_all' );
+	} )()
+);
 
 configure();
 catalogue( array( 'pdt_book' ) );
