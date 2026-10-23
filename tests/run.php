@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.12.0' );
+define( 'WPDC_VERSION', '0.13.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -373,7 +373,8 @@ check(
 	// that decision in a comment. Third time today a substring check matched
 	// prose instead of behaviour. The key set cannot.
 	'BELL: exactly these keys are sent, and no price among them',
-	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags', 'cancel_url' ) === array_keys( $sent )
+	// `customization` since 2026-10-23: the owner put the checkout's look in code.
+	array( 'product_cart', 'minimal_address', 'show_saved_payment_methods', 'feature_flags', 'customization', 'cancel_url' ) === array_keys( $sent )
 );
 check(
 	// Reversed, and the reason is worth keeping. Sending home_url() as a floor
@@ -1509,8 +1510,9 @@ respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/sessio
 wpdc_create_session( 'pdt_pro', 1, null, null );
 $withoutLang = json_decode( last_request()['args']['body'], true );
 check(
-	'BELL: and no language means no customization block at all',
-	is_array( $withoutLang ) && ! isset( $withoutLang['customization'] )
+	// The theme is always there now; what must stay absent is a guessed language.
+	'BELL: and no language means no forced language',
+	is_array( $withoutLang ) && ! isset( $withoutLang['customization']['force_language'] )
 );
 
 check(
@@ -4094,6 +4096,56 @@ check(
 		$sent = json_decode( last_request()['args']['body'], true );
 		return array( 'email' => 'own@example.com' ) === ( $sent['customer'] ?? null ) && ! isset( $sent['billing_address'] );
 	} )()
+);
+
+// ─── The checkout dressed as UnleashWP ───────────────────────────────────────
+
+$themed = ticket_sent( null, null );
+$tc     = $themed['customization']['theme_config'] ?? array();
+check(
+	'BELL: Dodo\'s form is dressed as UnleashWP: larger type, the 5px corner, yellow pay button with navy text',
+	'light' === ( $themed['customization']['theme'] ?? '' )
+		&& 'lg' === ( $tc['font_size'] ?? '' )
+		&& 'medium' === ( $tc['font_weight'] ?? '' )
+		&& '5px' === ( $tc['radius'] ?? '' )
+		&& '#fcbe00' === ( $tc['light']['button_primary'] ?? '' )
+		&& '#203159' === ( $tc['light']['button_text_primary'] ?? '' )
+		&& '#203159' === ( $tc['light']['text_primary'] ?? '' )
+		&& '#203159' === ( $tc['light']['input_focus_border'] ?? '' )
+);
+check(
+	'BELL: the theme rides beside the language, it does not replace it',
+	'de' === ( $themed['customization']['force_language'] ?? '' )
+);
+check(
+	// No font unless the shop names one it hosts itself: a Google Fonts URL in the
+	// frame would hand every buyer's address to Google.
+	'BELL: no font URL is sent unless the shop configured an https one',
+	! isset( $tc['font_primary_url'] ) && ! str_contains( (string) json_encode( $themed ), 'googleapis' )
+);
+check(
+	'BELL: a site can change or drop the theme with a filter',
+	( function (): bool {
+		$GLOBALS['wpdc_test_filters_keep'] = true;
+		$sent = ( function (): array {
+			configure();
+			$GLOBALS['wpdc_test_filters']['wpdc_theme_config'] = array( 'font_size' => 'xl' );
+			catalogue( array( 'pdt_allowed' ) );
+			respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_5', 'session_id' => 'cks_5' ) );
+			wpdc_create_session( 'pdt_allowed', 1, null, 'de' );
+			return json_decode( last_request()['args']['body'], true );
+		} )();
+		return array( 'font_size' => 'xl' ) === ( $sent['customization']['theme_config'] ?? null );
+	} )()
+);
+
+check(
+	'BELL: a configured font must be https and the shop\'s own, never Google',
+	wpdc_is_font_url( 'https://www.unleash-wp.com/wp-content/uploads/2025/08/ubuntu-v20-latin-regular.woff2' )
+		&& ! wpdc_is_font_url( 'http://www.unleash-wp.com/font.woff2' )
+		&& ! wpdc_is_font_url( 'https://fonts.googleapis.com/css2?family=Ubuntu' )
+		&& ! wpdc_is_font_url( 'https://fonts.gstatic.com/s/ubuntu/v20/x.woff2' )
+		&& ! wpdc_is_font_url( 'javascript:alert(1)' )
 );
 
 if ( $failures ) {
