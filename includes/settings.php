@@ -69,7 +69,9 @@ function wpdc_register_settings(): void {
  */
 function wpdc_sanitise_api_key( $value ): string {
 	delete_transient( wpdc_catalog_key() );
-	return is_string( $value ) ? trim( sanitize_text_field( $value ) ) : '';
+	$value = is_string( $value ) ? trim( sanitize_text_field( $value ) ) : '';
+	// The field is never filled with the stored key, so empty means "keep it".
+	return '' === $value ? (string) get_option( 'wpdc_api_key', '' ) : $value;
 }
 
 function wpdc_sanitise_mode( $value ): string {
@@ -138,10 +140,16 @@ function wpdc_render_settings_page(): void {
 							id="wpdc_api_key"
 							name="wpdc_api_key"
 							class="regular-text"
-							value="<?php echo $from_constant ? '' : esc_attr( $stored ); ?>"
+							value=""
+							<?php if ( ! $from_constant && '' !== $stored ) : ?>
+								placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
+							<?php endif; ?>
 							autocomplete="off"
 							<?php disabled( $from_constant ); ?>
 						/>
+						<?php if ( ! $from_constant && '' !== $stored ) : ?>
+							<p class="description"><?php echo esc_html__( 'A key is saved. Leave this field empty to keep it.', 'wp-dodo-checkout' ); ?></p>
+						<?php endif; ?>
 						<p class="description">
 							<?php
 							echo $from_constant

@@ -35,6 +35,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 /** A visitor is waiting on a page. Long enough for a slow API, short enough to fail. */
 const WPDC_TIMEOUT = 15;
 
+/** The most the download host's artifact list or link answer may be: a few hundred bytes of JSON. */
+const WPDC_LINK_RESPONSE_LIMIT = 65536;
+
 /**
  * The timeout for a call made while a page is rendering, as opposed to a click.
  *
@@ -90,13 +93,20 @@ const WPDC_SESSION_CEILING = 60;
 const WPDC_DISCOUNT_CEILING = 20;
 
 /**
+ * How many localized-price lookups reach Dodo in a minute, all visitors together.
+ *
+ * Cached answers do not count. Past this the page keeps its base price.
+ */
+const WPDC_PRICE_LOOKUPS_MINUTE = 60;
+
+/**
  * How long a product id Dodo does not list is remembered as unlisted.
  *
  * The session route refreshes the catalogue the first time an unknown id
  * arrives, in case the owner created it a minute ago. After that the answer is
- * cached briefly, so a loop of invented ids is one fetch each rather than a
- * fresh Dodo call per request. Short, because a product created during the
- * window should become sellable soon after.
+ * cached briefly, and the forced refresh itself runs at most once per window
+ * site-wide, so a loop of invented ids is one fetch per window. Short, because
+ * a product created during the window should become sellable soon after.
  */
 const WPDC_UNKNOWN_TTL = 30;
 

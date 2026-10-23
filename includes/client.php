@@ -304,16 +304,27 @@ function wpdc_localized_prices( string $product, bool $render = false ) {
 	if ( is_array( $cached ) ) {
 		return $cached;
 	}
+	// A recent failure answers from memory, so an outage is not one call per view.
+	if ( false !== get_transient( $key . '_fail' ) ) {
+		return wpdc_error( 'unreachable', true, __( 'The payment provider could not be reached. Please try again in a moment.', 'wp-dodo-checkout' ) );
+	}
 
 	// The per-visitor price runs while a page renders, so it uses the shorter
 	// render timeout: a slow localized-prices call must not hold the page, and
 	// the caller already falls back to the base price on any failure.
+	// Site-wide, and only calls that reach Dodo count: a busy page answered from cache is never turned away.
+	$spent = (int) get_transient( 'wpdc_price_lookups' );
+	if ( $spent >= WPDC_PRICE_LOOKUPS_MINUTE ) {
+		return wpdc_error( 'busy', true, '' );
+	}
+	set_transient( 'wpdc_price_lookups', $spent + 1, MINUTE_IN_SECONDS );
+
 	$timeout = $render ? WPDC_RENDER_TIMEOUT : WPDC_TIMEOUT;
 	$result  = wpdc_dodo_request( 'GET', '/products/' . rawurlencode( $product ) . '/localized-prices', null, $timeout );
 	if ( wpdc_is_error( $result ) ) {
-		// Not cached, because the next visitor deserves a fresh attempt -- but
-		// also not fatal: the caller falls back to the base price, which is what
-		// the page showed before this feature existed.
+		// Remembered briefly, then retried; not fatal either: the caller falls
+		// back to the base price, which is what the page showed before this existed.
+		set_transient( $key . '_fail', 1, WPDC_CATALOG_FAIL_TTL );
 		return $result;
 	}
 
@@ -495,7 +506,11 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	// A product the catalogue does not know is refused BEFORE any session is
 	// created, and refreshed once first: the owner may have created it a minute
 	// ago, and making them wait out a cache reads as the plugin being broken.
-	if ( ! isset( $catalog[ $product ] ) ) {
+	// At most one such refresh per WPDC_UNKNOWN_TTL site-wide, so rotating
+	// invented ids cannot buy a Dodo call each.
+	$forced = wpdc_catalog_key() . '_forced';
+	if ( ! isset( $catalog[ $product ] ) && false === get_transient( $forced ) ) {
+		set_transient( $forced, 1, WPDC_UNKNOWN_TTL );
 		$catalog = wpdc_catalog( true );
 		if ( wpdc_is_error( $catalog ) ) {
 			return $catalog;
@@ -1046,9 +1061,16 @@ function wpdc_direct_link( string $page, string $key ): string {
 		return '';
 	}
 
-	$headers = array( 'Authorization' => 'Bearer ' . $key );
+	// The key rides in a header, so a redirect must not carry it anywhere else.
+	$args = array(
+		'timeout'             => WPDC_TIMEOUT,
+		'redirection'         => 0,
+		'sslverify'           => true,
+		'limit_response_size' => WPDC_LINK_RESPONSE_LIMIT,
+		'headers'             => array( 'Authorization' => 'Bearer ' . $key ),
+	);
 
-	$listed = wp_remote_get( $origin . '/artifacts', array( 'timeout' => WPDC_TIMEOUT, 'headers' => $headers ) );
+	$listed = wp_remote_get( $origin . '/artifacts', $args );
 	if ( is_wp_error( $listed ) || 200 !== wp_remote_retrieve_response_code( $listed ) ) {
 		return '';
 	}
@@ -1062,7 +1084,7 @@ function wpdc_direct_link( string $page, string $key ): string {
 
 	$minted = wp_remote_get(
 		$origin . '/link?artifact=' . rawurlencode( $artifacts[0] ),
-		array( 'timeout' => WPDC_TIMEOUT, 'headers' => $headers )
+		$args
 	);
 	if ( is_wp_error( $minted ) || 200 !== wp_remote_retrieve_response_code( $minted ) ) {
 		return '';
@@ -1088,8 +1110,11 @@ function wpdc_download_url(): string {
 function wpdc_return_url(): string {
 	if ( defined( 'WPDC_RETURN_URL' ) && is_string( WPDC_RETURN_URL ) ) {
 		$configured = trim( WPDC_RETURN_URL );
-		// Same-origin only, checked rather than trusted.
-		if ( '' !== $configured && wp_parse_url( $configured, PHP_URL_HOST ) === wp_parse_url( home_url(), PHP_URL_HOST ) ) {
+		// Same-origin only, checked rather than trusted. The scheme too: a
+		// javascript: URL can carry the shop's own host.
+		$scheme = strtolower( (string) wp_parse_url( $configured, PHP_URL_SCHEME ) );
+		if ( '' !== $configured && in_array( $scheme, array( 'http', 'https' ), true )
+			&& wp_parse_url( $configured, PHP_URL_HOST ) === wp_parse_url( home_url(), PHP_URL_HOST ) ) {
 			return $configured;
 		}
 	}

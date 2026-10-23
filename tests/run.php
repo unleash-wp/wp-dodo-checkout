@@ -12,6 +12,11 @@
 
 declare(strict_types=1);
 
+// Stubbed WordPress must never run for a web visitor who finds this file.
+if ( 'cli' !== PHP_SAPI ) {
+	exit( 1 );
+}
+
 $root = dirname( __DIR__ );
 
 // ─── Enough WordPress to run the client ──────────────────────────────────────
@@ -20,7 +25,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.16.4' );
+define( 'WPDC_VERSION', '0.16.5' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -48,6 +53,9 @@ function wp_remote_request( string $url, array $args ) {
 	// An exhausted queue is a test that asked for more calls than it scripted,
 	// which is a fact about the test rather than about the code. Said loudly.
 	return $next ?? new WP_Error( 'wpdc_test', 'no scripted response left' );
+}
+function wp_remote_get( string $url, array $args = array() ) {
+	return wp_remote_request( $url, $args + array( 'method' => 'GET' ) );
 }
 function get_transient( string $k ) {
 	return $GLOBALS['wpdc_test_transients'][ $k ] ?? false;
@@ -642,6 +650,75 @@ check( 'SILENCE: a test key in test mode is not a mismatch', false === wpdc_api_
 $GLOBALS['wpdc_test_options'] = array( 'wpdc_api_key' => 'some-other-key', 'wpdc_mode' => 'live_mode' );
 check( 'BELL: a key with no known prefix is never flagged, so nothing is guessed', false === wpdc_api_key_mode_mismatch() );
 
+// ─── The settings page keeps the stored key to itself ───────────────────────
+//
+// Before WPDC_API_KEY is defined below, so the page renders the option path.
+
+// Enough wp-admin to render the page. Audit 2026-10-23: the stored key was
+// echoed into the HTML, so anyone who could view the page source had it.
+function current_user_can( string $cap ): bool {
+	return true;
+}
+function esc_html__( string $text, string $domain = '' ): string {
+	return esc_html( $text );
+}
+function esc_attr__( string $text, string $domain = '' ): string {
+	return esc_attr( $text );
+}
+function settings_fields( string $group ): void {}
+function submit_button(): void {}
+function disabled( $value ): void {
+	echo $value ? ' disabled="disabled"' : '';
+}
+function selected( $a, $b ): void {
+	echo $a === $b ? ' selected="selected"' : '';
+}
+function sanitize_text_field( $value ): string {
+	return trim( (string) $value );
+}
+function delete_option( string $name ): bool {
+	unset( $GLOBALS['wpdc_test_options'][ $name ] );
+	return true;
+}
+require_once $root . '/includes/settings.php';
+
+check(
+	'BELL: the settings page never prints the stored key, only that one is set',
+	( static function (): bool {
+		configure();
+		$GLOBALS['wpdc_test_options']['wpdc_api_key'] = 'stored-secret-value-abc';
+		respond( 200, array( 'items' => array() ) );
+		ob_start();
+		wpdc_render_settings_page();
+		$html = (string) ob_get_clean();
+		return ! str_contains( $html, 'stored-secret-value-abc' )
+			&& str_contains( $html, 'value=""' )
+			&& str_contains( $html, 'A key is saved. Leave this field empty to keep it.' );
+	} )()
+);
+check(
+	'BELL: saving with the key field empty keeps the stored key, a new one replaces it',
+	( static function (): bool {
+		configure();
+		$GLOBALS['wpdc_test_options']['wpdc_api_key'] = 'stored-secret-value-abc';
+		return 'stored-secret-value-abc' === wpdc_sanitise_api_key( '' )
+			&& 'fresh-key' === wpdc_sanitise_api_key( ' fresh-key ' );
+	} )()
+);
+check(
+	'BELL: uninstalling removes the stored API key',
+	( static function () use ( $root ): bool {
+		configure();
+		$GLOBALS['wpdc_test_options']['wpdc_api_key'] = 'stored-secret-value-abc';
+		if ( ! is_readable( $root . '/uninstall.php' ) ) {
+			return false;
+		}
+		defined( 'WP_UNINSTALL_PLUGIN' ) || define( 'WP_UNINSTALL_PLUGIN', 'wp-dodo-checkout/wp-dodo-checkout.php' );
+		include $root . '/uninstall.php';
+		return ! isset( $GLOBALS['wpdc_test_options']['wpdc_api_key'] );
+	} )()
+);
+
 // ─── Configuration precedence ────────────────────────────────────────────────
 
 define( 'WPDC_API_KEY', 'from-wp-config' );
@@ -1174,8 +1251,8 @@ check(
 	str_contains( $settings, 'disabled( $from_constant )' )
 );
 check(
-	'BELL: and it renders the stored option, never the resolved key',
-	str_contains( $settings, '$from_constant ? \'\' : esc_attr( $stored )' )
+	'BELL: and it renders neither the resolved key nor the stored option',
+	! str_contains( $settings, 'esc_attr( $stored )' )
 		&& ! str_contains( $settings, 'esc_attr( wpdc_api_key() )' )
 );
 check(
@@ -2569,6 +2646,22 @@ check(
 	'BELL: an upstream failure is reported as "not yet", never as finished',
 	200 === $broken->get_status() && false === $broken->get_data()['finished']
 );
+check(
+	// Audit 2026-10-23: a finished answer carries download links and keys.
+	'BELL: every status answer is private, no-store',
+	( static function () use ( $open, $broken ): bool {
+		$unknown = wpdc_rest_status( new WP_REST_Request( array( 'session' => 'cks_nevermintedcache000000' ) ) );
+		$GLOBALS['wpdc_test_options'] = array();
+		$off = wpdc_rest_status( new WP_REST_Request( array( 'session' => 'cks_nevermintedcache000000' ) ) );
+		configure();
+		foreach ( array( $open, $broken, $unknown, $off ) as $r ) {
+			if ( 'private, no-store' !== ( $r->headers['cache-control'] ?? '' ) ) {
+				return false;
+			}
+		}
+		return true;
+	} )()
+);
 
 $GLOBALS['wpdc_test_transients'] = array();
 $GLOBALS['wpdc_test_requests']   = array();
@@ -3407,6 +3500,40 @@ check(
 		&& 'EUR' === $outage['currency']
 		&& false === $outage['localized']
 );
+check(
+	// Audit 2026-10-23: a failure was never remembered, so every view asked again.
+	'BELL: a failed price lookup is remembered briefly, the next view asks nobody',
+	( static function (): bool {
+		$GLOBALS['wpdc_test_requests'] = array();
+		$again = wpdc_price_for_country( 'pdt_book', 'US' );
+		return ! wpdc_is_error( $again ) && 2499 === $again['amount'] && array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+check(
+	'BELL: at the lookup ceiling the price falls back to the base and Dodo is not asked',
+	( static function (): bool {
+		configure();
+		catalogue( array( 'pdt_book' ) );
+		$GLOBALS['wpdc_test_transients']['wpdc_price_lookups'] = WPDC_PRICE_LOOKUPS_MINUTE;
+		$GLOBALS['wpdc_test_requests'] = array();
+		$p = wpdc_price_for_country( 'pdt_book', 'US' );
+		$asked = array_filter( $GLOBALS['wpdc_test_requests'], static fn( $r ) => str_contains( $r['url'], 'localized-prices' ) );
+		return ! wpdc_is_error( $p ) && false === $p['localized'] && array() === $asked;
+	} )()
+);
+check(
+	// A busy page served from cache must never reach the ceiling.
+	'BELL: only lookups that reach Dodo are counted, cached answers are free',
+	( static function (): bool {
+		configure();
+		catalogue( array( 'pdt_book' ) );
+		respond( 200, array( 'items' => array( array( 'currency' => 'USD', 'amount' => 1999 ) ) ) );
+		wpdc_price_for_country( 'pdt_book', 'US' );
+		wpdc_price_for_country( 'pdt_book', 'US' );
+		wpdc_rest_price( new WP_REST_Request( array( 'product' => 'pdt_book' ) ) );
+		return 1 === (int) get_transient( 'wpdc_price_lookups' );
+	} )()
+);
 
 configure();
 catalogue( array( 'pdt_book' ) );
@@ -3423,7 +3550,10 @@ check(
 	// One price cached at the edge and handed to the next country is the exact
 	// mismatch this feature exists to remove.
 	'BELL: a per-visitor price is never cached anywhere',
-	2 === substr_count( $rest, "header( 'cache-control', 'private, no-store' )" )
+	2 === substr_count(
+		(string) strstr( (string) strstr( $rest, 'function wpdc_rest_price(' ), 'function wpdc_rest_status(', true ),
+		"header( 'cache-control', 'private, no-store' )"
+	)
 );
 check(
 	// The shortcode renders the BASE price and the script replaces it. A
@@ -3483,6 +3613,28 @@ check(
 		return 400 === $again->get_status()
 			&& 'unknown_product' === $again->get_data()['reason']
 			&& array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+check(
+	// Audit 2026-10-23: the memo above is per id, so rotating ids bought one fetch each.
+	'BELL: a different invented id right after does not refetch the catalogue',
+	( static function (): bool {
+		$GLOBALS['wpdc_test_requests'] = array();
+		$other = mint( array( 'product' => 'pdt_ghost2' ) );
+		return 400 === $other->get_status()
+			&& 'unknown_product' === $other->get_data()['reason']
+			&& array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+check(
+	'BELL: once the window passes, a just-created product is found by a fresh look',
+	( static function (): bool {
+		unset( $GLOBALS['wpdc_test_transients'][ wpdc_catalog_key() . '_forced' ] );
+		$GLOBALS['wpdc_test_requests'] = array();
+		catalogue( array( 'pdt_pro', 'pdt_new' ) );
+		respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_n', 'session_id' => 'cks_newprod01' ) );
+		return 200 === mint( array( 'product' => 'pdt_new' ) )->get_status()
+			&& 2 === count( $GLOBALS['wpdc_test_requests'] );
 	} )()
 );
 
@@ -3716,6 +3868,36 @@ check(
 );
 
 check(
+	// Audit 2026-10-23: a buyer clicking before Dodo said "succeeded" burned the allowance.
+	'BELL: clicks before the payment succeeded do not spend the code allowance',
+	( function () use ( $code_session ): bool {
+		configure();
+		wpdc_remember_session( $code_session );
+		for ( $i = 0; $i < WPDC_ACCOUNT_CODES_SALE + 1; $i++ ) {
+			respond( 200, array( 'payment_status' => 'processing' ) );
+			wpdc_account_code( $code_session, 'de' );
+		}
+		$GLOBALS['wpdc_test_requests'] = array();
+		respond( 200, array( 'payment_status' => 'succeeded', 'payment_id' => 'pay_0Test123' ) );
+		respond( 200, array( 'email' => 'buyer@example.com' ) );
+		return 'buyer@example.com' === wpdc_account_code( $code_session, 'de' )
+			&& 2 === count( $GLOBALS['wpdc_test_requests'] );
+	} )()
+);
+check(
+	'BELL: the Dodo lookups behind early clicks have their own ceiling',
+	( function () use ( $code_session ): bool {
+		configure();
+		wpdc_remember_session( $code_session );
+		for ( $i = 0; $i < WPDC_ACCOUNT_LOOKUPS_SALE; $i++ ) {
+			respond( 200, array( 'payment_status' => 'processing' ) );
+			wpdc_account_code( $code_session, 'de' );
+		}
+		$GLOBALS['wpdc_test_requests'] = array();
+		return '' === wpdc_account_code( $code_session, 'de' ) && array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+check(
 	'BELL: the route answers with the address and nothing about the payment',
 	( function () use ( $code_session ): bool {
 		configure();
@@ -3872,6 +4054,31 @@ check(
 	'BELL: attributes survive the late expansion',
 	str_contains( wpdc_account_expand( '<p>[wpdc_account label="Konto" size="24"]</p>' ), '<span class="wpdc-account-link__text">Konto</span>' )
 		&& str_contains( wpdc_account_expand( '<p>[wpdc_account size="24"]</p>' ), 'width="24" height="24"' )
+);
+check(
+	// Audit 2026-10-23: expanded inside an attribute or a script, the link's
+	// quotes break out of it.
+	'BELL: the late expansion touches text only, never a tag, a script or a style',
+	( function (): bool {
+		$inert = array(
+			'<a title="[wpdc_account]">x</a>',
+			'<a title="a > b [wpdc_account]" href="/">x</a>',
+			"<img alt='[wpdc_account label=\"x\"]'>",
+			'<script>var s = "[wpdc_account]";</script>',
+			'<SCRIPT type="text/javascript">if (a<b) { s = "[wpdc_account]"; }</SCRIPT>',
+			'<style>/* [wpdc_account] */</style>',
+			'<!-- [wpdc_account] -->',
+		);
+		foreach ( $inert as $page ) {
+			if ( $page !== wpdc_account_expand( $page ) ) {
+				return false;
+			}
+		}
+		$mixed = wpdc_account_expand( '<a title="[wpdc_account]">[wpdc_account]</a><script>"[wpdc_account]"</script>' );
+		return 1 === substr_count( $mixed, 'class="wpdc-account-link"' )
+			&& str_starts_with( $mixed, '<a title="[wpdc_account]"><a class="wpdc-account-link"' )
+			&& str_ends_with( $mixed, '</a></a><script>"[wpdc_account]"</script>' );
+	} )()
 );
 check(
 	'SILENCE: a page without the shortcode comes back byte for byte',
@@ -4187,6 +4394,68 @@ check(
 	'BELL: field borders are visible but softened, dividers a step lighter',
 	'#939fb8' === ( wpdc_theme_config( 'de' )['light']['border_primary'] ?? '' )
 		&& '#bfc8da' === ( wpdc_theme_config( 'de' )['light']['border_secondary'] ?? '' )
+);
+
+check(
+	// Audit 2026-10-23: the key goes in a header, so a redirect must not carry it on.
+	'BELL: the direct-link lookups follow no redirect and cap what they read',
+	( static function (): bool {
+		configure();
+		respond( 200, array( 'artifacts' => array( 'easy-svg-pro.zip' ) ) );
+		respond( 200, array( 'url' => 'https://downloads.example/f/easy-svg-pro.zip?sig=1' ) );
+		$url  = wpdc_direct_link( 'https://downloads.example/', 'key_1' );
+		$sent = $GLOBALS['wpdc_test_requests'];
+		if ( 'https://downloads.example/f/easy-svg-pro.zip?sig=1' !== $url || 2 !== count( $sent ) ) {
+			return false;
+		}
+		foreach ( $sent as $call ) {
+			if ( 0 !== ( $call['args']['redirection'] ?? null )
+				|| true !== ( $call['args']['sslverify'] ?? null )
+				|| WPDC_LINK_RESPONSE_LIMIT !== ( $call['args']['limit_response_size'] ?? null ) ) {
+				return false;
+			}
+		}
+		return true;
+	} )()
+);
+
+check(
+	// Audit 2026-10-23: a harness reachable over HTTP would run for any visitor.
+	'BELL: the harness refuses to run outside the command line, before anything else',
+	1 === preg_match(
+		"/^<\\?php\\s*\\/\\*\\*.*?\\*\\/\\s*declare\\(strict_types=1\\);\\s*(?:\\/\\/[^\\n]*\\n\\s*)*if \\( 'cli' !== PHP_SAPI \\) \\{\\s*exit\\( 1 \\);\\s*\\}/s",
+		(string) file_get_contents( __FILE__ )
+	)
+);
+
+check(
+	// Audit 2026-10-23: a moved tag runs somebody else's code with our release token.
+	'BELL: every workflow action is pinned to a full commit SHA, and the release runs the checks first',
+	( static function () use ( $root ): bool {
+		$release = (string) file_get_contents( $root . '/.github/workflows/release.yml' );
+		$uses    = 0;
+		foreach ( glob( $root . '/.github/workflows/*.yml' ) ?: array() as $file ) {
+			foreach ( file( $file ) ?: array() as $line ) {
+				if ( 1 === preg_match( '/^\s*-?\s*uses:\s*(\S+)(.*)$/', $line, $m ) ) {
+					$uses++;
+					if ( 1 !== preg_match( '/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/', $m[1] ) || 1 !== preg_match( '/^\s+# v?\d+\.\d+\.\d+\s*$/', $m[2] ) ) {
+						return false;
+					}
+				}
+			}
+		}
+		$tests = strpos( $release, 'run: php tests/run.php' );
+		$zip   = strpos( $release, '- name: Build the zip' );
+		return $uses >= 4 && false !== $tests && false !== $zip && $tests < $zip;
+	} )()
+);
+
+// Defined last, because a constant cannot be undefined for the tests above.
+// The host matches the shop, so only the scheme check can refuse it.
+define( 'WPDC_RETURN_URL', "javascript://shop.example/%0Aalert(document.domain)" );
+check(
+	'BELL: a return URL that is not http or https is refused even on the shop host',
+	'' === wpdc_return_url()
 );
 
 if ( $failures ) {

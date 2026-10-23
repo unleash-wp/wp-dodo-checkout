@@ -90,8 +90,8 @@ function wpdc_register_rest(): void {
 		array(
 			// GET, and no nonce, unlike its neighbours. Both follow from what this
 			// route is: it reads a price out of a catalogue the shop publishes on
-			// its own sales pages anyway. It creates nothing, it spends nothing
-			// per call -- the Dodo lookup behind it is cached per product -- and
+			// its own sales pages anyway. It creates nothing, it spends little --
+			// the Dodo lookup behind it is cached per product, failures too -- and
 			// it answers only about ids Dodo currently lists. A nonce here would
 			// buy nothing and would break the one case this exists for: a page
 			// served from a full-page cache, where no fresh nonce is available.
@@ -166,8 +166,8 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 	 * The REST validator guarantees the SHAPE, so what reaches this callback is a
 	 * well-formed id that may or may not be on sale. The first unlisted one is
 	 * checked against Dodo (wpdc_create_session refreshes the catalogue for it);
-	 * after that the answer is remembered for WPDC_UNKNOWN_TTL, so a loop of
-	 * invented ids costs one fetch each rather than a fresh Dodo call every time.
+	 * after that the answer is remembered for WPDC_UNKNOWN_TTL, and the client
+	 * refreshes at most once per that window, so rotated ids cost no extra fetch.
 	 */
 	$unknown_key = 'wpdc_unknown_' . md5( $product . '|' . (string) $bump );
 	if ( false !== get_transient( $unknown_key ) ) {
@@ -302,7 +302,8 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
  */
 function wpdc_rest_price( WP_REST_Request $request ): WP_REST_Response {
 	$product = (string) $request->get_param( 'product' );
-	$price   = wpdc_price_for_country( $product, wpdc_visitor_country() );
+
+	$price = wpdc_price_for_country( $product, wpdc_visitor_country() );
 
 	if ( wpdc_is_error( $price ) ) {
 		// Silent by design. The page already shows a price; saying "we could not
@@ -352,6 +353,13 @@ function wpdc_rest_price( WP_REST_Request $request ): WP_REST_Response {
  * The API key is spent per call, so the ceiling below is not optional.
  */
 function wpdc_rest_status( WP_REST_Request $request ): WP_REST_Response {
+	// A finished answer carries download links and a licence key: no shared cache keeps it.
+	$response = wpdc_rest_status_answer( $request );
+	$response->header( 'cache-control', 'private, no-store' );
+	return $response;
+}
+
+function wpdc_rest_status_answer( WP_REST_Request $request ): WP_REST_Response {
 	if ( ! wpdc_is_configured() ) {
 		return new WP_REST_Response( array( 'finished' => false ), 200 );
 	}

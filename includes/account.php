@@ -16,6 +16,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 const WPDC_ACCOUNT_DEFAULT    = 'https://account.unleash-wp.com';
 const WPDC_ACCOUNT_CODES_SALE = 2;
+// Dodo lookups per checkout, so early clicks stay cheap without becoming free Dodo spend.
+const WPDC_ACCOUNT_LOOKUPS_SALE = 10;
 
 function wpdc_account_url(): string {
 	if ( defined( 'WPDC_ACCOUNT_URL' ) && is_string( WPDC_ACCOUNT_URL ) ) {
@@ -47,12 +49,14 @@ function wpdc_account_code( string $session, string $lang ): string {
 		return '';
 	}
 
-	$bucket = 'wpdc_account_code_' . md5( $session );
-	$spent  = (int) get_transient( $bucket );
-	if ( $spent >= WPDC_ACCOUNT_CODES_SALE ) {
+	$bucket  = 'wpdc_account_code_' . md5( $session );
+	$spent   = (int) get_transient( $bucket );
+	$lookups = 'wpdc_account_lookup_' . md5( $session );
+	$looked  = (int) get_transient( $lookups );
+	if ( $spent >= WPDC_ACCOUNT_CODES_SALE || $looked >= WPDC_ACCOUNT_LOOKUPS_SALE ) {
 		return '';
 	}
-	set_transient( $bucket, $spent + 1, HOUR_IN_SECONDS );
+	set_transient( $lookups, $looked + 1, HOUR_IN_SECONDS );
 
 	$checkout = wpdc_dodo_request( 'GET', '/checkouts/' . rawurlencode( $session ), null );
 	if ( wpdc_is_error( $checkout ) || 'succeeded' !== ( $checkout['payment_status'] ?? '' ) ) {
@@ -62,6 +66,9 @@ function wpdc_account_code( string $session, string $lang ): string {
 	if ( ! is_string( $payment ) || 1 !== preg_match( '/^pay_[A-Za-z0-9]+$/', $payment ) ) {
 		return '';
 	}
+
+	// Spent only now: a click before the payment succeeded mailed nobody.
+	set_transient( $bucket, $spent + 1, HOUR_IN_SECONDS );
 
 	$response = wp_remote_request(
 		wpdc_account_url() . '/api/handoff/code',
@@ -213,15 +220,32 @@ function wpdc_account_expand( string $html ): string {
 	if ( ! str_contains( $html, '[wpdc_account' ) ) {
 		return $html;
 	}
-	$out = preg_replace_callback(
-		'/\[wpdc_account(\s[^\]]*)?\]/',
-		static function ( array $m ): string {
-			$atts = shortcode_parse_atts( trim( $m[1] ?? '' ) );
-			return wpdc_render_account( is_array( $atts ) ? $atts : array() );
-		},
-		$html
+	// Text between tags only: inside an attribute, a script or a style the
+	// link's quotes would break out of where it was written.
+	$parts = preg_split(
+		'/(<script\b.*?<\/script\s*>|<style\b.*?<\/style\s*>|<!--.*?-->|<[a-z\/!?](?:"[^"]*"|\'[^\']*\'|[^\'">])*>)/is',
+		$html,
+		-1,
+		PREG_SPLIT_DELIM_CAPTURE
 	);
-	return is_string( $out ) ? $out : $html;
+	if ( ! is_array( $parts ) ) {
+		return $html;
+	}
+	foreach ( $parts as $i => $part ) {
+		if ( 1 === $i % 2 || ! str_contains( $part, '[wpdc_account' ) ) {
+			continue;
+		}
+		$out = preg_replace_callback(
+			'/\[wpdc_account(\s[^\]]*)?\]/',
+			static function ( array $m ): string {
+				$atts = shortcode_parse_atts( trim( $m[1] ?? '' ) );
+				return wpdc_render_account( is_array( $atts ) ? $atts : array() );
+			},
+			$part
+		);
+		$parts[ $i ] = is_string( $out ) ? $out : $part;
+	}
+	return implode( '', $parts );
 }
 
 function wpdc_account_buffer(): void {

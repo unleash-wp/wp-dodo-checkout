@@ -74,10 +74,10 @@ msgid "Mode"
 msgstr "Modus"
 
 msgid "Test — no real money moves"
-msgstr "Test – es fließt kein echtes Geld"
+msgstr "Test: es fließt kein echtes Geld"
 
 msgid "Live — real cards are charged"
-msgstr "Live – echte Karten werden belastet"
+msgstr "Live: echte Karten werden belastet"
 
 msgid "What this site can sell"
 msgstr "Was diese Website verkaufen kann"
@@ -104,13 +104,16 @@ msgid "No API key yet, so nothing was checked. This does not mean there is nothi
 msgstr "Noch kein API-Schlüssel, es wurde also nichts geprüft. Das heißt nicht, dass es nichts zu verkaufen gibt."
 
 msgid "Dodo answered, and this account has no live products. Create one in the Dodo dashboard and it becomes sellable here, with no changes to this site."
-msgstr "Dodo hat geantwortet, und dieses Konto hat keine aktiven Produkte. Legen Sie eines im Dodo-Dashboard an, dann ist es hier verkäuflich – ohne Änderung an dieser Website."
+msgstr "Dodo hat geantwortet, und dieses Konto hat keine aktiven Produkte. Legen Sie eines im Dodo-Dashboard an, dann ist es hier verkäuflich, ohne Änderung an dieser Website."
 
 msgid "Dodo has no restricted API keys, so this one can issue refunds and read every customer. Prefer WPDC_API_KEY in wp-config.php, which keeps it out of the database and out of every backup."
-msgstr "Dodo kennt keine eingeschränkten API-Schlüssel: dieser kann Erstattungen auslösen und jeden Kunden lesen. Besser WPDC_API_KEY in der wp-config.php – dann steht er nicht in der Datenbank und in keiner Sicherung."
+msgstr "Dodo kennt keine eingeschränkten API-Schlüssel: dieser kann Erstattungen auslösen und jeden Kunden lesen. Besser WPDC_API_KEY in der wp-config.php. Dann steht er nicht in der Datenbank und in keiner Sicherung."
 
 msgid "Set in wp-config.php as WPDC_API_KEY, which is why this field is disabled: saving here would copy the key into the database, and keeping it out is the whole point of the constant."
-msgstr "In der wp-config.php als WPDC_API_KEY gesetzt – deshalb ist dieses Feld gesperrt: Speichern würde den Schlüssel in die Datenbank kopieren, und genau das soll die Konstante verhindern."
+msgstr "In der wp-config.php als WPDC_API_KEY gesetzt. Deshalb ist dieses Feld gesperrt: Speichern würde den Schlüssel in die Datenbank kopieren, und genau das soll die Konstante verhindern."
+
+msgid "A key is saved. Leave this field empty to keep it."
+msgstr "Ein Schlüssel ist gespeichert. Feld leer lassen, um ihn zu behalten."
 
 msgid "wpdc_checkout: a product attribute holding a Dodo product id (pdt_...) is required."
 msgstr "wpdc_checkout: Es wird ein Attribut product mit einer Dodo-Produkt-ID (pdt_…) benötigt."
@@ -158,7 +161,7 @@ msgid "Your licence key"
 msgstr "Dein Lizenzschlüssel"
 
 msgid "We could not confirm your order in time. If you were charged it is on its way — check your inbox, or contact us and we will sort it out."
-msgstr "Wir konnten deine Bestellung nicht rechtzeitig bestätigen. Falls abgebucht wurde, ist sie unterwegs — sieh in dein Postfach oder melde dich bei uns, wir klären das."
+msgstr "Wir konnten deine Bestellung nicht rechtzeitig bestätigen. Falls abgebucht wurde, ist sie unterwegs. Sieh in dein Postfach oder melde dich bei uns, wir klären das."
 
 msgid "Download now"
 msgstr "Jetzt herunterladen"
@@ -170,7 +173,7 @@ msgid "Copied."
 msgstr "Kopiert."
 
 msgid "Selected — press Ctrl/Cmd + C to copy."
-msgstr "Markiert — mit Strg/Cmd + C kopieren."
+msgstr "Markiert. Mit Strg/Cmd + C kopieren."
 
 msgid "Close window"
 msgstr "Fenster schließen"
