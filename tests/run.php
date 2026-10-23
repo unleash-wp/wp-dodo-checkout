@@ -3575,6 +3575,14 @@ check(
 	wpdc_is_error( $offPrice ) && 'unknown_product' === $offPrice['reason']
 );
 
+// The SVG carries wide inner margins: at 16px the mark rendered about 9px tall,
+// smaller than the sentence it closes. Owner flagged it on the live panel.
+check(
+	'BELL: the Dodo mark in the payment line is sized to be read',
+	str_contains( $shortcode, 'alt="Dodo Payments" width="137" height="28"' )
+		&& 1 === preg_match( '/\.wpdc__legal-mark\s*\{[^}]*height:\s*28px/', $css )
+);
+
 if ( $failures ) {
 	echo count( $failures ) . " of $checks checks FAILED\n";
 	foreach ( $failures as $name ) {
