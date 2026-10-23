@@ -172,8 +172,9 @@ dialog.uwp-login .uwp-login__primary {
   border: 0 !important;
   font-size: 15px !important;
 }
-dialog.uwp-login .uwp-login__primary:hover,
-dialog.uwp-login .uwp-login__primary:focus {
+/* Impreza paints every submit white on hover at (0,5,0); doubled classes outrank it. */
+dialog.uwp-login.uwp-login .uwp-login__primary.uwp-login__primary:not([hidden]):hover,
+dialog.uwp-login.uwp-login .uwp-login__primary.uwp-login__primary:not([hidden]):focus {
   background: #e6ab00 !important;
   color: #203159 !important;
 }

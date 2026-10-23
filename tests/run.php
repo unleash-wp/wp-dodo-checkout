@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.16.1' );
+define( 'WPDC_VERSION', '0.16.2' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -3819,6 +3819,15 @@ check(
 			&& str_contains( $css, 'text-transform: none !important' )
 			&& 1 === preg_match( '/button::before,\s*dialog\.uwp-login button::after\s*\{\s*display:\s*none !important/', $css );
 	} )()
+);
+
+check(
+	// Measured live: Impreza's `.no-touch [type="submit"]:not(.w-btn):not(.button):hover` (0,5,0) paints the text white.
+	'BELL: the modal button keeps navy text on hover against the theme',
+	1 === preg_match(
+		'/dialog\.uwp-login\.uwp-login \.uwp-login__primary\.uwp-login__primary:not\(\[hidden\]\):hover,[^{]*\{[^}]*color:\s*#203159 !important/',
+		(string) file_get_contents( $root . '/assets/account-login.css' )
+	)
 );
 
 // ─── The header shortcode ────────────────────────────────────────────────────
