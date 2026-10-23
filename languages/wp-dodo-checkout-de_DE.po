@@ -263,3 +263,6 @@ msgstr "Wir haben einen Code an %s geschickt. Er ist zehn Minuten gültig und nu
 
 msgid "Too many wrong codes. Send yourself a new one."
 msgstr "Zu viele falsche Codes. Lass dir einen neuen schicken."
+
+msgid "My account"
+msgstr "Mein Konto"
