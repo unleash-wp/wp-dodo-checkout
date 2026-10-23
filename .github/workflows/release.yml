@@ -33,7 +33,7 @@ jobs:
     # must never run on a self-hosted runner that holds our keys.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: The tag and the version must agree
         if: startsWith(github.ref, 'refs/tags/v')
@@ -51,6 +51,15 @@ jobs:
             echo "::error::the tag ($tag), the header ($header) and WPDC_VERSION ($constant) do not all agree"
             exit 1
           fi
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      # A tag must not ship a zip the contract checks would have refused.
+      - name: Contract checks
+        run: php tests/run.php
 
       - name: Build the zip
         run: |
@@ -89,7 +98,7 @@ jobs:
 
       - name: Keep the zip as a dry-run artifact
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wp-dodo-checkout-zip
           path: dist/wp-dodo-checkout.zip

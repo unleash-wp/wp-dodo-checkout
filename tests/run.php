@@ -4423,6 +4423,28 @@ check(
 	)
 );
 
+check(
+	// Audit 2026-10-23: a moved tag runs somebody else's code with our release token.
+	'BELL: every workflow action is pinned to a full commit SHA, and the release runs the checks first',
+	( static function () use ( $root ): bool {
+		$release = (string) file_get_contents( $root . '/.github/workflows/release.yml' );
+		$uses    = 0;
+		foreach ( glob( $root . '/.github/workflows/*.yml' ) ?: array() as $file ) {
+			foreach ( file( $file ) ?: array() as $line ) {
+				if ( 1 === preg_match( '/^\s*-?\s*uses:\s*(\S+)(.*)$/', $line, $m ) ) {
+					$uses++;
+					if ( 1 !== preg_match( '/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/', $m[1] ) || 1 !== preg_match( '/^\s+# v?\d+\.\d+\.\d+\s*$/', $m[2] ) ) {
+						return false;
+					}
+				}
+			}
+		}
+		$tests = strpos( $release, 'run: php tests/run.php' );
+		$zip   = strpos( $release, '- name: Build the zip' );
+		return $uses >= 4 && false !== $tests && false !== $zip && $tests < $zip;
+	} )()
+);
+
 // Defined last, because a constant cannot be undefined for the tests above.
 // The host matches the shop, so only the scheme check can refuse it.
 define( 'WPDC_RETURN_URL', "javascript://shop.example/%0Aalert(document.domain)" );
