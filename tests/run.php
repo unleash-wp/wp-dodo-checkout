@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.11.3' );
+define( 'WPDC_VERSION', '0.12.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -3992,7 +3992,7 @@ check(
 );
 
 check(
-	// Measured live on 0.11.3: after signing in from the panel the discount line
+	// Measured live on 0.11.1: after signing in from the panel the discount line
 	// kept "Opening checkout…" for good, because only the discount path overwrote it.
 	'BELL: the re-mint after signing in clears the busy line it borrowed',
 	str_contains( (string) file_get_contents( $root . '/assets/checkout.js' ), ".then(function () { note.textContent = ''; })" )
