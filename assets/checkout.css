@@ -917,11 +917,10 @@
 }
 .wpdc__legal-mark {
   display: block;
-  height: 28px;
+  /* The SVG is cropped to its ink, so flex centring centres what is seen. */
+  height: 18px;
   width: auto;
   opacity: .85;
-  /* The round mark sits high in the logo; this centres the sentence on it. */
-  transform: translateY(1.5px);
 }
 .wpdc__legal-link:hover .wpdc__legal-mark,
 .wpdc__legal-link:focus-visible .wpdc__legal-mark {
