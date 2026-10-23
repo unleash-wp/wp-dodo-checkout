@@ -3858,6 +3858,36 @@ check(
 );
 
 check(
+	// Audit 2026-10-23: a buyer clicking before Dodo said "succeeded" burned the allowance.
+	'BELL: clicks before the payment succeeded do not spend the code allowance',
+	( function () use ( $code_session ): bool {
+		configure();
+		wpdc_remember_session( $code_session );
+		for ( $i = 0; $i < WPDC_ACCOUNT_CODES_SALE + 1; $i++ ) {
+			respond( 200, array( 'payment_status' => 'processing' ) );
+			wpdc_account_code( $code_session, 'de' );
+		}
+		$GLOBALS['wpdc_test_requests'] = array();
+		respond( 200, array( 'payment_status' => 'succeeded', 'payment_id' => 'pay_0Test123' ) );
+		respond( 200, array( 'email' => 'buyer@example.com' ) );
+		return 'buyer@example.com' === wpdc_account_code( $code_session, 'de' )
+			&& 2 === count( $GLOBALS['wpdc_test_requests'] );
+	} )()
+);
+check(
+	'BELL: the Dodo lookups behind early clicks have their own ceiling',
+	( function () use ( $code_session ): bool {
+		configure();
+		wpdc_remember_session( $code_session );
+		for ( $i = 0; $i < WPDC_ACCOUNT_LOOKUPS_SALE; $i++ ) {
+			respond( 200, array( 'payment_status' => 'processing' ) );
+			wpdc_account_code( $code_session, 'de' );
+		}
+		$GLOBALS['wpdc_test_requests'] = array();
+		return '' === wpdc_account_code( $code_session, 'de' ) && array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+check(
 	'BELL: the route answers with the address and nothing about the payment',
 	( function () use ( $code_session ): bool {
 		configure();
