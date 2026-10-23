@@ -1098,16 +1098,15 @@ function wpdc_return_url(): string {
 }
 
 /**
- * The UnleashWP look for Dodo's checkout form: navy text, the yellow button,
- * the one 5px corner, larger type. A font only when the shop names its own
- * https file (WPDC_CHECKOUT_FONT_URL); never Google, whose fonts would take
- * every buyer's address with them.
+ * The UnleashWP look for Dodo's checkout form: navy text and controls, the one
+ * 5px corner, larger type, Ubuntu from our own server. Never Google, whose
+ * fonts would take every buyer's address with them.
  */
 function wpdc_theme_config( string $language = '' ): array {
 	$config = array(
-		// The largest size that still fits the 1040px window; the card block,
-		// which is the payment provider's own frame, keeps its size regardless.
-		'font_size'   => 'xl',
+		// The card block is the payment provider's own frame and keeps its size;
+		// everything Dodo themes takes this one.
+		'font_size'   => '2xl',
 		'font_weight' => 'medium',
 		'radius'      => '5px',
 		'light'       => array(
@@ -1121,9 +1120,11 @@ function wpdc_theme_config( string $language = '' ): array {
 			'text_placeholder'       => '#6b7591',
 			'text_error'             => '#b42318',
 			'text_success'           => '#1a7f4b',
-			'button_primary'         => '#fcbe00',
-			'button_primary_hover'   => '#e6ab00',
-			'button_text_primary'    => '#203159',
+			// Measured: this paints the radios and the focus ring, while the enabled
+			// pay button takes text_primary. Navy keeps all three one colour.
+			'button_primary'         => '#203159',
+			'button_primary_hover'   => '#2b3466',
+			'button_text_primary'    => '#ffffff',
 			'button_secondary'       => '#f4f6fb',
 			'button_secondary_hover' => '#e6eaf3',
 			'button_text_secondary'  => '#203159',
@@ -1138,9 +1139,12 @@ function wpdc_theme_config( string $language = '' ): array {
 	if ( isset( $pay[ $language ] ) ) {
 		$config['pay_button_text'] = $pay[ $language ];
 	}
-	if ( defined( 'WPDC_CHECKOUT_FONT_URL' ) && wpdc_is_font_url( WPDC_CHECKOUT_FONT_URL ) ) {
-		$config['font_primary_url'] = WPDC_CHECKOUT_FONT_URL;
-	}
+	// Ubuntu from the account's own server; Dodo takes the family from `family=`.
+	$font = defined( 'WPDC_CHECKOUT_FONT_URL' ) && wpdc_is_font_url( WPDC_CHECKOUT_FONT_URL )
+		? WPDC_CHECKOUT_FONT_URL
+		: wpdc_account_url() . '/fonts/ubuntu.css?family=Ubuntu';
+	$config['font_primary_url']   = $font;
+	$config['font_secondary_url'] = $font;
 	return $config;
 }
 
