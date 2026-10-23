@@ -375,6 +375,12 @@ function wpdc_render( $atts ): string {
 				// A form rather than a div with a button: Enter submits it, which
 				// is what somebody who has just typed a code will press.
 				?>
+				<?php // Shown by the browser only when the account does not know this visitor. ?>
+				<p class="wpdc__signin" hidden>
+					<button type="button" class="wpdc__signin-link" data-wpdc-signin>
+						<?php echo esc_html__( 'Already a customer? Sign in', 'wp-dodo-checkout' ); ?>
+					</button>
+				</p>
 				<form class="wpdc__discount" novalidate>
 					<input type="text" class="wpdc__discount-input"
 						name="wpdc_discount"

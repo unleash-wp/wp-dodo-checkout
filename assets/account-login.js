@@ -13,6 +13,7 @@
   var opener = null;
   var email = '';
   var resendAt = 0;
+  var onDone = null;
 
   function el(tag, attrs, kids) {
     var node = document.createElement(tag);
@@ -199,8 +200,12 @@
     });
     other.addEventListener('click', function () { step('email'); });
 
-    var goBtn = el('button', { type: 'button', class: 'uwp-login__primary', text: c.s.open });
-    goBtn.addEventListener('click', openDownloads);
+    var goBtn = el('button', { type: 'button', class: 'uwp-login__primary uwp-login__go', text: c.s.open });
+    goBtn.addEventListener('click', function () {
+      // Opened from a checkout: back to the purchase, not away to Downloads.
+      if (onDone) { var next = onDone; onDone = null; dialog.close(); next(); return; }
+      openDownloads();
+    });
     var done = el('div', { class: 'uwp-login__step uwp-login__step--done', hidden: '' }, [
       el('p', { class: 'uwp-login__lead', text: c.s.signedIn }),
       goBtn
@@ -228,7 +233,9 @@
 
   window.wpdcAccountLogin.open = function (from, opts) {
     opener = from || null;
+    onDone = opts && typeof opts.onDone === 'function' ? opts.onDone : null;
     if (!dialog) build();
+    dialog.querySelector('.uwp-login__go').textContent = onDone ? c.s.continue : c.s.open;
     if (!pow) prefetch();
     dialog.showModal();
     if (c.signedIn) { step('done'); return; }

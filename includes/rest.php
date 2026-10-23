@@ -128,6 +128,12 @@ function wpdc_register_rest(): void {
 					'validate_callback' => static fn( $value ): bool =>
 						is_string( $value ) && 1 === preg_match( '/^[a-z]{2}$/i', $value ),
 				),
+				'email'    => array(
+					'validate_callback' => static fn( $value ): bool => is_string( $value ) && strlen( $value ) <= 254,
+				),
+				'name'     => array(
+					'validate_callback' => static fn( $value ): bool => is_string( $value ) && strlen( $value ) <= 400,
+				),
 				'discount' => array(
 					'required'          => false,
 					'validate_callback' => 'wpdc_is_discount_code',
@@ -217,7 +223,11 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 		(int) ( $request->get_param( 'quantity' ) ?? 1 ),
 		$bump,
 		$lang,
-		$discount
+		$discount,
+		wpdc_prefill_customer(
+			null !== $request->get_param( 'email' ) ? (string) $request->get_param( 'email' ) : null,
+			null !== $request->get_param( 'name' ) ? (string) $request->get_param( 'name' ) : null
+		)
 	);
 
 	if ( ! $result['ok'] ) {

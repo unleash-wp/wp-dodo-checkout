@@ -136,6 +136,7 @@ function wpdc_account_login_config(): array {
 			'offline'     => __( 'No connection. Try again in a moment.', 'wp-dodo-checkout' ),
 			'signedIn'    => __( 'You are signed in.', 'wp-dodo-checkout' ),
 			'open'        => __( 'Open my downloads', 'wp-dodo-checkout' ),
+			'continue'    => __( 'Continue to checkout', 'wp-dodo-checkout' ),
 			'close'       => __( 'Close', 'wp-dodo-checkout' ),
 		),
 	);
@@ -228,4 +229,21 @@ function wpdc_account_buffer(): void {
 		return;
 	}
 	ob_start( 'wpdc_account_expand' );
+}
+
+/**
+ * What a signed-in visitor's browser says about them, cleaned for Dodo's form.
+ * It is a convenience, not an identity: the same person could type it.
+ */
+function wpdc_prefill_customer( ?string $email, ?string $name ): ?array {
+	$email = strtolower( trim( (string) $email ) );
+	if ( '' === $email || strlen( $email ) > 254 || ! is_email( $email ) ) {
+		return null;
+	}
+	$out  = array( 'email' => $email );
+	$name = trim( (string) preg_replace( '/\s+/u', ' ', (string) preg_replace( '/[\x00-\x1F\x7F]/u', '', strip_tags( (string) $name ) ) ) );
+	if ( '' !== $name ) {
+		$out['name'] = mb_substr( $name, 0, 100 );
+	}
+	return $out;
 }

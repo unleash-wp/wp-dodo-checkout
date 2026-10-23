@@ -269,3 +269,9 @@ msgstr "Mein Konto"
 
 msgid "The security check did not work. Try again."
 msgstr "Die Sicherheitsprüfung hat nicht geklappt. Versuch es noch einmal."
+
+msgid "Continue to checkout"
+msgstr "Weiter zum Kauf"
+
+msgid "Already a customer? Sign in"
+msgstr "Schon Kunde? Anmelden"

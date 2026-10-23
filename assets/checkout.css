@@ -797,6 +797,40 @@
 /* Under the note, quiet: removing a code is a correction, not an action the
    panel is inviting. Underlined rather than boxed so it does not read as a
    second Apply. */
+/* "Already a customer? Sign in": a quiet line above the code field, armoured
+   like the panel's other controls because the theme styles every button. */
+.wpdc__signin {
+  margin: 0 0 10px;
+}
+.wpdc__signin[hidden] {
+  display: none;
+}
+.wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-link {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: var(--wpdc-panel-fg) !important;
+  font: inherit !important;
+  font-size: 13px !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-link::before,
+.wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-link::after {
+  display: none !important;
+}
+.wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-link:hover {
+  color: var(--wpdc-panel-accent) !important;
+}
+.wpdc__signin-link:focus-visible {
+  outline: 2px solid var(--wpdc-panel-accent);
+  outline-offset: 2px;
+}
 .wpdc__discount-clear {
   grid-column: 1 / -1;
   justify-self: start;

@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.10.0' );
+define( 'WPDC_VERSION', '0.11.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -2251,7 +2251,8 @@ check(
 	// told about one after the fact nor told to forget one. Two copies of that
 	// would be two places to fix the next thing found in it.
 	'BELL: applying and removing share one path',
-	3 === substr_count( $js, 'remintWith' )
+	// Definition, apply/remove, and the re-mint after signing in from the panel.
+	4 === substr_count( $js, 'remintWith' )
 		&& str_contains( $js, "event.target.closest('.wpdc__discount-clear')" )
 		&& str_contains( $js, "delete root.dataset.discount;" )
 );
@@ -3899,6 +3900,84 @@ check(
 	'BELL: while a refused send waits to retry, the button stays busy',
 	1 === preg_match( '/setTimeout\(go, 2100\); \}\)\.then\(function \(\) \{\s*busy\(button, false\);\s*return sendCode\(button, true\);/', $modal )
 		&& 0 === preg_match( '/prefetch\(\);\s*busy\(button, false\);\s*if \(r\.status === 403\)/', $modal )
+);
+
+// The allow-list defined above is in force here, so these sessions buy pdt_allowed.
+// ─── Prefill from the UnleashWP account ──────────────────────────────────────
+
+/** One session, scripted, with whatever prefill the browser sent. */
+function prefill_sent( ?array $prefill ): array {
+	configure();
+	catalogue( array( 'pdt_allowed' ) );
+	respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_9', 'session_id' => 'cks_9' ) );
+	wpdc_create_session( 'pdt_allowed', 1, null, 'de', null, $prefill );
+	return json_decode( last_request()['args']['body'], true );
+}
+
+$filled = prefill_sent( wpdc_prefill_customer( 'kunde@example.com', 'Kunde Eins' ) );
+check(
+	'BELL: a signed-in customer reaches Dodo prefilled, and may still change both fields',
+	array( 'email' => 'kunde@example.com', 'name' => 'Kunde Eins' ) === ( $filled['customer'] ?? null )
+		&& true === ( $filled['feature_flags']['allow_customer_editing_email'] ?? null )
+		&& true === ( $filled['feature_flags']['allow_customer_editing_name'] ?? null )
+);
+check(
+	'SILENCE: without a prefill no customer is sent',
+	! isset( prefill_sent( null )['customer'] )
+);
+check(
+	'BELL: a prefill is checked, never trusted: a bad address is dropped, a name is cleaned and capped',
+	null === wpdc_prefill_customer( 'not-an-address', 'X' )
+		&& null === wpdc_prefill_customer( str_repeat( 'a', 250 ) . '@example.com', 'X' )
+		&& array( 'email' => 'kunde@example.com' ) === wpdc_prefill_customer( 'Kunde@Example.com ', "  \t" )
+		&& 'Kunde script' === ( wpdc_prefill_customer( 'kunde@example.com', "<b>Kunde</b> \x07script" )['name'] ?? '' )
+		&& 100 === mb_strlen( wpdc_prefill_customer( 'kunde@example.com', str_repeat( 'ä', 300 ) )['name'] ?? '' )
+);
+check(
+	'BELL: a site that answers wpdc_customer itself still wins over the browser',
+	( function (): bool {
+		$sent = prefill_sent( null );
+		configure();
+		$GLOBALS['wpdc_test_filters']['wpdc_customer'] = array( 'email' => 'own@example.com' );
+		catalogue( array( 'pdt_allowed' ) );
+		respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_8', 'session_id' => 'cks_8' ) );
+		wpdc_create_session( 'pdt_allowed', 1, null, 'de', null, wpdc_prefill_customer( 'kunde@example.com', 'K' ) );
+		return 'own@example.com' === ( json_decode( last_request()['args']['body'], true )['customer']['email'] ?? '' );
+	} )()
+);
+check(
+	'BELL: the session route takes email and name, both optional',
+	( function (): bool {
+		$GLOBALS['wpdc_test_routes'] = array();
+		wpdc_register_rest();
+		$args = $GLOBALS['wpdc_test_routes']['wp-dodo-checkout/v1/session']['args'] ?? array();
+		return isset( $args['email'], $args['name'] ) && empty( $args['email']['required'] ) && empty( $args['name']['required'] );
+	} )()
+);
+
+$checkoutJs = (string) file_get_contents( $root . '/assets/checkout.js' );
+check(
+	'BELL: the checkout asks the account who is signed in, with the cookie, and waits at most 800 ms',
+	str_contains( $checkoutJs, "login.account + '/api/sso/session', { credentials: 'include' }" )
+		&& str_contains( $checkoutJs, 'setTimeout(function () { resolve(null); }, 800)' )
+		&& 1 === preg_match( '/if \(me && me\.signedIn && me\.email\) \{\s*body\.email = me\.email;/', $checkoutJs )
+);
+check(
+	'BELL: the account is asked as early as the SDK is warmed, not on the click',
+	1 === preg_match( "/closest\('\[data-wpdc-open\], \.wpdc__button'\)\) \{\s*warmSdk\(\);\s*who\(\);/", $checkoutJs )
+);
+check(
+	'BELL: "Already a customer? Sign in" sits in the panel, hidden until the account says nobody is signed in',
+	str_contains( $shortcode, '<p class="wpdc__signin" hidden>' )
+		&& str_contains( $shortcode, "'Already a customer? Sign in'" )
+		&& str_contains( $checkoutJs, 'signin.hidden = !window.wpdcAccountLogin || !!(me && me.signedIn);' )
+);
+check(
+	'BELL: signing in from the checkout continues the purchase prefilled, it does not leave for Downloads',
+	str_contains( $checkoutJs, 'login.show(btn, { onDone: function () {' )
+		&& str_contains( $checkoutJs, 'remintWith(root, root.dataset.discount || ' )
+		&& str_contains( $modal = (string) file_get_contents( $root . '/assets/account-login.js' ), 'if (onDone) { var next = onDone; onDone = null; dialog.close(); next(); return; }' )
+		&& str_contains( (string) file_get_contents( $root . '/includes/account.php' ), "'continue'    => __( 'Continue to checkout'" )
 );
 
 if ( $failures ) {
