@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.11.2' );
+define( 'WPDC_VERSION', '0.11.3' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -2174,9 +2174,10 @@ check(
 	// header instead of a button sitting on it.
 	'BELL: every corner uses the one radius, and only the ring and the button are round',
 	1 === substr_count( $css, '--wpdc-radius: 5px' )
-		// Eleven: the download button, the key field, the copy button beside it,
-		// the account button and the labelled way out in the completion panel.
-		&& 11 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
+		// Twelve: the download button, the key field, the copy button beside it,
+		// the account button and the labelled way out in the completion panel,
+		// and the sign-in button in the order panel.
+		&& 12 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
 		// Four circles: the frame's spinner ring, the close button, the done
 		// mark, and the spinner that waits inside the done panel.
 		&& 4 === substr_count( $css, 'border-radius: 50%' )
@@ -3991,10 +3992,19 @@ check(
 );
 
 check(
-	// Measured live on 0.11.2: after signing in from the panel the discount line
+	// Measured live on 0.11.3: after signing in from the panel the discount line
 	// kept "Opening checkout…" for good, because only the discount path overwrote it.
 	'BELL: the re-mint after signing in clears the busy line it borrowed',
 	str_contains( (string) file_get_contents( $root . '/assets/checkout.js' ), ".then(function () { note.textContent = ''; })" )
+);
+
+check(
+	// Owner: the underlined line was too quiet to be found.
+	'BELL: "Already a customer? Sign in" is a framed button with an icon and a reason, not a footnote',
+	str_contains( $shortcode, '<span class="wpdc__signin-text"><strong>' )
+		&& str_contains( $shortcode, "'Your details are filled in for you'" )
+		&& str_contains( $shortcode, 'class="wpdc__signin-icon"' )
+		&& 1 === preg_match( '/\.wpdc__panel \.wpdc__signin-link \{[^}]*border: 1px solid var\(--wpdc-panel-accent\) !important/', (string) file_get_contents( $root . '/assets/checkout.css' ) )
 );
 
 if ( $failures ) {

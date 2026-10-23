@@ -275,3 +275,6 @@ msgstr "Weiter zum Kauf"
 
 msgid "Already a customer? Sign in"
 msgstr "Schon Kunde? Anmelden"
+
+msgid "Your details are filled in for you"
+msgstr "Deine Daten werden übernommen"
