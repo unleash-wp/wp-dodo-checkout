@@ -3880,7 +3880,7 @@ check(
 );
 check(
 	'BELL: the next challenge is fetched right after every send, so a resend is not refused for being too fast',
-	1 === preg_match( '/function sendCode[\s\S]{0,900}prefetch\(\);/', $modal )
+	1 === preg_match( '/\.then\(function \(r\) \{\s*\/\/ Every proof is single use: the next one starts now\.\s*prefetch\(\);/', $modal )
 );
 check(
 	'BELL: a refused proof is retried once with fresh work, then said plainly',
