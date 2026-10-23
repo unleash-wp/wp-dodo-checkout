@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.16.2' );
+define( 'WPDC_VERSION', '0.16.3' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -397,9 +397,9 @@ check(
 	true === $sent['feature_flags']['redirect_immediately']
 );
 check(
-	// The only field reduction that improves the more somebody buys.
-	'BELL: a returning customer is offered the card they already used',
-	true === $sent['show_saved_payment_methods']
+	// Audit 2026-10-23: a typed email proves nothing, so it must not open anybody's saved cards.
+	'BELL: without a signed customer id no saved card is offered',
+	false === $sent['show_saved_payment_methods']
 );
 check(
 	// Street, city and state skipped. This plugin sells digital goods: the
@@ -4072,7 +4072,8 @@ check(
 	'SILENCE: without a ticket the address prefill is what it was',
 	( function (): bool {
 		$sent = ticket_sent( wpdc_prefill_customer( 'kunde@example.com', 'K' ), null );
-		return array( 'email' => 'kunde@example.com', 'name' => 'K' ) === ( $sent['customer'] ?? null ) && ! isset( $sent['billing_address'] );
+		return array( 'email' => 'kunde@example.com', 'name' => 'K' ) === ( $sent['customer'] ?? null ) && ! isset( $sent['billing_address'] )
+			&& false === ( $sent['show_saved_payment_methods'] ?? null );
 	} )()
 );
 check(
