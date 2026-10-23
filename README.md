@@ -118,6 +118,32 @@ test products.
 
 Archiving in Dodo is also the off switch: nothing on the site needs changing.
 
+## Into the account
+
+**After a purchase.** The completed panel shows "Open my account". This site
+turns the browser's session id into the Dodo payment id; the account checks
+that payment with Dodo itself (succeeded, at most an hour old, two codes per
+payment) and mails the normal sign-in code to the address that paid. The modal
+opens at the code with that address filled in. A purchase alone never opens an
+account: Dodo does not verify the address a buyer types, the code proves the
+inbox.
+
+```php
+define( 'WPDC_ACCOUNT_SECRET', '...' ); // same value as UWP_CHECKOUT_SECRET on the account
+define( 'WPDC_ACCOUNT_URL', 'https://account.unleash-wp.com' ); // optional, https only
+```
+
+Without the secret, or when anything on the way fails, the modal opens at the
+email field instead. The order is never affected.
+
+**Anywhere else.** Every link to the account (for the Impreza header icon:
+link it to `https://account.unleash-wp.com/downloads`) and any element with
+`data-uwp-login` opens the UnleashWP sign-in modal: email, then a six-digit
+code, then "Open my downloads" in a new tab. The modal talks to the account
+directly (CORS for `https://unleash-wp.com` only) and is fetched on the first
+click; every page carries a loader under 1.5 KB. A visitor who is already
+signed in goes straight to the link. Without JavaScript the link still works.
+
 ## The checkout is a modal on your page
 
 Clicking the button does not navigate anywhere. The page stays exactly as it

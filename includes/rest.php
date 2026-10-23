@@ -51,6 +51,21 @@ if ( ! defined( 'ABSPATH' ) ) {
 function wpdc_register_rest(): void {
 	register_rest_route(
 		'wp-dodo-checkout/v1',
+		'/account-code',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'wpdc_rest_account_code',
+			'permission_callback' => '__return_true',
+			'args'                => array(
+				'session' => array(
+					'required'          => true,
+					'validate_callback' => 'wpdc_is_session_id',
+				),
+			),
+		)
+	);
+	register_rest_route(
+		'wp-dodo-checkout/v1',
 		'/status',
 		array(
 			// POST, not GET. The session id is a CAPABILITY -- whoever holds it

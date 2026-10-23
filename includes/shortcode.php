@@ -455,6 +455,11 @@ function wpdc_render( $atts ): string {
 					<?php // Filled by the browser when the purchase delivered files or a key. ?>
 					<div class="wpdc__done-goods"></div>
 					<p class="wpdc__done-text"><?php echo esc_html__( 'Your confirmation is on its way to your inbox.', 'wp-dodo-checkout' ); ?></p>
+					<?php // Into the account with a code to the purchase address: no password to make. ?>
+					<button type="button" class="wpdc__account" data-wpdc-account>
+						<?php echo esc_html__( 'Open my account', 'wp-dodo-checkout' ); ?>
+					</button>
+					<p class="wpdc__account-hint"><?php echo esc_html__( 'Downloads, keys and invoices. We send a sign-in code to your purchase email, no password.', 'wp-dodo-checkout' ); ?></p>
 					<?php
 					// A way out that says what it does.
 					//
@@ -609,6 +614,8 @@ function wpdc_enqueue(): void {
 			'endpoint' => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/session' ) ),
 			'status'   => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/status' ) ),
 			'price'    => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/price' ) ),
+			'accountCode' => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/account-code' ) ),
+			'account'  => wpdc_account_downloads_url(),
 			// The SDK, loaded by checkout.js on the first interaction rather than
 			// eagerly here. Pinned to the exact version `@1` resolved to, with the
 			// sha384 integrity the browser enforces on load.

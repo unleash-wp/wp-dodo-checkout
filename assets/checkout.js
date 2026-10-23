@@ -1401,6 +1401,29 @@
     if (dismiss) closeFrame(sdk());
   });
 
+  // The account mails a code to the paying address; the sign-in modal opens at
+  // the code. Without the modal on the page, the account's own sign-in is next.
+  document.addEventListener('click', function (event) {
+    var btn = event.target.closest && event.target.closest('[data-wpdc-account]');
+    if (!btn || btn.disabled) return;
+    var login = window.wpdcAccountLogin;
+    if (!login || !login.show) { window.open(cfg.account, '_blank', 'noopener'); return; }
+    var root = btn.closest('.wp-dodo-checkout');
+    var session = (root && root.dataset.session) || '';
+    var show = function (email) { btn.disabled = false; login.show(btn, email ? { email: email } : null); };
+    btn.disabled = true;
+    if (!session || !cfg.accountCode) { show(''); return; }
+    fetch(cfg.accountCode, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session: session })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { show(d && d.sent && typeof d.email === 'string' ? d.email : ''); })
+      .catch(function () { show(''); });
+  });
+
   document.addEventListener('close', function (event) {
     if (event.target.classList && event.target.classList.contains('wpdc__dialog')) {
       closeFrame(sdk());

@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.8.4' );
+define( 'WPDC_VERSION', '0.9.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -130,6 +130,7 @@ class WP_Error {
 // had no behavioural coverage at all.
 
 define( 'MINUTE_IN_SECONDS', 60 );
+define( 'HOUR_IN_SECONDS', 3600 );
 
 $GLOBALS['wpdc_test_routes'] = array();
 
@@ -155,7 +156,11 @@ class WP_REST_Request {
 }
 
 class WP_REST_Response {
+	public array $headers = array();
 	public function __construct( public $data = null, public int $status = 200 ) {}
+	public function header( string $name, string $value ): void {
+		$this->headers[ strtolower( $name ) ] = $value;
+	}
 	public function get_data() {
 		return $this->data;
 	}
@@ -164,9 +169,20 @@ class WP_REST_Response {
 	}
 }
 
+function plugins_url( string $path = '', string $plugin = '' ): string {
+	return 'https://shop.test/wp-content/plugins/wp-dodo-checkout/' . ltrim( $path, '/' );
+}
+function add_query_arg( string $key, string $value, string $url ): string {
+	return $url . ( str_contains( $url, '?' ) ? '&' : '?' ) . rawurlencode( $key ) . '=' . rawurlencode( $value );
+}
+if ( ! defined( 'WPDC_DIR' ) ) {
+	define( 'WPDC_DIR', $root . '/' );
+}
+
 require_once $root . '/includes/config.php';
 require_once $root . '/includes/client.php';
 require_once $root . '/includes/rest.php';
+require_once $root . '/includes/account.php';
 
 // ─── Runner ──────────────────────────────────────────────────────────────────
 
@@ -2133,9 +2149,9 @@ check(
 	// header instead of a button sitting on it.
 	'BELL: every corner uses the one radius, and only the ring and the button are round',
 	1 === substr_count( $css, '--wpdc-radius: 5px' )
-		// Ten: the download button, the key field, the copy button beside it, and
-		// the labelled way out -- all four in the completion panel.
-		&& 10 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
+		// Eleven: the download button, the key field, the copy button beside it,
+		// the account button and the labelled way out in the completion panel.
+		&& 11 === substr_count( $css, 'border-radius: var(--wpdc-radius' )
 		// Four circles: the frame's spinner ring, the close button, the done
 		// mark, and the spinner that waits inside the done panel.
 		&& 4 === substr_count( $css, 'border-radius: 50%' )
@@ -3581,6 +3597,174 @@ check(
 	'BELL: the Dodo mark in the payment line is sized to be read',
 	str_contains( $shortcode, 'alt="Dodo Payments" width="137" height="28"' )
 		&& 1 === preg_match( '/\.wpdc__legal-mark\s*\{[^}]*height:\s*28px/', $css )
+);
+
+// ─── A sign-in code to the paying address ────────────────────────────────────
+
+wpdc_register_rest();
+$routes = $GLOBALS['wpdc_test_routes'];
+check(
+	'BELL: the account-code route is POST and validates the session id',
+	'POST' === ( $routes['wp-dodo-checkout/v1/account-code']['methods'] ?? '' )
+		&& 'wpdc_is_session_id' === ( $routes['wp-dodo-checkout/v1/account-code']['args']['session']['validate_callback'] ?? '' )
+);
+
+$code_session = 'cks_handoffabcdefghijklmno';
+
+configure();
+wpdc_remember_session( $code_session );
+check(
+	'BELL: without a shared secret nobody is asked and the modal asks for the address',
+	'' === wpdc_account_code( $code_session, 'de' ) && array() === $GLOBALS['wpdc_test_requests']
+);
+
+define( 'WPDC_ACCOUNT_SECRET', 'test-checkout-secret' );
+
+/** A paid checkout followed by the account's answer. */
+function code_scripted( string $session, int $status, array $answer, string $paid = 'succeeded' ): string {
+	configure();
+	wpdc_remember_session( $session );
+	respond( 200, array( 'payment_status' => $paid, 'payment_id' => 'pay_0Test123', 'customer' => array( 'email' => 'typed@example.com' ) ) );
+	respond( $status, $answer );
+	return wpdc_account_code( $session, 'de' );
+}
+
+check(
+	'BELL: an unknown session spends no call',
+	( function (): bool {
+		configure();
+		return '' === wpdc_account_code( 'cks_neverminted0000000000', 'de' ) && array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+
+check(
+	'BELL: a paid checkout comes back as the address the account mailed',
+	'buyer@example.com' === code_scripted( $code_session, 200, array( 'email' => 'Buyer@Example.com' ) )
+);
+
+$code_call = $GLOBALS['wpdc_test_requests'][1] ?? array();
+check(
+	'BELL: the account is asked with the secret and the payment id, never an address from here',
+	'https://account.unleash-wp.com/api/handoff/code' === ( $code_call['url'] ?? '' )
+		&& 'Bearer test-checkout-secret' === ( $code_call['args']['headers']['authorization'] ?? '' )
+		&& '{"payment_id":"pay_0Test123","lang":"de"}' === ( $code_call['args']['body'] ?? '' )
+		&& 0 === ( $code_call['args']['redirection'] ?? null )
+		&& true === ( $code_call['args']['sslverify'] ?? null )
+);
+
+check(
+	'BELL: a checkout that has not succeeded never asks the account',
+	'' === code_scripted( $code_session, 200, array( 'email' => 'buyer@example.com' ), 'processing' )
+		&& 1 === count( $GLOBALS['wpdc_test_requests'] )
+);
+
+check(
+	'BELL: an answer that is not an address is dropped',
+	'' === code_scripted( $code_session, 200, array( 'email' => 'not an address' ) )
+		&& '' === code_scripted( $code_session, 200, array( 'url' => 'https://evil.example' ) )
+);
+
+foreach ( array( 401, 409, 429, 503 ) as $refusal ) {
+	check(
+		"BELL: account $refusal leaves the modal asking for the address",
+		'' === code_scripted( $code_session, $refusal, array( 'error' => 'x' ) )
+	);
+}
+
+check(
+	'BELL: a third code for one checkout does not reach the account',
+	( function () use ( $code_session ): bool {
+		code_scripted( $code_session, 200, array( 'email' => 'buyer@example.com' ) );
+		respond( 200, array( 'payment_status' => 'succeeded', 'payment_id' => 'pay_0Test123' ) );
+		respond( 200, array( 'email' => 'buyer@example.com' ) );
+		wpdc_account_code( $code_session, 'de' );
+		$GLOBALS['wpdc_test_requests'] = array();
+		return '' === wpdc_account_code( $code_session, 'de' ) && array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+
+check(
+	'BELL: the route answers with the address and nothing about the payment',
+	( function () use ( $code_session ): bool {
+		configure();
+		wpdc_remember_session( $code_session );
+		respond( 200, array( 'payment_status' => 'succeeded', 'payment_id' => 'pay_0Test123' ) );
+		respond( 200, array( 'email' => 'buyer@example.com' ) );
+		$r = wpdc_rest_account_code( new WP_REST_Request( array( 'session' => $code_session ) ) );
+		return array( 'sent' => true, 'email' => 'buyer@example.com' ) === $r->get_data()
+			&& ! str_contains( (string) json_encode( $r->get_data() ), 'pay_' )
+			&& 'private, no-store' === ( $r->headers['cache-control'] ?? '' );
+	} )()
+);
+
+check(
+	'BELL: the completed panel offers the account and says how it signs in',
+	str_contains( $shortcode, 'class="wpdc__account" data-wpdc-account' )
+		&& str_contains( $shortcode, "'Open my account'" )
+		&& str_contains( $shortcode, "'Downloads, keys and invoices. We send a sign-in code to your purchase email, no password.'" )
+		&& str_contains( $shortcode, "'accountCode' => esc_url_raw( rest_url( 'wp-dodo-checkout/v1/account-code' ) )" )
+		&& str_contains( $shortcode, "'account'  => wpdc_account_downloads_url()" )
+);
+check(
+	'BELL: the account button opens the sign-in modal at the code, and still works without it',
+	( function () use ( $root ): bool {
+		$js = (string) file_get_contents( $root . '/assets/checkout.js' );
+		$modal = (string) file_get_contents( $root . '/assets/account-login.js' );
+		return str_contains( $js, 'cfg.accountCode' ) && str_contains( $js, "credentials: 'omit'" )
+			&& str_contains( $js, 'login.show(btn, email ? { email: email } : null)' )
+			&& str_contains( $js, "window.open(cfg.account, '_blank', 'noopener')" )
+			&& str_contains( $modal, "opts && opts.email" ) && str_contains( $modal, "c.s.sentTo.replace('%s', email)" );
+	} )()
+);
+
+// ─── The sign-in modal's loader ──────────────────────────────────────────────
+
+$loader = wpdc_account_login_loader();
+$login  = wpdc_account_login_config();
+check(
+	'BELL: every page carries only a small loader, the modal itself is fetched on click',
+	str_starts_with( $loader, '<script id="wpdc-account-login">' )
+		&& ! str_contains( $loader, '<script src' )
+		&& strlen( WPDC_ACCOUNT_LOGIN_LOADER ) < 1500
+		&& str_contains( $loader, "c.script" ) && str_ends_with( $login['script'], '/assets/account-login.js?ver=' . WPDC_VERSION )
+);
+check(
+	'BELL: the loader talks to the configured account only, with the cookie, and opens new tabs without an opener',
+	'https://account.unleash-wp.com' === $login['account']
+		&& str_contains( WPDC_ACCOUNT_LOGIN_LOADER, "c.account+'/api/sso/session',{credentials:'include'}" )
+		&& str_contains( WPDC_ACCOUNT_LOGIN_LOADER, "'_blank','noopener'" )
+		&& str_contains( WPDC_ACCOUNT_LOGIN_LOADER, "h.indexOf(c.account+'/')===0" )
+);
+check(
+	'BELL: a modifier click on an account link keeps the browser meaning',
+	str_contains( WPDC_ACCOUNT_LOGIN_LOADER, 'e.metaKey||e.ctrlKey||e.shiftKey||e.altKey' )
+);
+check(
+	'BELL: config text cannot close the script tag it is printed in',
+	( function (): bool {
+		$GLOBALS['wpdc_test_filters'] = array();
+		$json = wp_json_encode( array( 'x' => '</script><script>alert(1)</script>' ) );
+		return ! str_contains( $json, '</script>' );
+	} )()
+);
+check(
+	'BELL: the modal asks the account for a code and a sign-in, with the cookie, never leaking whether an address exists',
+	( function () use ( $root ): bool {
+		$js = (string) file_get_contents( $root . '/assets/account-login.js' );
+		return str_contains( $js, "'/api/auth/email-otp/send-verification-otp', { email: email, type: 'sign-in' }" )
+			&& str_contains( $js, "'/api/auth/sign-in/email-otp', { email: email, otp: code }" )
+			&& str_contains( $js, "credentials: 'include'" )
+			&& str_contains( $js, "autocomplete: 'one-time-code'" )
+			&& str_contains( $js, "inputmode: 'numeric'" )
+			// Two ways to the code step: after this modal sent one, or after the account mailed one for a purchase.
+			&& 2 === substr_count( $js, "step('code')" );
+	} )()
+);
+check(
+	'BELL: with nothing configured the account is the production host',
+	( function (): bool {
+		return 'https://account.unleash-wp.com' === wpdc_account_url();
+	} )()
 );
 
 if ( $failures ) {

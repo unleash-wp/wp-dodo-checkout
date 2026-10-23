@@ -750,6 +750,44 @@
   outline-offset: 2px !important;
 }
 
+/* The account is the second step after the download, so navy rather than a
+   second yellow: one primary per screen. White on #1a1e3c is about 16:1. */
+.wp-dodo-checkout.wpdc__dialog .wpdc__done .wpdc__account {
+  display: inline-block !important;
+  margin: 18px 0 0 !important;
+  min-height: 44px;
+  padding: 12px 22px !important;
+  border: 0 !important;
+  border-radius: var(--wpdc-radius, 5px);
+  background: #1a1e3c !important;
+  color: #fff !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+  text-transform: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+.wp-dodo-checkout.wpdc__dialog .wpdc__done .wpdc__account:hover,
+.wp-dodo-checkout.wpdc__dialog .wpdc__done .wpdc__account:focus {
+  background: #2b3466 !important;
+  color: #fff !important;
+}
+.wp-dodo-checkout.wpdc__dialog .wpdc__done .wpdc__account:focus-visible {
+  outline: 3px solid #f5c518 !important;
+  outline-offset: 2px !important;
+}
+.wp-dodo-checkout.wpdc__dialog .wpdc__done .wpdc__account[disabled] {
+  opacity: .7;
+  cursor: progress;
+}
+.wpdc__account-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #3d4a6e;
+}
+
 /* Flex above owes the platform its hidden case back -- fifth time. */
 .wpdc__done[hidden],
 .wpdc__frame[hidden] {

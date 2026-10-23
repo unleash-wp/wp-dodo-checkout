@@ -1,0 +1,186 @@
+/**
+ * The UnleashWP sign-in, on the site itself.
+ *
+ * Loaded on the first click of an account link, never with the page. Email,
+ * then a six-digit code, both answered by the account directly; its cookie is
+ * set for the whole of unleash-wp.com, so the Downloads tab opens signed in.
+ */
+(function () {
+  'use strict';
+
+  var c = window.wpdcAccountLogin || {};
+  var dialog = null;
+  var opener = null;
+  var email = '';
+  var resendAt = 0;
+
+  function el(tag, attrs, kids) {
+    var node = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === 'text') node.textContent = attrs[k];
+      else node.setAttribute(k, attrs[k]);
+    });
+    (kids || []).forEach(function (kid) { if (kid) node.appendChild(kid); });
+    return node;
+  }
+
+  function call(path, body) {
+    var init = { credentials: 'include', headers: { 'x-uwp-lang': c.lang || 'en' } };
+    if (body) {
+      init.method = 'POST';
+      init.headers['content-type'] = 'application/json';
+      init.body = JSON.stringify(body);
+    }
+    return fetch(c.account + path, init);
+  }
+
+  function say(text) {
+    var live = dialog.querySelector('.uwp-login__status');
+    live.textContent = text || '';
+    live.hidden = !text;
+  }
+
+  function busy(button, on, label) {
+    button.disabled = on;
+    if (on) {
+      button.dataset.label = button.textContent;
+      button.textContent = label;
+    } else if (button.dataset.label) {
+      button.textContent = button.dataset.label;
+    }
+  }
+
+  function openDownloads() {
+    window.open(c.account + '/downloads', '_blank', 'noopener');
+    dialog.close();
+  }
+
+  function step(name) {
+    ['email', 'code', 'done'].forEach(function (s) {
+      dialog.querySelector('.uwp-login__step--' + s).hidden = s !== name;
+    });
+    dialog.querySelector('.uwp-login__intro').hidden = name === 'done';
+    say('');
+    var first = dialog.querySelector('.uwp-login__step--' + name + ' input, .uwp-login__step--' + name + ' button');
+    if (first) first.focus();
+  }
+
+  function sendCode(button) {
+    busy(button, true, c.s.sending);
+    return call('/api/auth/email-otp/send-verification-otp', { email: email, type: 'sign-in' })
+      .then(function (r) {
+        busy(button, false);
+        // Any answer but a throttle moves on: the wording never says whether the address exists.
+        if (r.status === 429) { say(c.s.tooMany); return; }
+        resendAt = Date.now() + 30000;
+        dialog.querySelector('.uwp-login__sent').textContent = c.s.sent;
+        step('code');
+      })
+      .catch(function () { busy(button, false); say(c.s.offline); });
+  }
+
+  function verify(code, button) {
+    busy(button, true, c.s.checking);
+    call('/api/auth/sign-in/email-otp', { email: email, otp: code })
+      .then(function (r) {
+        busy(button, false);
+        if (r.ok) { step('done'); return; }
+        say(r.status === 429 ? c.s.tooMany : c.s.wrong);
+        var input = dialog.querySelector('.uwp-login__code');
+        input.value = '';
+        input.focus();
+      })
+      .catch(function () { busy(button, false); say(c.s.offline); });
+  }
+
+  function build() {
+    var mailInput = el('input', {
+      type: 'email', id: 'uwp-login-email', class: 'uwp-login__input', autocomplete: 'email',
+      required: 'required', placeholder: c.s.placeholder
+    });
+    var sendBtn = el('button', { type: 'submit', class: 'uwp-login__primary', text: c.s.send });
+    var mailForm = el('form', { class: 'uwp-login__step uwp-login__step--email', novalidate: 'novalidate' }, [
+      el('label', { for: 'uwp-login-email', class: 'uwp-login__label', text: c.s.email }),
+      mailInput,
+      sendBtn
+    ]);
+    mailForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      email = mailInput.value.trim();
+      if (!mailInput.checkValidity() || !email) { say(c.s.badEmail); mailInput.focus(); return; }
+      sendCode(sendBtn);
+    });
+
+    var codeInput = el('input', {
+      type: 'text', id: 'uwp-login-code', class: 'uwp-login__input uwp-login__code', inputmode: 'numeric',
+      autocomplete: 'one-time-code', maxlength: '6', pattern: '[0-9]{6}', required: 'required'
+    });
+    var verifyBtn = el('button', { type: 'submit', class: 'uwp-login__primary', text: c.s.signIn });
+    var resend = el('button', { type: 'button', class: 'uwp-login__quiet', text: c.s.resend });
+    var other = el('button', { type: 'button', class: 'uwp-login__quiet', text: c.s.other });
+    var codeForm = el('form', { class: 'uwp-login__step uwp-login__step--code', novalidate: 'novalidate', hidden: '' }, [
+      el('p', { class: 'uwp-login__sent' }),
+      el('label', { for: 'uwp-login-code', class: 'uwp-login__label', text: c.s.code }),
+      codeInput,
+      verifyBtn,
+      el('div', { class: 'uwp-login__row' }, [resend, other])
+    ]);
+    codeInput.addEventListener('input', function () {
+      codeInput.value = codeInput.value.replace(/\D/g, '').slice(0, 6);
+      if (codeInput.value.length === 6) verify(codeInput.value, verifyBtn);
+    });
+    codeForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (codeInput.value.length === 6) verify(codeInput.value, verifyBtn);
+    });
+    resend.addEventListener('click', function () {
+      var wait = Math.ceil((resendAt - Date.now()) / 1000);
+      if (wait > 0) { say(c.s.wait.replace('%d', wait)); return; }
+      sendCode(resend);
+    });
+    other.addEventListener('click', function () { step('email'); });
+
+    var goBtn = el('button', { type: 'button', class: 'uwp-login__primary', text: c.s.open });
+    goBtn.addEventListener('click', openDownloads);
+    var done = el('div', { class: 'uwp-login__step uwp-login__step--done', hidden: '' }, [
+      el('p', { class: 'uwp-login__lead', text: c.s.signedIn }),
+      goBtn
+    ]);
+
+    var close = el('button', { type: 'button', class: 'uwp-login__close', 'aria-label': c.s.close, text: '×' });
+    close.addEventListener('click', function () { dialog.close(); });
+
+    dialog = el('dialog', { class: 'uwp-login', 'aria-labelledby': 'uwp-login-title' }, [
+      el('div', { class: 'uwp-login__card' }, [
+        close,
+        c.logo ? el('img', { class: 'uwp-login__logo', src: c.logo, alt: 'UnleashWP', width: '160', height: '36' }) : null,
+        el('h2', { id: 'uwp-login-title', class: 'uwp-login__title', text: c.s.title }),
+        el('p', { class: 'uwp-login__lead uwp-login__intro', text: c.s.lead }),
+        mailForm,
+        codeForm,
+        done,
+        el('p', { class: 'uwp-login__status', role: 'status', 'aria-live': 'polite', hidden: '' })
+      ])
+    ]);
+    dialog.addEventListener('click', function (e) { if (e.target === dialog) dialog.close(); });
+    dialog.addEventListener('close', function () { if (opener) opener.focus(); });
+    document.body.appendChild(dialog);
+  }
+
+  window.wpdcAccountLogin.open = function (from, opts) {
+    opener = from || null;
+    if (!dialog) build();
+    dialog.showModal();
+    if (c.signedIn) { step('done'); return; }
+    // After a purchase the account has already mailed the code to the paying address.
+    if (opts && opts.email) {
+      email = opts.email;
+      dialog.querySelector('#uwp-login-email').value = email;
+      dialog.querySelector('.uwp-login__sent').textContent = c.s.sentTo.replace('%s', email);
+      resendAt = Date.now() + 30000;
+      step('code');
+      return;
+    }
+    step('email');
+  };
+})();
