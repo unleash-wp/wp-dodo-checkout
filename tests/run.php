@@ -4016,6 +4016,31 @@ check(
 		&& str_contains( wpdc_account_expand( '<p>[wpdc_account size="24"]</p>' ), 'width="24" height="24"' )
 );
 check(
+	// Audit 2026-10-23: expanded inside an attribute or a script, the link's
+	// quotes break out of it.
+	'BELL: the late expansion touches text only, never a tag, a script or a style',
+	( function (): bool {
+		$inert = array(
+			'<a title="[wpdc_account]">x</a>',
+			'<a title="a > b [wpdc_account]" href="/">x</a>',
+			"<img alt='[wpdc_account label=\"x\"]'>",
+			'<script>var s = "[wpdc_account]";</script>',
+			'<SCRIPT type="text/javascript">if (a<b) { s = "[wpdc_account]"; }</SCRIPT>',
+			'<style>/* [wpdc_account] */</style>',
+			'<!-- [wpdc_account] -->',
+		);
+		foreach ( $inert as $page ) {
+			if ( $page !== wpdc_account_expand( $page ) ) {
+				return false;
+			}
+		}
+		$mixed = wpdc_account_expand( '<a title="[wpdc_account]">[wpdc_account]</a><script>"[wpdc_account]"</script>' );
+		return 1 === substr_count( $mixed, 'class="wpdc-account-link"' )
+			&& str_starts_with( $mixed, '<a title="[wpdc_account]"><a class="wpdc-account-link"' )
+			&& str_ends_with( $mixed, '</a></a><script>"[wpdc_account]"</script>' );
+	} )()
+);
+check(
 	'SILENCE: a page without the shortcode comes back byte for byte',
 	'<html><body>[wpdc_checkout] [wpdc_accountx]</body></html>' === wpdc_account_expand( '<html><body>[wpdc_checkout] [wpdc_accountx]</body></html>' )
 );

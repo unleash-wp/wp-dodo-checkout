@@ -213,15 +213,32 @@ function wpdc_account_expand( string $html ): string {
 	if ( ! str_contains( $html, '[wpdc_account' ) ) {
 		return $html;
 	}
-	$out = preg_replace_callback(
-		'/\[wpdc_account(\s[^\]]*)?\]/',
-		static function ( array $m ): string {
-			$atts = shortcode_parse_atts( trim( $m[1] ?? '' ) );
-			return wpdc_render_account( is_array( $atts ) ? $atts : array() );
-		},
-		$html
+	// Text between tags only: inside an attribute, a script or a style the
+	// link's quotes would break out of where it was written.
+	$parts = preg_split(
+		'/(<script\b.*?<\/script\s*>|<style\b.*?<\/style\s*>|<!--.*?-->|<[a-z\/!?](?:"[^"]*"|\'[^\']*\'|[^\'">])*>)/is',
+		$html,
+		-1,
+		PREG_SPLIT_DELIM_CAPTURE
 	);
-	return is_string( $out ) ? $out : $html;
+	if ( ! is_array( $parts ) ) {
+		return $html;
+	}
+	foreach ( $parts as $i => $part ) {
+		if ( 1 === $i % 2 || ! str_contains( $part, '[wpdc_account' ) ) {
+			continue;
+		}
+		$out = preg_replace_callback(
+			'/\[wpdc_account(\s[^\]]*)?\]/',
+			static function ( array $m ): string {
+				$atts = shortcode_parse_atts( trim( $m[1] ?? '' ) );
+				return wpdc_render_account( is_array( $atts ) ? $atts : array() );
+			},
+			$part
+		);
+		$parts[ $i ] = is_string( $out ) ? $out : $part;
+	}
+	return implode( '', $parts );
 }
 
 function wpdc_account_buffer(): void {
