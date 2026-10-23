@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.9.0' );
+define( 'WPDC_VERSION', '0.9.1' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -3597,6 +3597,8 @@ check(
 	'BELL: the Dodo mark in the payment line is sized to be read',
 	str_contains( $shortcode, 'alt="Dodo Payments" width="137" height="28"' )
 		&& 1 === preg_match( '/\.wpdc__legal-mark\s*\{[^}]*height:\s*28px/', $css )
+		// The round mark sits high in the logo; nudged so the sentence reads centred.
+		&& 1 === preg_match( '/\.wpdc__legal-mark\s*\{[^}]*transform:\s*translateY\(1\.5px\)/', $css )
 );
 
 // ─── A sign-in code to the paying address ────────────────────────────────────
