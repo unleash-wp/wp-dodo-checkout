@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.9.3' );
+define( 'WPDC_VERSION', '0.9.4' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -176,6 +176,14 @@ function shortcode_atts( array $pairs, $atts, string $tag = '' ): array {
 		$out[ $name ] = array_key_exists( $name, $atts ) ? $atts[ $name ] : $default;
 	}
 	return $out;
+}
+function shortcode_parse_atts( string $text ) {
+	preg_match_all( '/(\w+)\s*=\s*"([^"]*)"/', $text, $m, PREG_SET_ORDER );
+	$out = array();
+	foreach ( $m as $pair ) {
+		$out[ strtolower( $pair[1] ) ] = $pair[2];
+	}
+	return $out ?: '';
 }
 function esc_attr( $text ): string {
 	return htmlspecialchars( (string) $text, ENT_QUOTES );
@@ -3834,6 +3842,26 @@ check(
 check(
 	'BELL: the shortcode is registered under the plugin prefix',
 	str_contains( $shortcode, "add_shortcode( 'wpdc_account', 'wpdc_render_account' );" )
+);
+
+// Measured live: Impreza's header Text element prints its value raw, so the
+// shortcode reached the page as "[wpdc_account]".
+check(
+	'BELL: [wpdc_account] in a theme element that runs no shortcodes still becomes the icon',
+	( function (): bool {
+		$page = '<div class="w-text"><span class="w-text-value">[wpdc_account]</span></div>';
+		$out  = wpdc_account_expand( $page );
+		return str_contains( $out, '<a class="wpdc-account-link"' ) && ! str_contains( $out, '[wpdc_account]' );
+	} )()
+);
+check(
+	'BELL: attributes survive the late expansion',
+	str_contains( wpdc_account_expand( '<p>[wpdc_account label="Konto" size="24"]</p>' ), '<span class="wpdc-account-link__text">Konto</span>' )
+		&& str_contains( wpdc_account_expand( '<p>[wpdc_account size="24"]</p>' ), 'width="24" height="24"' )
+);
+check(
+	'SILENCE: a page without the shortcode comes back byte for byte',
+	'<html><body>[wpdc_checkout] [wpdc_accountx]</body></html>' === wpdc_account_expand( '<html><body>[wpdc_checkout] [wpdc_accountx]</body></html>' )
 );
 
 if ( $failures ) {

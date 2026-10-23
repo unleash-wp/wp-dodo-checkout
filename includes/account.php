@@ -201,3 +201,30 @@ function wpdc_render_account( $atts ): string {
 		. ( '' === $label ? '' : '<span class="wpdc-account-link__text">' . esc_html( $label ) . '</span>' )
 		. '</a>';
 }
+
+/**
+ * Themes print some fields raw: Impreza's header Text element showed the
+ * shortcode as text. So the finished front-end page is searched once for it,
+ * and only a page that contains it is touched.
+ */
+function wpdc_account_expand( string $html ): string {
+	if ( ! str_contains( $html, '[wpdc_account' ) ) {
+		return $html;
+	}
+	$out = preg_replace_callback(
+		'/\[wpdc_account(\s[^\]]*)?\]/',
+		static function ( array $m ): string {
+			$atts = shortcode_parse_atts( trim( $m[1] ?? '' ) );
+			return wpdc_render_account( is_array( $atts ) ? $atts : array() );
+		},
+		$html
+	);
+	return is_string( $out ) ? $out : $html;
+}
+
+function wpdc_account_buffer(): void {
+	if ( is_admin() || wp_doing_ajax() || is_feed() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+		return;
+	}
+	ob_start( 'wpdc_account_expand' );
+}

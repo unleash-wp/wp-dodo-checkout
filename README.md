@@ -139,6 +139,8 @@ email field instead. The order is never affected.
 **In the header.** `[wpdc_account]` prints a person icon named "My account"
 ("Mein Konto") that opens the modal. `label="Konto"` adds visible text,
 `size="20"` sets the icon (12 to 48 px). It takes the colour of the header.
+It works in any element, including Impreza's header Text element, which
+prints shortcodes raw: the finished page is searched for it once.
 
 **Anywhere else.** Every link to the account (for example
 `https://account.unleash-wp.com/downloads`) and any element with
