@@ -537,11 +537,9 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		// products would have to turn this off.
 		'minimal_address' => true,
 
-		// A returning customer sees the card they used last time instead of
-		// typing it again. Off by default at Dodo. It costs nothing here and it
-		// is the only field-count reduction that gets BETTER the more somebody
-		// buys.
-		'show_saved_payment_methods' => true,
+		// Off unless a signed ticket names the customer (below): a typed email
+		// proves nothing and must not open somebody else's saved cards.
+		'show_saved_payment_methods' => false,
 
 		'feature_flags' => array(
 			// Dodo shows it by default and nobody here reads it. An optional
@@ -653,7 +651,8 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	$signed = $customer === $prefill && is_array( $ticket ) ? $ticket : array();
 	if ( isset( $signed['cid'] ) ) {
 		// Dodo fills name and address from its own record and offers the saved cards.
-		$body['customer'] = array( 'customer_id' => $signed['cid'] );
+		$body['customer']                   = array( 'customer_id' => $signed['cid'] );
+		$body['show_saved_payment_methods'] = true;
 		$body['feature_flags']['allow_customer_editing_email'] = true;
 		$body['feature_flags']['allow_customer_editing_name']  = true;
 	} elseif ( is_array( $customer ) && is_string( $customer['email'] ?? null ) && is_email( $customer['email'] ) ) {

@@ -322,7 +322,7 @@ What stays is the window and the plumbing:
 |---|---|
 | The `<dialog>` | A container. It holds their frame, it does not imitate it. |
 | Width, padding, scroll correction | Fixes for our own bugs, not additions to theirs. |
-| `minimal_address`, no phone, discount code, saved cards | API flags. Dodo renders the result. |
+| `minimal_address`, no phone, discount code, saved cards (only with a signed account ticket) | API flags. Dodo renders the result. |
 
 Branding belongs on Dodo's **Design page**, which styles the checkout, the
 customer portal and the storefront together, test and live apart. That is one
