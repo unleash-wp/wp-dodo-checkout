@@ -1,6 +1,7 @@
 /* The UnleashWP sign-in modal. Same navy, yellow, Ubuntu and 5px corners as
-   account.unleash-wp.com, so the two read as one product. Selectors carry the
-   dialog class because the theme styles bare inputs and buttons hard. */
+   account.unleash-wp.com, so the two read as one product. Measured live: the
+   theme paints every button (uppercase, 18px, transparent with a drawn frame),
+   so the controls below carry !important like checkout.css does. */
 dialog.uwp-login {
   width: min(420px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
@@ -153,6 +154,55 @@ dialog.uwp-login .uwp-login__status {
   color: #5c3d00;
   font-size: 14px;
   line-height: 1.45;
+}
+/* Armour against the theme's global button and field styles. */
+dialog.uwp-login button,
+dialog.uwp-login input {
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  box-shadow: none !important;
+}
+dialog.uwp-login button::before,
+dialog.uwp-login button::after {
+  display: none !important;
+}
+dialog.uwp-login .uwp-login__primary {
+  background: #fcbe00 !important;
+  color: #203159 !important;
+  border: 0 !important;
+  font-size: 15px !important;
+}
+dialog.uwp-login .uwp-login__primary:hover,
+dialog.uwp-login .uwp-login__primary:focus {
+  background: #e6ab00 !important;
+  color: #203159 !important;
+}
+dialog.uwp-login .uwp-login__quiet,
+dialog.uwp-login .uwp-login__close {
+  background: transparent !important;
+  border: 0 !important;
+  color: #3c4e7d !important;
+}
+dialog.uwp-login .uwp-login__quiet {
+  font-size: 14px !important;
+}
+dialog.uwp-login .uwp-login__close {
+  font-size: 26px !important;
+}
+dialog.uwp-login .uwp-login__close:hover {
+  background: #f4f6fb !important;
+}
+dialog.uwp-login .uwp-login__input {
+  background: #fff !important;
+  color: #203159 !important;
+  border: 1px solid #c9d1e3 !important;
+  font-size: 16px !important;
+}
+dialog.uwp-login .uwp-login__code {
+  font-size: 24px !important;
+}
+dialog.uwp-login .uwp-login__input:focus {
+  border-color: #203159 !important;
 }
 dialog.uwp-login [hidden] {
   display: none !important;
