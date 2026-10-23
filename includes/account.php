@@ -247,3 +247,41 @@ function wpdc_prefill_customer( ?string $email, ?string $name ): ?array {
 	}
 	return $out;
 }
+
+/**
+ * The account's signed word on who is buying: a Dodo customer id and the last
+ * billing address. Only a ticket the account signed with the shared secret is
+ * believed; a browser cannot name somebody else's customer and see their cards.
+ */
+function wpdc_prefill_ticket( string $ticket ): ?array {
+	$secret = wpdc_account_secret();
+	if ( '' === $secret || strlen( $ticket ) > 2048 || 1 !== preg_match( '/^([A-Za-z0-9_-]+)\.([0-9a-f]{64})$/', $ticket, $m ) ) {
+		return null;
+	}
+	if ( ! hash_equals( hash_hmac( 'sha256', $m[1], $secret ), $m[2] ) ) {
+		return null;
+	}
+	$claims = json_decode( (string) base64_decode( strtr( $m[1], '-_', '+/' ), true ), true );
+	if ( ! is_array( $claims ) || 1 !== ( $claims['v'] ?? null ) || ! is_int( $claims['exp'] ?? null ) || $claims['exp'] <= (int) ( microtime( true ) * 1000 ) ) {
+		return null;
+	}
+
+	$out = array();
+	if ( is_string( $claims['cid'] ?? null ) && 1 === preg_match( '/^cus_[A-Za-z0-9]{1,64}$/', $claims['cid'] ) ) {
+		$out['cid'] = $claims['cid'];
+	}
+	$billing = $claims['billing'] ?? null;
+	if ( is_array( $billing ) && is_string( $billing['country'] ?? null ) && 1 === preg_match( '/^[A-Z]{2}$/', $billing['country'] ) ) {
+		$clean = array( 'country' => $billing['country'] );
+		foreach ( array( 'zipcode', 'city', 'state', 'street' ) as $field ) {
+			if ( is_string( $billing[ $field ] ?? null ) ) {
+				$value = trim( (string) preg_replace( '/[\x00-\x1F\x7F]/u', '', strip_tags( $billing[ $field ] ) ) );
+				if ( '' !== $value ) {
+					$clean[ $field ] = mb_substr( $value, 0, 100 );
+				}
+			}
+		}
+		$out['billing'] = $clean;
+	}
+	return $out;
+}

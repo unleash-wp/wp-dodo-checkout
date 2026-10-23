@@ -213,7 +213,7 @@
     var login = window.wpdcAccountLogin;
     if (!login || !login.account) return Promise.resolve(null);
     if (!whoAsked) {
-      whoAsked = fetch(login.account + '/api/sso/session', { credentials: 'include' })
+      whoAsked = fetch(login.account + '/api/checkout/prefill', { credentials: 'include' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .catch(function () { return null; });
     }
@@ -251,9 +251,10 @@
     if (bump && bump.checked) body.bump = bump.value;
 
     return whoSoon().then(function (me) {
-      if (me && me.signedIn && me.email) {
+      if (me && me.email) {
         body.email = me.email;
         if (me.name) body.name = me.name;
+        if (me.ticket) body.ticket = me.ticket;
       }
       return fetch(cfg.endpoint, {
         method: 'POST',
@@ -1375,7 +1376,7 @@
     var signin = part(root, '.wpdc__signin');
     if (!signin) return;
     who().then(function (me) {
-      signin.hidden = !window.wpdcAccountLogin || !!(me && me.signedIn);
+      signin.hidden = !window.wpdcAccountLogin || !!(me && me.email);
     });
   }
 

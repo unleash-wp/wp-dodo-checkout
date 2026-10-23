@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.11.3' );
+define( 'WPDC_VERSION', '0.12.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -3959,9 +3959,9 @@ check(
 $checkoutJs = (string) file_get_contents( $root . '/assets/checkout.js' );
 check(
 	'BELL: the checkout asks the account who is signed in, with the cookie, and waits at most 800 ms',
-	str_contains( $checkoutJs, "login.account + '/api/sso/session', { credentials: 'include' }" )
+	str_contains( $checkoutJs, "login.account + '/api/checkout/prefill', { credentials: 'include' }" )
 		&& str_contains( $checkoutJs, 'setTimeout(function () { resolve(null); }, 800)' )
-		&& 1 === preg_match( '/if \(me && me\.signedIn && me\.email\) \{\s*body\.email = me\.email;/', $checkoutJs )
+		&& 1 === preg_match( '/if \(me && me\.email\) \{\s*body\.email = me\.email;/', $checkoutJs )
 );
 check(
 	'BELL: the account is asked as early as the SDK is warmed, not on the click',
@@ -3971,7 +3971,7 @@ check(
 	'BELL: "Already a customer? Sign in" sits in the panel, hidden until the account says nobody is signed in',
 	str_contains( $shortcode, '<p class="wpdc__signin" hidden>' )
 		&& str_contains( $shortcode, "'Already a customer? Sign in'" )
-		&& str_contains( $checkoutJs, 'signin.hidden = !window.wpdcAccountLogin || !!(me && me.signedIn);' )
+		&& str_contains( $checkoutJs, 'signin.hidden = !window.wpdcAccountLogin || !!(me && me.email);' )
 );
 check(
 	'BELL: signing in from the checkout continues the purchase prefilled, it does not leave for Downloads',
@@ -3992,7 +3992,7 @@ check(
 );
 
 check(
-	// Measured live on 0.11.3: after signing in from the panel the discount line
+	// Measured live on 0.11.1: after signing in from the panel the discount line
 	// kept "Opening checkout…" for good, because only the discount path overwrote it.
 	'BELL: the re-mint after signing in clears the busy line it borrowed',
 	str_contains( (string) file_get_contents( $root . '/assets/checkout.js' ), ".then(function () { note.textContent = ''; })" )
@@ -4005,6 +4005,95 @@ check(
 		&& str_contains( $shortcode, "'Your details are filled in for you'" )
 		&& str_contains( $shortcode, 'class="wpdc__signin-icon"' )
 		&& 1 === preg_match( '/\.wpdc__panel \.wpdc__signin-link \{[^}]*border: 1px solid var\(--wpdc-panel-accent\) !important/', (string) file_get_contents( $root . '/assets/checkout.css' ) )
+);
+
+// ─── Signed prefill ticket from the account ──────────────────────────────────
+
+/** A ticket as account signs it. */
+function ticket_for( array $claims, string $secret = 'test-checkout-secret' ): string {
+	$payload = rtrim( strtr( base64_encode( (string) json_encode( $claims ) ), '+/', '-_' ), '=' );
+	return $payload . '.' . hash_hmac( 'sha256', $payload, $secret );
+}
+$soon    = (int) ( microtime( true ) * 1000 ) + 300000;
+$billing = array( 'country' => 'DE', 'zipcode' => '10115', 'city' => 'Berlin', 'street' => 'Musterstr. 1' );
+
+check(
+	'BELL: a ticket signed by the account is read back: customer id and address',
+	array( 'cid' => 'cus_0Abc123', 'billing' => $billing ) === wpdc_prefill_ticket( ticket_for( array( 'v' => 1, 'cid' => 'cus_0Abc123', 'billing' => $billing, 'exp' => $soon ) ) )
+);
+check(
+	'BELL: a forged, expired or malformed ticket is nothing, never a customer id',
+	null === wpdc_prefill_ticket( ticket_for( array( 'v' => 1, 'cid' => 'cus_0Abc123', 'exp' => $soon ), 'other-secret' ) )
+		&& null === wpdc_prefill_ticket( ticket_for( array( 'v' => 1, 'cid' => 'cus_0Abc123', 'exp' => $soon - 600000 ) ) )
+		&& null === wpdc_prefill_ticket( ticket_for( array( 'v' => 2, 'cid' => 'cus_0Abc123', 'exp' => $soon ) ) )
+		&& null === wpdc_prefill_ticket( 'abc' )
+		&& null === wpdc_prefill_ticket( str_repeat( 'a', 3000 ) . '.' . str_repeat( 'b', 64 ) )
+);
+check(
+	'BELL: inside a valid ticket, a strange id or country is dropped, fields are capped',
+	( function () use ( $soon ): bool {
+		$t = wpdc_prefill_ticket( ticket_for( array( 'v' => 1, 'cid' => 'pay_notacustomer', 'billing' => array( 'country' => 'Germany', 'city' => 'X' ), 'exp' => $soon ) ) );
+		$u = wpdc_prefill_ticket( ticket_for( array( 'v' => 1, 'billing' => array( 'country' => 'DE', 'city' => str_repeat( 'x', 300 ), 'street' => '<b>A</b>' ), 'exp' => $soon ) ) );
+		return is_array( $t ) && ! isset( $t['cid'] ) && ! isset( $t['billing'] )
+			&& 100 === strlen( $u['billing']['city'] ?? '' ) && 'A' === ( $u['billing']['street'] ?? '' );
+	} )()
+);
+
+/** One session with a prefill and a ticket. */
+function ticket_sent( ?array $prefill, ?array $ticket ): array {
+	configure();
+	catalogue( array( 'pdt_allowed' ) );
+	respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_7', 'session_id' => 'cks_7' ) );
+	wpdc_create_session( 'pdt_allowed', 1, null, 'de', null, $prefill, $ticket );
+	return json_decode( last_request()['args']['body'], true );
+}
+
+$withCid = ticket_sent( wpdc_prefill_customer( 'kunde@example.com', 'K' ), array( 'cid' => 'cus_0Abc123', 'billing' => $billing ) );
+check(
+	'BELL: with a signed customer id Dodo gets the customer itself, with the address, all still editable',
+	array( 'customer_id' => 'cus_0Abc123' ) === ( $withCid['customer'] ?? null )
+		&& $billing === ( $withCid['billing_address'] ?? null )
+		&& true === ( $withCid['show_saved_payment_methods'] ?? null )
+		&& true === ( $withCid['feature_flags']['allow_customer_editing_zipcode'] ?? null )
+		&& true === ( $withCid['feature_flags']['allow_customer_editing_country'] ?? null )
+);
+check(
+	'SILENCE: without a ticket the address prefill is what it was',
+	( function (): bool {
+		$sent = ticket_sent( wpdc_prefill_customer( 'kunde@example.com', 'K' ), null );
+		return array( 'email' => 'kunde@example.com', 'name' => 'K' ) === ( $sent['customer'] ?? null ) && ! isset( $sent['billing_address'] );
+	} )()
+);
+check(
+	'BELL: the session route takes a ticket, optional and bounded',
+	( function (): bool {
+		$GLOBALS['wpdc_test_routes'] = array();
+		wpdc_register_rest();
+		$arg = $GLOBALS['wpdc_test_routes']['wp-dodo-checkout/v1/session']['args']['ticket'] ?? null;
+		return is_array( $arg ) && empty( $arg['required'] ) && false === ( $arg['validate_callback'] )( str_repeat( 'a', 2100 ) );
+	} )()
+);
+check(
+	'BELL: the checkout asks the account for the prefill and its ticket, and passes the ticket on',
+	str_contains( $checkoutJs = (string) file_get_contents( $root . '/assets/checkout.js' ), "login.account + '/api/checkout/prefill', { credentials: 'include' }" )
+		&& str_contains( $checkoutJs, 'if (me.ticket) body.ticket = me.ticket;' )
+);
+
+check(
+	'BELL: even a correctly signed ticket is refused past 2048 characters',
+	null === wpdc_prefill_ticket( ticket_for( array( 'v' => 1, 'cid' => 'cus_0Abc123', 'pad' => str_repeat( 'x', 2100 ), 'exp' => $soon ) ) )
+);
+check(
+	'BELL: a site that names its own customer is not overridden by a ticket',
+	( function () use ( $billing ): bool {
+		configure();
+		$GLOBALS['wpdc_test_filters']['wpdc_customer'] = array( 'email' => 'own@example.com' );
+		catalogue( array( 'pdt_allowed' ) );
+		respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_6', 'session_id' => 'cks_6' ) );
+		wpdc_create_session( 'pdt_allowed', 1, null, 'de', null, wpdc_prefill_customer( 'kunde@example.com', 'K' ), array( 'cid' => 'cus_0Abc123', 'billing' => $billing ) );
+		$sent = json_decode( last_request()['args']['body'], true );
+		return array( 'email' => 'own@example.com' ) === ( $sent['customer'] ?? null ) && ! isset( $sent['billing_address'] );
+	} )()
 );
 
 if ( $failures ) {
