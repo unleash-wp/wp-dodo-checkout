@@ -24,8 +24,40 @@
     return node;
   }
 
-  function call(path, body) {
-    var init = { credentials: 'include', headers: { 'x-uwp-lang': c.lang || 'en' } };
+  var pow = null;
+
+  function hex(buf) {
+    return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  }
+
+  function sha(text) {
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)).then(hex);
+  }
+
+  // A small sum the browser does once per code: nothing for a person, a cost per mail for a bot.
+  async function solve(ch) {
+    for (var start = 0; start <= ch.maxnumber; start += 250) {
+      var batch = [];
+      for (var i = start; i < start + 250 && i <= ch.maxnumber; i++) batch.push(sha(ch.salt + i));
+      var at = (await Promise.all(batch)).indexOf(ch.challenge);
+      if (at >= 0) {
+        var n = start + at;
+        return btoa(JSON.stringify({ salt: ch.salt, number: n, challenge: ch.challenge, signature: ch.signature }));
+      }
+    }
+    return null;
+  }
+
+  // Fetched ahead, so it is ready by the time someone has typed an address.
+  function prefetch() {
+    pow = fetch(c.account + '/api/pow/challenge', { credentials: 'omit', cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (ch) { return ch && ch.salt ? solve(ch) : null; })
+      .catch(function () { return null; });
+  }
+
+  function call(path, body, extra) {
+    var init = { credentials: 'include', headers: Object.assign({ 'x-uwp-lang': c.lang || 'en' }, extra || {}) };
     if (body) {
       init.method = 'POST';
       init.headers['content-type'] = 'application/json';
@@ -65,10 +97,34 @@
     if (first) first.focus();
   }
 
-  function sendCode(button) {
+  function sendCode(button, retried) {
     busy(button, true, c.s.sending);
-    return call('/api/auth/email-otp/send-verification-otp', { email: email, type: 'sign-in' })
+    if (!pow) prefetch();
+    var trap = dialog.querySelector('.uwp-login__hp').value;
+    return pow
+      .then(function (proof) {
+        var extra = {};
+        if (proof) extra['x-uwp-pow'] = proof;
+        if (trap) extra['x-uwp-hp'] = trap;
+        return call('/api/auth/email-otp/send-verification-otp', { email: email, type: 'sign-in' }, extra);
+      })
       .then(function (r) {
+        // Every proof is single use: the next one starts now.
+        prefetch();
+        if (r.status === 403) {
+          return r.json().catch(function () { return {}; }).then(function (d) {
+            // The fresh challenge has to age past the server's two-second floor first;
+            // the button stays busy meanwhile, so a second click cannot send twice.
+            if (d && d.code === 'POW_REQUIRED' && !retried) {
+              return new Promise(function (go) { setTimeout(go, 2100); }).then(function () {
+                busy(button, false);
+                return sendCode(button, true);
+              });
+            }
+            busy(button, false);
+            say(c.s.powFailed);
+          });
+        }
         busy(button, false);
         // Any answer but a throttle moves on: the wording never says whether the address exists.
         if (r.status === 429) { say(c.s.tooMany); return; }
@@ -102,6 +158,9 @@
     var mailForm = el('form', { class: 'uwp-login__step uwp-login__step--email', novalidate: 'novalidate' }, [
       el('label', { for: 'uwp-login-email', class: 'uwp-login__label', text: c.s.email }),
       mailInput,
+      // Filled only by bots that complete every field; a person never sees it. No name
+      // that autofill knows ("website", "url"), or a person would be taken for a bot.
+      el('input', { type: 'text', name: 'uwp_extra_field', class: 'uwp-login__hp', tabindex: '-1', autocomplete: 'off', 'aria-hidden': 'true' }),
       sendBtn
     ]);
     mailForm.addEventListener('submit', function (e) {
@@ -170,6 +229,7 @@
   window.wpdcAccountLogin.open = function (from, opts) {
     opener = from || null;
     if (!dialog) build();
+    if (!pow) prefetch();
     dialog.showModal();
     if (c.signedIn) { step('done'); return; }
     // After a purchase the account has already mailed the code to the paying address.

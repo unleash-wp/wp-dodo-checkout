@@ -266,3 +266,6 @@ msgstr "Zu viele falsche Codes. Lass dir einen neuen schicken."
 
 msgid "My account"
 msgstr "Mein Konto"
+
+msgid "The security check did not work. Try again."
+msgstr "Die Sicherheitsprüfung hat nicht geklappt. Versuch es noch einmal."
