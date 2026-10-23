@@ -134,6 +134,9 @@ function wpdc_register_rest(): void {
 				'name'     => array(
 					'validate_callback' => static fn( $value ): bool => is_string( $value ) && strlen( $value ) <= 400,
 				),
+				'ticket'   => array(
+					'validate_callback' => static fn( $value ): bool => is_string( $value ) && strlen( $value ) <= 2048,
+				),
 				'discount' => array(
 					'required'          => false,
 					'validate_callback' => 'wpdc_is_discount_code',
@@ -227,7 +230,8 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 		wpdc_prefill_customer(
 			null !== $request->get_param( 'email' ) ? (string) $request->get_param( 'email' ) : null,
 			null !== $request->get_param( 'name' ) ? (string) $request->get_param( 'name' ) : null
-		)
+		),
+		null !== $request->get_param( 'ticket' ) ? wpdc_prefill_ticket( (string) $request->get_param( 'ticket' ) ) : null
 	);
 
 	if ( ! $result['ok'] ) {
