@@ -195,3 +195,64 @@ msgstr "Zu meinem Konto"
 
 msgid "Downloads, keys and invoices. Signed in with your purchase email, no password."
 msgstr "Downloads, Schlüssel und Rechnungen. Angemeldet mit deiner Kauf-E-Mail, ohne Passwort."
+
+msgid "Sign in to UnleashWP"
+msgstr "Bei UnleashWP anmelden"
+
+msgid "Your downloads, licence keys and invoices, with no password. We send you a code."
+msgstr "Deine Downloads, Lizenzschlüssel und Rechnungen, ganz ohne Passwort. Wir schicken dir einen Code."
+
+msgid "Email"
+msgstr "E-Mail"
+
+msgid "your@email.com"
+msgstr "deine@email.de"
+
+msgid "Enter a valid email address."
+msgstr "Gib eine gültige E-Mail-Adresse ein."
+
+msgid "Send code"
+msgstr "Code senden"
+
+msgid "Sending…"
+msgstr "Wird gesendet …"
+
+msgid "If that address can sign in, a code is on its way. It lasts ten minutes and works once."
+msgstr "Wenn diese Adresse sich anmelden kann, ist ein Code unterwegs. Er ist zehn Minuten gültig und nur einmal verwendbar."
+
+msgid "6-digit code"
+msgstr "6-stelliger Code"
+
+msgid "Sign in"
+msgstr "Anmelden"
+
+msgid "Checking…"
+msgstr "Wird geprüft …"
+
+msgid "Resend code"
+msgstr "Code erneut senden"
+
+#, php-format
+msgid "You can send a new code in %d seconds."
+msgstr "Einen neuen Code kannst du in %d Sekunden anfordern."
+
+msgid "Use a different address"
+msgstr "Andere Adresse verwenden"
+
+msgid "That code did not work. Check it, or send a new one."
+msgstr "Dieser Code hat nicht funktioniert. Prüfe ihn oder lass dir einen neuen schicken."
+
+msgid "Too many tries. Wait a minute and try again."
+msgstr "Zu viele Versuche. Warte eine Minute und versuch es noch einmal."
+
+msgid "No connection. Try again in a moment."
+msgstr "Keine Verbindung. Versuch es gleich noch einmal."
+
+msgid "You are signed in."
+msgstr "Du bist angemeldet."
+
+msgid "Open my downloads"
+msgstr "Meine Downloads öffnen"
+
+msgid "Close"
+msgstr "Schließen"

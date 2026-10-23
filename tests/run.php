@@ -169,6 +169,16 @@ class WP_REST_Response {
 	}
 }
 
+function plugins_url( string $path = '', string $plugin = '' ): string {
+	return 'https://shop.test/wp-content/plugins/wp-dodo-checkout/' . ltrim( $path, '/' );
+}
+function add_query_arg( string $key, string $value, string $url ): string {
+	return $url . ( str_contains( $url, '?' ) ? '&' : '?' ) . rawurlencode( $key ) . '=' . rawurlencode( $value );
+}
+if ( ! defined( 'WPDC_DIR' ) ) {
+	define( 'WPDC_DIR', $root . '/' );
+}
+
 require_once $root . '/includes/config.php';
 require_once $root . '/includes/client.php';
 require_once $root . '/includes/rest.php';
@@ -3708,6 +3718,55 @@ check(
 		$js = (string) file_get_contents( $root . '/assets/checkout.js' );
 		return str_contains( $js, "window.open('', '_blank')" ) && str_contains( $js, 'tab.opener = null' )
 			&& str_contains( $js, 'cfg.handoff' ) && str_contains( $js, "credentials: 'omit'" );
+	} )()
+);
+
+// ─── The sign-in modal's loader ──────────────────────────────────────────────
+
+$loader = wpdc_account_login_loader();
+$login  = wpdc_account_login_config();
+check(
+	'BELL: every page carries only a small loader, the modal itself is fetched on click',
+	str_starts_with( $loader, '<script id="wpdc-account-login">' )
+		&& ! str_contains( $loader, '<script src' )
+		&& strlen( WPDC_ACCOUNT_LOGIN_LOADER ) < 1500
+		&& str_contains( $loader, "c.script" ) && str_ends_with( $login['script'], '/assets/account-login.js?ver=' . WPDC_VERSION )
+);
+check(
+	'BELL: the loader talks to the configured account only, with the cookie, and opens new tabs without an opener',
+	'https://account.unleash-wp.com' === $login['account']
+		&& str_contains( WPDC_ACCOUNT_LOGIN_LOADER, "c.account+'/api/sso/session',{credentials:'include'}" )
+		&& str_contains( WPDC_ACCOUNT_LOGIN_LOADER, "'_blank','noopener'" )
+		&& str_contains( WPDC_ACCOUNT_LOGIN_LOADER, "h.indexOf(c.account+'/')===0" )
+);
+check(
+	'BELL: a modifier click on an account link keeps the browser meaning',
+	str_contains( WPDC_ACCOUNT_LOGIN_LOADER, 'e.metaKey||e.ctrlKey||e.shiftKey||e.altKey' )
+);
+check(
+	'BELL: config text cannot close the script tag it is printed in',
+	( function (): bool {
+		$GLOBALS['wpdc_test_filters'] = array();
+		$json = wp_json_encode( array( 'x' => '</script><script>alert(1)</script>' ) );
+		return ! str_contains( $json, '</script>' );
+	} )()
+);
+check(
+	'BELL: the modal asks the account for a code and a sign-in, with the cookie, never leaking whether an address exists',
+	( function () use ( $root ): bool {
+		$js = (string) file_get_contents( $root . '/assets/account-login.js' );
+		return str_contains( $js, "'/api/auth/email-otp/send-verification-otp', { email: email, type: 'sign-in' }" )
+			&& str_contains( $js, "'/api/auth/sign-in/email-otp', { email: email, otp: code }" )
+			&& str_contains( $js, "credentials: 'include'" )
+			&& str_contains( $js, "autocomplete: 'one-time-code'" )
+			&& str_contains( $js, "inputmode: 'numeric'" )
+			&& 1 === substr_count( $js, "step('code')" );
+	} )()
+);
+check(
+	'BELL: with nothing configured the account is the production host',
+	( function (): bool {
+		return 'https://account.unleash-wp.com' === wpdc_account_url();
 	} )()
 );
 

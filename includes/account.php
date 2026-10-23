@@ -97,3 +97,69 @@ function wpdc_rest_handoff( WP_REST_Request $request ): WP_REST_Response {
 	$response->header( 'cache-control', 'private, no-store' );
 	return $response;
 }
+
+/**
+ * Everything the sign-in modal needs, in the page's language. The modal itself
+ * is fetched on the first click; only this and a few hundred bytes of loader
+ * ride on every page.
+ */
+function wpdc_account_login_config(): array {
+	return array(
+		'account' => wpdc_account_url(),
+		'lang'    => wpdc_page_language(),
+		'script'  => add_query_arg( 'ver', WPDC_VERSION, plugins_url( 'assets/account-login.js', WPDC_DIR . 'wp-dodo-checkout.php' ) ),
+		'style'   => add_query_arg( 'ver', WPDC_VERSION, plugins_url( 'assets/account-login.css', WPDC_DIR . 'wp-dodo-checkout.php' ) ),
+		'logo'    => add_query_arg( 'ver', WPDC_VERSION, plugins_url( 'assets/brand-logo.svg', WPDC_DIR . 'wp-dodo-checkout.php' ) ),
+		's'       => array(
+			'title'       => __( 'Sign in to UnleashWP', 'wp-dodo-checkout' ),
+			'lead'        => __( 'Your downloads, licence keys and invoices, with no password. We send you a code.', 'wp-dodo-checkout' ),
+			'email'       => __( 'Email', 'wp-dodo-checkout' ),
+			'placeholder' => __( 'your@email.com', 'wp-dodo-checkout' ),
+			'badEmail'    => __( 'Enter a valid email address.', 'wp-dodo-checkout' ),
+			'send'        => __( 'Send code', 'wp-dodo-checkout' ),
+			'sending'     => __( 'Sending…', 'wp-dodo-checkout' ),
+			'sent'        => __( 'If that address can sign in, a code is on its way. It lasts ten minutes and works once.', 'wp-dodo-checkout' ),
+			'code'        => __( '6-digit code', 'wp-dodo-checkout' ),
+			'signIn'      => __( 'Sign in', 'wp-dodo-checkout' ),
+			'checking'    => __( 'Checking…', 'wp-dodo-checkout' ),
+			'resend'      => __( 'Resend code', 'wp-dodo-checkout' ),
+			/* translators: %d: seconds until another code may be sent */
+			'wait'        => __( 'You can send a new code in %d seconds.', 'wp-dodo-checkout' ),
+			'other'       => __( 'Use a different address', 'wp-dodo-checkout' ),
+			'wrong'       => __( 'That code did not work. Check it, or send a new one.', 'wp-dodo-checkout' ),
+			'tooMany'     => __( 'Too many tries. Wait a minute and try again.', 'wp-dodo-checkout' ),
+			'offline'     => __( 'No connection. Try again in a moment.', 'wp-dodo-checkout' ),
+			'signedIn'    => __( 'You are signed in.', 'wp-dodo-checkout' ),
+			'open'        => __( 'Open my downloads', 'wp-dodo-checkout' ),
+			'close'       => __( 'Close', 'wp-dodo-checkout' ),
+		),
+	);
+}
+
+/**
+ * Any link into the account opens the modal instead; without JavaScript it is
+ * still a plain link that lands on the account's own sign-in. A modifier click
+ * keeps the browser's own meaning.
+ */
+const WPDC_ACCOUNT_LOGIN_LOADER = <<<'JS'
+(function(c){var asked=0;
+function hit(t){var a=t&&t.closest&&t.closest('a[href],[data-uwp-login]');if(!a)return null;if(a.hasAttribute('data-uwp-login'))return a;var h=a.href||'';return h===c.account||h.indexOf(c.account+'/')===0?a:null}
+function ask(){if(asked)return;asked=1;fetch(c.account+'/api/sso/session',{credentials:'include'}).then(function(r){return r.json()}).then(function(d){c.signedIn=!!(d&&d.signedIn)}).catch(function(){})}
+function load(a){if(c.open){c.open(a);return}var n=2,go=function(){if(--n===0&&c.open)c.open(a)};var l=document.createElement('link');l.rel='stylesheet';l.href=c.style;l.onload=l.onerror=go;document.head.appendChild(l);var s=document.createElement('script');s.src=c.script;s.onload=go;document.head.appendChild(s)}
+document.addEventListener('pointerover',function(e){if(hit(e.target))ask()},{passive:true});
+document.addEventListener('focusin',function(e){if(hit(e.target))ask()});
+document.addEventListener('click',function(e){var a=hit(e.target);if(!a||e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();if(c.signedIn){window.open(a.href||c.account+'/downloads','_blank','noopener');return}load(a)});
+})(window.wpdcAccountLogin);
+JS;
+
+function wpdc_account_login_loader(): string {
+	return '<script id="wpdc-account-login">window.wpdcAccountLogin=' . wp_json_encode( wpdc_account_login_config() ) . ';' . WPDC_ACCOUNT_LOGIN_LOADER . '</script>' . "\n";
+}
+
+function wpdc_print_account_login(): void {
+	$switched = function_exists( 'wpdc_load_catalogue' ) && wpdc_load_catalogue( wpdc_page_language() );
+	echo wpdc_account_login_loader(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON from wp_json_encode, a fixed script.
+	if ( $switched ) {
+		wpdc_restore_catalogue();
+	}
+}
