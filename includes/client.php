@@ -1096,8 +1096,11 @@ function wpdc_download_url(): string {
 function wpdc_return_url(): string {
 	if ( defined( 'WPDC_RETURN_URL' ) && is_string( WPDC_RETURN_URL ) ) {
 		$configured = trim( WPDC_RETURN_URL );
-		// Same-origin only, checked rather than trusted.
-		if ( '' !== $configured && wp_parse_url( $configured, PHP_URL_HOST ) === wp_parse_url( home_url(), PHP_URL_HOST ) ) {
+		// Same-origin only, checked rather than trusted. The scheme too: a
+		// javascript: URL can carry the shop's own host.
+		$scheme = strtolower( (string) wp_parse_url( $configured, PHP_URL_SCHEME ) );
+		if ( '' !== $configured && in_array( $scheme, array( 'http', 'https' ), true )
+			&& wp_parse_url( $configured, PHP_URL_HOST ) === wp_parse_url( home_url(), PHP_URL_HOST ) ) {
 			return $configured;
 		}
 	}

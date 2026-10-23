@@ -4259,6 +4259,14 @@ check(
 		&& '#bfc8da' === ( wpdc_theme_config( 'de' )['light']['border_secondary'] ?? '' )
 );
 
+// Defined last, because a constant cannot be undefined for the tests above.
+// The host matches the shop, so only the scheme check can refuse it.
+define( 'WPDC_RETURN_URL', "javascript://shop.example/%0Aalert(document.domain)" );
+check(
+	'BELL: a return URL that is not http or https is refused even on the shop host',
+	'' === wpdc_return_url()
+);
+
 if ( $failures ) {
 	echo count( $failures ) . " of $checks checks FAILED\n";
 	foreach ( $failures as $name ) {
