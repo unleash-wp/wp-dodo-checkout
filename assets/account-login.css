@@ -204,6 +204,13 @@ dialog.uwp-login .uwp-login__code {
 dialog.uwp-login .uwp-login__input:focus {
   border-color: #203159 !important;
 }
+dialog.uwp-login .uwp-login__hp {
+  position: absolute !important;
+  left: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+}
 dialog.uwp-login [hidden] {
   display: none !important;
 }

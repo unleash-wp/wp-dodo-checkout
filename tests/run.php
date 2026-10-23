@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.9.5' );
+define( 'WPDC_VERSION', '0.10.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -3863,6 +3863,36 @@ check(
 check(
 	'SILENCE: a page without the shortcode comes back byte for byte',
 	'<html><body>[wpdc_checkout] [wpdc_accountx]</body></html>' === wpdc_account_expand( '<html><body>[wpdc_checkout] [wpdc_accountx]</body></html>' )
+);
+
+// ─── Spam guard in the modal (contract: account /api/pow/challenge) ──────────
+
+$modal = (string) file_get_contents( $root . '/assets/account-login.js' );
+check(
+	'BELL: the modal fetches a proof-of-work challenge and solves it with SHA-256',
+	str_contains( $modal, "'/api/pow/challenge'" )
+		&& str_contains( $modal, "crypto.subtle.digest('SHA-256'" )
+		&& str_contains( $modal, "'x-uwp-pow'" )
+);
+check(
+	'BELL: the solved work travels as the agreed base64 JSON of salt, number, challenge, signature',
+	str_contains( $modal, 'btoa(JSON.stringify({ salt: ch.salt, number: n, challenge: ch.challenge, signature: ch.signature }))' )
+);
+check(
+	'BELL: the next challenge is fetched right after every send, so a resend is not refused for being too fast',
+	1 === preg_match( '/function sendCode[\s\S]{0,900}prefetch\(\);/', $modal )
+);
+check(
+	'BELL: a refused proof is retried once with fresh work, then said plainly',
+	str_contains( $modal, "'POW_REQUIRED'" ) && str_contains( $modal, 'c.s.powFailed' )
+		&& str_contains( $modal, 'setTimeout(go, 2100)' )
+		&& str_contains( (string) file_get_contents( $root . '/includes/account.php' ), "'powFailed'   => __( 'The security check did not work. Try again.'" )
+);
+check(
+	'BELL: a honeypot field the person never sees, sent as x-uwp-hp only when filled',
+	str_contains( $modal, "name: 'website'" ) && str_contains( $modal, "tabindex: '-1'" ) && str_contains( $modal, "'aria-hidden': 'true'" )
+		&& str_contains( $modal, "'x-uwp-hp'" )
+		&& str_contains( (string) file_get_contents( $root . '/assets/account-login.css' ), '.uwp-login__hp' )
 );
 
 if ( $failures ) {
