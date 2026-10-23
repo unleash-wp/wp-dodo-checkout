@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.9.1' );
+define( 'WPDC_VERSION', '0.9.2' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -3777,6 +3777,17 @@ check(
 		$js = (string) file_get_contents( $root . '/assets/account-login.js' );
 		return str_contains( $js, 'r.status === 403 ? c.s.locked' )
 			&& str_contains( (string) file_get_contents( $root . '/includes/account.php' ), "'locked'      => __( 'Too many wrong codes. Send yourself a new one.'" );
+	} )()
+);
+
+check(
+	// Measured live: the theme turned "Code senden" into an uppercase, transparent, framed button.
+	'BELL: the modal keeps its own yellow button against the theme',
+	( function () use ( $root ): bool {
+		$css = (string) file_get_contents( $root . '/assets/account-login.css' );
+		return 1 === preg_match( '/\.uwp-login__primary\s*\{[^}]*background:\s*#fcbe00 !important/', $css )
+			&& str_contains( $css, 'text-transform: none !important' )
+			&& 1 === preg_match( '/button::before,\s*dialog\.uwp-login button::after\s*\{\s*display:\s*none !important/', $css );
 	} )()
 );
 
