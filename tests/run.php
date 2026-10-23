@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.7.19' );
+define( 'WPDC_VERSION', '0.8.4' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -655,6 +655,20 @@ check(
 	str_contains( $shortcode, 'rel="preconnect"' )
 		&& str_contains( $shortcode, 'cdn.jsdelivr.net' )
 		&& str_contains( $shortcode, 'function wpdc_preconnect' )
+);
+check(
+	// The click waits on the inline frame and its assets most of all, so their
+	// handshake is warmed here too, not just the SDK CDN's.
+	'BELL: the dodopayments hosts are preconnected, not only the CDN',
+	str_contains( $shortcode, 'checkout.dodopayments.com' )
+		&& str_contains( $shortcode, 'assets.dodopayments.com' )
+);
+check(
+	// The logo files keep one name across releases, so without a version on the
+	// url a cache serves yesterday's logo for months. Swapping the Dodo mark for
+	// ours did exactly that once. Both logo urls carry the version.
+	'BELL: the logo urls carry a version so a cache cannot pin an old file',
+	2 === substr_count( $shortcode, "add_query_arg( 'ver', WPDC_VERSION, plugins_url( 'assets/" )
 );
 check(
 	// The browser enforces the hash: a script injected without integrity +
@@ -3559,6 +3573,14 @@ $offPrice = wpdc_price_for_country( 'pdt_other', 'DE' );
 check(
 	'BELL: the price path refuses a product off the allow-list',
 	wpdc_is_error( $offPrice ) && 'unknown_product' === $offPrice['reason']
+);
+
+// The SVG carries wide inner margins: at 16px the mark rendered about 9px tall,
+// smaller than the sentence it closes. Owner flagged it on the live panel.
+check(
+	'BELL: the Dodo mark in the payment line is sized to be read',
+	str_contains( $shortcode, 'alt="Dodo Payments" width="137" height="28"' )
+		&& 1 === preg_match( '/\.wpdc__legal-mark\s*\{[^}]*height:\s*28px/', $css )
 );
 
 if ( $failures ) {

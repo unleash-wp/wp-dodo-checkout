@@ -54,12 +54,19 @@ function wpdc_register_shortcode(): void {
 }
 
 /**
- * Warm the connection to the CDN the SDK is loaded from.
+ * Warm the connections the checkout needs before the click asks for them.
  *
  * The SDK is no longer enqueued eagerly -- checkout.js injects it on the first
  * interaction with a buy control -- so the TLS handshake would otherwise start
  * only then. A preconnect makes the browser open that connection as soon as it
  * meets the shortcode, so the on-demand load is not slowed by the handshake.
+ *
+ * cdn.jsdelivr.net serves the SDK. The three dodopayments hosts serve what the
+ * click actually waits on: the inline checkout frame, its runtime and its
+ * assets. Measured on a real buy, the frame and its assets were the slowest
+ * part, and their TLS handshake started only after the click. Warming them here
+ * takes that handshake off the critical path. The session mint and Dodo's own
+ * render are theirs, not ours, and a preconnect cannot shorten those.
  *
  * Emitted once per page, in the body: a shortcode renders after wp_head has run,
  * and a browser honours a preconnect wherever it parses one.
@@ -70,7 +77,17 @@ function wpdc_preconnect(): string {
 		return '';
 	}
 	$done = true;
-	return '<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>' . "\n";
+	$hosts = array(
+		'https://cdn.jsdelivr.net',
+		'https://checkout.dodopayments.com',
+		'https://assets.dodopayments.com',
+		'https://sdk-v2.hs.dodopayments.com',
+	);
+	$links = '';
+	foreach ( $hosts as $host ) {
+		$links .= '<link rel="preconnect" href="' . esc_url( $host ) . '" crossorigin>' . "\n";
+	}
+	return $links;
 }
 
 /**
@@ -331,6 +348,20 @@ function wpdc_render( $atts ): string {
 			?>
 			<div class="wpdc__scroll">
 			<aside class="wpdc__panel">
+				<?php
+				// The mark is navy and yellow, drawn for a white background, so on
+				// this dark panel it sits on a light plate to stay legible. Only
+				// rendered when the file shipped, so a missing asset leaves no
+				// broken-image box and no alt text standing where a logo should be.
+				if ( file_exists( WPDC_DIR . 'assets/brand-logo.svg' ) ) :
+					?>
+					<span class="wpdc__logo-plate">
+						<img class="wpdc__logo"
+							src="<?php echo esc_url( add_query_arg( 'ver', WPDC_VERSION, plugins_url( 'assets/brand-logo.svg', WPDC_DIR . 'wp-dodo-checkout.php' ) ) ); ?>"
+							alt="UnleashWP" width="99" height="22" decoding="async">
+					</span>
+				<?php endif; ?>
+
 				<?php wpdc_render_item( $atts['product'] ); ?>
 
 				<?php
@@ -376,6 +407,27 @@ function wpdc_render( $atts ): string {
 						<dt><?php echo esc_html__( 'Total', 'wp-dodo-checkout' ); ?></dt><dd></dd>
 					</div>
 				</dl>
+
+				<?php
+				// Who takes the money, said plainly. The frame is Dodo's, and a
+				// customer who sees a payment form from a name they do not know
+				// should find it named here.
+				?>
+				<p class="wpdc__legal">
+					<?php
+					// The Dodo wordmark itself, small, as the link: we do not sell
+					// this, Dodo does, so their name carries the line. Falls back to
+					// the plain words when the logo file is not shipped.
+					$dodo_mark = file_exists( WPDC_DIR . 'assets/dodo-logo.svg' )
+						? '<img class="wpdc__legal-mark" src="' . esc_url( add_query_arg( 'ver', WPDC_VERSION, plugins_url( 'assets/dodo-logo.svg', WPDC_DIR . 'wp-dodo-checkout.php' ) ) ) . '" alt="Dodo Payments" width="137" height="28" decoding="async">'
+						: esc_html__( 'Dodo Payments', 'wp-dodo-checkout' );
+					printf(
+						/* translators: %s: the Dodo Payments wordmark, linking to dodopayments.com */
+						esc_html__( 'Payment processed by %s', 'wp-dodo-checkout' ),
+						'<a class="wpdc__legal-link" href="' . esc_url( 'https://dodopayments.com' ) . '" target="_blank" rel="noopener noreferrer">' . $dodo_mark . '</a>'
+					);
+					?>
+				</p>
 
 			</aside>
 

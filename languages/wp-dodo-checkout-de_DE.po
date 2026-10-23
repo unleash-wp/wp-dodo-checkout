@@ -183,3 +183,9 @@ msgstr "Dieses Produkt ist nicht verfügbar."
 
 msgid "The shop is busy right now. Please try again in a minute."
 msgstr "Der Shop ist gerade stark ausgelastet. Bitte versuchen Sie es in einer Minute noch einmal."
+
+msgid "Payment processed by %s"
+msgstr "Zahlung abgewickelt über %s"
+
+msgid "Dodo Payments"
+msgstr "Dodo Payments"
