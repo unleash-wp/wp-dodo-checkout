@@ -1111,9 +1111,9 @@ function wpdc_theme_config( string $language = '' ): array {
 		'light'       => array(
 			'bg_primary'             => '#ffffff',
 			'bg_secondary'           => '#f4f6fb',
-			// Field edges at 3:1 against white (WCAG 1.4.11); dividers a step lighter.
-			'border_primary'         => '#8794b0',
-			'border_secondary'       => '#b8c2d6',
+			// The 3:1 edge (#8794b0) softened 10% toward white at the owner's eye; dividers a step lighter.
+			'border_primary'         => '#939fb8',
+			'border_secondary'       => '#bfc8da',
 			'input_focus_border'     => '#203159',
 			'text_primary'           => '#203159',
 			'text_secondary'         => '#3d4a6e',

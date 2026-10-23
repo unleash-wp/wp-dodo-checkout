@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.16.3' );
+define( 'WPDC_VERSION', '0.16.4' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -4183,10 +4183,10 @@ check(
 
 check(
 	// WCAG 1.4.11: a field's edge needs 3:1 against white. #d7deec was 1.35:1 and the
-	// owner could not see the fields; #8794b0 is 3.05:1.
-	'BELL: field borders are dark enough to see, dividers a step lighter',
-	'#8794b0' === ( wpdc_theme_config( 'de' )['light']['border_primary'] ?? '' )
-		&& '#b8c2d6' === ( wpdc_theme_config( 'de' )['light']['border_secondary'] ?? '' )
+	// owner could not see the fields; #8794b0 (3.05:1) then read too hard, so 10% toward white.
+	'BELL: field borders are visible but softened, dividers a step lighter',
+	'#939fb8' === ( wpdc_theme_config( 'de' )['light']['border_primary'] ?? '' )
+		&& '#bfc8da' === ( wpdc_theme_config( 'de' )['light']['border_secondary'] ?? '' )
 );
 
 if ( $failures ) {
