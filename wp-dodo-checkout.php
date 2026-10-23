@@ -47,6 +47,7 @@ require_once WPDC_DIR . 'includes/config.php';
 require_once WPDC_DIR . 'includes/client.php';
 require_once WPDC_DIR . 'includes/shortcode.php';
 require_once WPDC_DIR . 'includes/rest.php';
+require_once WPDC_DIR . 'includes/account.php';
 require_once WPDC_DIR . 'includes/apple-pay.php';
 require_once WPDC_DIR . 'includes/settings.php';
 

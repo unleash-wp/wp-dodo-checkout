@@ -130,6 +130,7 @@ class WP_Error {
 // had no behavioural coverage at all.
 
 define( 'MINUTE_IN_SECONDS', 60 );
+define( 'HOUR_IN_SECONDS', 3600 );
 
 $GLOBALS['wpdc_test_routes'] = array();
 
@@ -155,7 +156,11 @@ class WP_REST_Request {
 }
 
 class WP_REST_Response {
+	public array $headers = array();
 	public function __construct( public $data = null, public int $status = 200 ) {}
+	public function header( string $name, string $value ): void {
+		$this->headers[ strtolower( $name ) ] = $value;
+	}
 	public function get_data() {
 		return $this->data;
 	}
@@ -167,6 +172,7 @@ class WP_REST_Response {
 require_once $root . '/includes/config.php';
 require_once $root . '/includes/client.php';
 require_once $root . '/includes/rest.php';
+require_once $root . '/includes/account.php';
 
 // ─── Runner ──────────────────────────────────────────────────────────────────
 
@@ -3581,6 +3587,111 @@ check(
 	'BELL: the Dodo mark in the payment line is sized to be read',
 	str_contains( $shortcode, 'alt="Dodo Payments" width="137" height="28"' )
 		&& 1 === preg_match( '/\.wpdc__legal-mark\s*\{[^}]*height:\s*28px/', $css )
+);
+
+// ─── Handoff into the account ────────────────────────────────────────────────
+
+$routes = $GLOBALS['wpdc_test_routes'];
+wpdc_register_rest();
+$routes = $GLOBALS['wpdc_test_routes'];
+check(
+	'BELL: the handoff route is POST and validates the session id',
+	'POST' === ( $routes['wp-dodo-checkout/v1/handoff']['methods'] ?? '' )
+		&& 'wpdc_is_session_id' === ( $routes['wp-dodo-checkout/v1/handoff']['args']['session']['validate_callback'] ?? '' )
+);
+
+$handoff_session = 'cks_handoffabcdefghijklmno';
+$downloads       = 'https://account.unleash-wp.com/downloads';
+
+configure();
+wpdc_remember_session( $handoff_session );
+check(
+	'BELL: without a shared secret the handoff asks nobody and opens Downloads',
+	$downloads === wpdc_account_handoff( $handoff_session ) && array() === $GLOBALS['wpdc_test_requests']
+);
+
+define( 'WPDC_ACCOUNT_SECRET', 'test-checkout-secret' );
+$ticket = str_repeat( 'A', 43 );
+$minted = 'https://account.unleash-wp.com/api/auth/handoff/redeem?t=' . $ticket;
+
+/** A paid checkout followed by the account's answer. */
+function handoff_scripted( string $session, int $status, array $answer, string $paid = 'succeeded' ): string {
+	configure();
+	wpdc_remember_session( $session );
+	respond( 200, array( 'payment_status' => $paid, 'payment_id' => 'pay_0Test123', 'customer' => array( 'email' => 'buyer@example.com' ) ) );
+	respond( $status, $answer );
+	return wpdc_account_handoff( $session );
+}
+
+check(
+	'BELL: an unknown session is sent to Downloads without spending a call',
+	( function () use ( $downloads ): bool {
+		configure();
+		return $downloads === wpdc_account_handoff( 'cks_neverminted0000000000' ) && array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+
+check(
+	'BELL: a paid checkout comes back as the account redeem link',
+	$minted === handoff_scripted( $handoff_session, 200, array( 'url' => $minted ) )
+);
+
+$mint_call = $GLOBALS['wpdc_test_requests'][1] ?? array();
+check(
+	'BELL: the account is asked with the secret, the payment id only, no redirects, TLS verified',
+	'https://account.unleash-wp.com/api/handoff/mint' === ( $mint_call['url'] ?? '' )
+		&& 'Bearer test-checkout-secret' === ( $mint_call['args']['headers']['authorization'] ?? '' )
+		&& '{"payment_id":"pay_0Test123"}' === ( $mint_call['args']['body'] ?? '' )
+		&& 0 === ( $mint_call['args']['redirection'] ?? null )
+		&& true === ( $mint_call['args']['sslverify'] ?? null )
+);
+
+check(
+	'BELL: a checkout that has not succeeded never asks the account',
+	$downloads === handoff_scripted( $handoff_session, 200, array( 'url' => $minted ), 'processing' )
+		&& 1 === count( $GLOBALS['wpdc_test_requests'] )
+);
+
+check(
+	'BELL: an account answer pointing anywhere else is refused',
+	$downloads === handoff_scripted( $handoff_session, 200, array( 'url' => 'https://evil.example/api/auth/handoff/redeem?t=' . $ticket ) )
+		&& $downloads === handoff_scripted( $handoff_session, 200, array( 'url' => $minted . '&next=https://evil.example' ) )
+		// Same length as the real prefix, so only the prefix check can catch it.
+		&& $downloads === handoff_scripted( $handoff_session, 200, array( 'url' => str_pad( 'https://evil.example/', strlen( $minted ) - 43, 'x' ) . $ticket ) )
+);
+
+foreach ( array( 401, 409, 429, 503 ) as $refusal ) {
+	check(
+		"BELL: account $refusal still leaves the buyer a way in",
+		$downloads === handoff_scripted( $handoff_session, $refusal, array( 'error' => 'x' ) )
+	);
+}
+
+check(
+	'BELL: a third handoff for one checkout does not reach the account',
+	( function () use ( $handoff_session, $minted, $downloads ): bool {
+		handoff_scripted( $handoff_session, 200, array( 'url' => $minted ) );
+		$GLOBALS['wpdc_test_requests'] = array();
+		respond( 200, array( 'payment_status' => 'succeeded', 'payment_id' => 'pay_0Test123' ) );
+		respond( 200, array( 'url' => $minted ) );
+		wpdc_account_handoff( $handoff_session );
+		$GLOBALS['wpdc_test_requests'] = array();
+		return $downloads === wpdc_account_handoff( $handoff_session ) && array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+
+check(
+	'BELL: the handoff answer carries the url and nothing about the buyer',
+	( function () use ( $handoff_session, $minted ): bool {
+		configure();
+		wpdc_remember_session( $handoff_session );
+		respond( 200, array( 'payment_status' => 'succeeded', 'payment_id' => 'pay_0Test123', 'customer' => array( 'email' => 'buyer@example.com' ) ) );
+		respond( 200, array( 'url' => $minted ) );
+		$r = wpdc_rest_handoff( new WP_REST_Request( array( 'session' => $handoff_session ) ) );
+		$json = json_encode( $r->get_data() );
+		return array( 'url' => $minted ) === $r->get_data() && ! str_contains( $json, 'buyer@' ) && ! str_contains( $json, 'pay_' )
+			&& 'private, no-store' === ( $r->headers['cache-control'] ?? '' );
+	} )()
 );
 
 if ( $failures ) {
