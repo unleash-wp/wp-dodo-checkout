@@ -12,6 +12,11 @@
 
 declare(strict_types=1);
 
+// Stubbed WordPress must never run for a web visitor who finds this file.
+if ( 'cli' !== PHP_SAPI ) {
+	exit( 1 );
+}
+
 $root = dirname( __DIR__ );
 
 // ─── Enough WordPress to run the client ──────────────────────────────────────
@@ -4407,6 +4412,15 @@ check(
 		}
 		return true;
 	} )()
+);
+
+check(
+	// Audit 2026-10-23: a harness reachable over HTTP would run for any visitor.
+	'BELL: the harness refuses to run outside the command line, before anything else',
+	1 === preg_match(
+		"/^<\\?php\\s*\\/\\*\\*.*?\\*\\/\\s*declare\\(strict_types=1\\);\\s*(?:\\/\\/[^\\n]*\\n\\s*)*if \\( 'cli' !== PHP_SAPI \\) \\{\\s*exit\\( 1 \\);\\s*\\}/s",
+		(string) file_get_contents( __FILE__ )
+	)
 );
 
 // Defined last, because a constant cannot be undefined for the tests above.
