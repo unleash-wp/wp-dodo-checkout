@@ -168,3 +168,36 @@ function wpdc_print_account_login(): void {
 		wpdc_restore_catalogue();
 	}
 }
+
+/**
+ * [wpdc_account] for the header: a person icon that opens the sign-in modal,
+ * and without JavaScript a plain link into the account. label="Konto" shows
+ * text beside the icon; size="20" sets the icon in pixels (12 to 48).
+ */
+function wpdc_render_account( $atts ): string {
+	$atts = shortcode_atts(
+		array(
+			'label' => '',
+			'size'  => '20',
+		),
+		is_array( $atts ) ? $atts : array(),
+		'wpdc_account'
+	);
+
+	$switched = function_exists( 'wpdc_load_catalogue' ) && wpdc_load_catalogue( wpdc_page_language() );
+	$name     = __( 'My account', 'wp-dodo-checkout' );
+	if ( $switched ) {
+		wpdc_restore_catalogue();
+	}
+
+	$size  = max( 12, min( 48, (int) $atts['size'] ) );
+	$label = trim( (string) $atts['label'] );
+
+	return '<a class="wpdc-account-link" href="' . esc_url( wpdc_account_downloads_url() ) . '" data-uwp-login'
+		. ( '' === $label ? ' aria-label="' . esc_attr( $name ) . '"' : '' )
+		. ' style="display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;color:inherit;text-decoration:none">'
+		. '<svg width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">'
+		. '<path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.42 0-8 2.24-8 5v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1c0-2.76-3.58-5-8-5Z"/></svg>'
+		. ( '' === $label ? '' : '<span class="wpdc-account-link__text">' . esc_html( $label ) . '</span>' )
+		. '</a>';
+}

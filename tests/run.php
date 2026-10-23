@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.9.2' );
+define( 'WPDC_VERSION', '0.9.3' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -169,6 +169,23 @@ class WP_REST_Response {
 	}
 }
 
+function shortcode_atts( array $pairs, $atts, string $tag = '' ): array {
+	$atts = (array) $atts;
+	$out  = array();
+	foreach ( $pairs as $name => $default ) {
+		$out[ $name ] = array_key_exists( $name, $atts ) ? $atts[ $name ] : $default;
+	}
+	return $out;
+}
+function esc_attr( $text ): string {
+	return htmlspecialchars( (string) $text, ENT_QUOTES );
+}
+function esc_html( $text ): string {
+	return htmlspecialchars( (string) $text, ENT_QUOTES );
+}
+function esc_url( $url ): string {
+	return htmlspecialchars( (string) $url, ENT_QUOTES );
+}
 function plugins_url( string $path = '', string $plugin = '' ): string {
 	return 'https://shop.test/wp-content/plugins/wp-dodo-checkout/' . ltrim( $path, '/' );
 }
@@ -3789,6 +3806,34 @@ check(
 			&& str_contains( $css, 'text-transform: none !important' )
 			&& 1 === preg_match( '/button::before,\s*dialog\.uwp-login button::after\s*\{\s*display:\s*none !important/', $css );
 	} )()
+);
+
+// ─── The header shortcode ────────────────────────────────────────────────────
+
+$icon = wpdc_render_account( array() );
+check(
+	'BELL: [wpdc_account] is a real link into the account that the modal takes over',
+	str_starts_with( $icon, '<a class="wpdc-account-link" href="https://account.unleash-wp.com/downloads" data-uwp-login' )
+		&& str_contains( $icon, '<svg' ) && str_contains( $icon, 'aria-hidden="true"' )
+);
+check(
+	'BELL: an icon-only link still has a name a screen reader can say',
+	str_contains( $icon, 'aria-label="My account"' )
+);
+$labelled = wpdc_render_account( array( 'label' => 'Konto <b>x</b>' ) );
+check(
+	'BELL: a visible label replaces the aria-label and is escaped',
+	str_contains( $labelled, '<span class="wpdc-account-link__text">Konto &lt;b&gt;x&lt;/b&gt;</span>' )
+		&& ! str_contains( $labelled, 'aria-label=' )
+);
+check(
+	'BELL: the icon size is clamped, never whatever the attribute says',
+	str_contains( wpdc_render_account( array( 'size' => '9999' ) ), 'width="48" height="48"' )
+		&& str_contains( wpdc_render_account( array( 'size' => 'x" onload="alert(1)' ) ), 'width="12" height="12"' )
+);
+check(
+	'BELL: the shortcode is registered under the plugin prefix',
+	str_contains( $shortcode, "add_shortcode( 'wpdc_account', 'wpdc_render_account' );" )
 );
 
 if ( $failures ) {

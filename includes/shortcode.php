@@ -51,6 +51,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 function wpdc_register_shortcode(): void {
 	add_shortcode( 'wpdc_checkout', 'wpdc_render' );
 	add_shortcode( 'wpdc_price', 'wpdc_render_price' );
+	add_shortcode( 'wpdc_account', 'wpdc_render_account' );
 }
 
 /**

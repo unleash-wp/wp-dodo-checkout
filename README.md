@@ -136,8 +136,12 @@ define( 'WPDC_ACCOUNT_URL', 'https://account.unleash-wp.com' ); // optional, htt
 Without the secret, or when anything on the way fails, the modal opens at the
 email field instead. The order is never affected.
 
-**Anywhere else.** Every link to the account (for the Impreza header icon:
-link it to `https://account.unleash-wp.com/downloads`) and any element with
+**In the header.** `[wpdc_account]` prints a person icon named "My account"
+("Mein Konto") that opens the modal. `label="Konto"` adds visible text,
+`size="20"` sets the icon (12 to 48 px). It takes the colour of the header.
+
+**Anywhere else.** Every link to the account (for example
+`https://account.unleash-wp.com/downloads`) and any element with
 `data-uwp-login` opens the UnleashWP sign-in modal: email, then a six-digit
 code, then "Open my downloads" in a new tab. The modal talks to the account
 directly (CORS for `https://unleash-wp.com` only) and is fetched on the first
