@@ -3767,6 +3767,17 @@ check(
 	} )()
 );
 
+check(
+	// Measured live: after five wrong codes the account answers 403 TOO_MANY_ATTEMPTS.
+	// "That code did not work" there sends the buyer back to typing a dead code.
+	'BELL: a locked code tells the buyer to get a new one',
+	( function () use ( $root ): bool {
+		$js = (string) file_get_contents( $root . '/assets/account-login.js' );
+		return str_contains( $js, 'r.status === 403 ? c.s.locked' )
+			&& str_contains( (string) file_get_contents( $root . '/includes/account.php' ), "'locked'      => __( 'Too many wrong codes. Send yourself a new one.'" );
+	} )()
+);
+
 if ( $failures ) {
 	echo count( $failures ) . " of $checks checks FAILED\n";
 	foreach ( $failures as $name ) {

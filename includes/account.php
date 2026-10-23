@@ -131,6 +131,7 @@ function wpdc_account_login_config(): array {
 			'other'       => __( 'Use a different address', 'wp-dodo-checkout' ),
 			'wrong'       => __( 'That code did not work. Check it, or send a new one.', 'wp-dodo-checkout' ),
 			'tooMany'     => __( 'Too many tries. Wait a minute and try again.', 'wp-dodo-checkout' ),
+			'locked'      => __( 'Too many wrong codes. Send yourself a new one.', 'wp-dodo-checkout' ),
 			'offline'     => __( 'No connection. Try again in a moment.', 'wp-dodo-checkout' ),
 			'signedIn'    => __( 'You are signed in.', 'wp-dodo-checkout' ),
 			'open'        => __( 'Open my downloads', 'wp-dodo-checkout' ),
