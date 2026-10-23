@@ -495,7 +495,11 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	// A product the catalogue does not know is refused BEFORE any session is
 	// created, and refreshed once first: the owner may have created it a minute
 	// ago, and making them wait out a cache reads as the plugin being broken.
-	if ( ! isset( $catalog[ $product ] ) ) {
+	// At most one such refresh per WPDC_UNKNOWN_TTL site-wide, so rotating
+	// invented ids cannot buy a Dodo call each.
+	$forced = wpdc_catalog_key() . '_forced';
+	if ( ! isset( $catalog[ $product ] ) && false === get_transient( $forced ) ) {
+		set_transient( $forced, 1, WPDC_UNKNOWN_TTL );
 		$catalog = wpdc_catalog( true );
 		if ( wpdc_is_error( $catalog ) ) {
 			return $catalog;

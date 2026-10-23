@@ -94,9 +94,9 @@ const WPDC_DISCOUNT_CEILING = 20;
  *
  * The session route refreshes the catalogue the first time an unknown id
  * arrives, in case the owner created it a minute ago. After that the answer is
- * cached briefly, so a loop of invented ids is one fetch each rather than a
- * fresh Dodo call per request. Short, because a product created during the
- * window should become sellable soon after.
+ * cached briefly, and the forced refresh itself runs at most once per window
+ * site-wide, so a loop of invented ids is one fetch per window. Short, because
+ * a product created during the window should become sellable soon after.
  */
 const WPDC_UNKNOWN_TTL = 30;
 

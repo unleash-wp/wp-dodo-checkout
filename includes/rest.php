@@ -166,8 +166,8 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 	 * The REST validator guarantees the SHAPE, so what reaches this callback is a
 	 * well-formed id that may or may not be on sale. The first unlisted one is
 	 * checked against Dodo (wpdc_create_session refreshes the catalogue for it);
-	 * after that the answer is remembered for WPDC_UNKNOWN_TTL, so a loop of
-	 * invented ids costs one fetch each rather than a fresh Dodo call every time.
+	 * after that the answer is remembered for WPDC_UNKNOWN_TTL, and the client
+	 * refreshes at most once per that window, so rotated ids cost no extra fetch.
 	 */
 	$unknown_key = 'wpdc_unknown_' . md5( $product . '|' . (string) $bump );
 	if ( false !== get_transient( $unknown_key ) ) {

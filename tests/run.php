@@ -3485,6 +3485,28 @@ check(
 			&& array() === $GLOBALS['wpdc_test_requests'];
 	} )()
 );
+check(
+	// Audit 2026-10-23: the memo above is per id, so rotating ids bought one fetch each.
+	'BELL: a different invented id right after does not refetch the catalogue',
+	( static function (): bool {
+		$GLOBALS['wpdc_test_requests'] = array();
+		$other = mint( array( 'product' => 'pdt_ghost2' ) );
+		return 400 === $other->get_status()
+			&& 'unknown_product' === $other->get_data()['reason']
+			&& array() === $GLOBALS['wpdc_test_requests'];
+	} )()
+);
+check(
+	'BELL: once the window passes, a just-created product is found by a fresh look',
+	( static function (): bool {
+		unset( $GLOBALS['wpdc_test_transients'][ wpdc_catalog_key() . '_forced' ] );
+		$GLOBALS['wpdc_test_requests'] = array();
+		catalogue( array( 'pdt_pro', 'pdt_new' ) );
+		respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_n', 'session_id' => 'cks_newprod01' ) );
+		return 200 === mint( array( 'product' => 'pdt_new' ) )->get_status()
+			&& 2 === count( $GLOBALS['wpdc_test_requests'] );
+	} )()
+);
 
 configure();
 catalogue( array( 'pdt_pro' ) );
