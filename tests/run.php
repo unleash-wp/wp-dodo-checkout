@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.11.1' );
+define( 'WPDC_VERSION', '0.11.2' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -3988,6 +3988,13 @@ check(
 	1 === substr_count( $checkoutJs = (string) file_get_contents( $root . '/assets/checkout.js' ), "closest('.wp-dodo-checkout')" )
 		&& 1 === preg_match( "/data-wpdc-account\]'\)[\s\S]{0,400}var root = rootFor\(btn\);/", $checkoutJs )
 		&& 1 === preg_match( "/data-wpdc-signin\]'\)[\s\S]{0,300}var root = rootFor\(btn\);/", $checkoutJs )
+);
+
+check(
+	// Measured live on 0.11.2: after signing in from the panel the discount line
+	// kept "Opening checkout…" for good, because only the discount path overwrote it.
+	'BELL: the re-mint after signing in clears the busy line it borrowed',
+	str_contains( (string) file_get_contents( $root . '/assets/checkout.js' ), ".then(function () { note.textContent = ''; })" )
 );
 
 if ( $failures ) {

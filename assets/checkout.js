@@ -1475,7 +1475,11 @@
       if (signin) signin.hidden = true;
       var note = part(root, '.wpdc__discount-note');
       var controls = [part(root, '.wpdc__discount-input'), part(root, '.wpdc__discount-apply')];
-      if (note) remintWith(root, root.dataset.discount || '', note, controls).catch(function () { say(root, cfg.failed); });
+      if (note) {
+        remintWith(root, root.dataset.discount || '', note, controls)
+          .then(function () { note.textContent = ''; })
+          .catch(function () { note.textContent = ''; say(root, cfg.failed); });
+      }
     } });
   });
 
