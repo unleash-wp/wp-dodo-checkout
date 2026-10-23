@@ -144,8 +144,8 @@ re-opens the checkout prefilled. A site answering `wpdc_customer` itself still
 decides.
 
 **The look.** Dodo's form is dressed as UnleashWP on every session: larger
-type (`lg`), medium weight, the 5px corner, navy text and the yellow pay
-button. Change it with the `wpdc_theme_config` filter. A font is sent only when
+type (`xl`), medium weight, the 5px corner, navy text and the yellow pay
+button reading "Zahlungspflichtig bestellen" or "Place order and pay" (§ 312j BGB). Change it with the `wpdc_theme_config` filter. A font is sent only when
 `WPDC_CHECKOUT_FONT_URL` names an https file the shop hosts itself (never
 Google), and the server must answer that file with CORS for
 `https://checkout.dodopayments.com`, or the frame falls back to its own font.

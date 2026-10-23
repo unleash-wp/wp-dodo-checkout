@@ -595,8 +595,6 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 
 	// Dodo's form dressed as UnleashWP, per session. Owner's choice (2026-10-23)
 	// over the dashboard's Design page: the shop's checkout is set here, in code.
-	$body['customization']['theme']        = 'light';
-	$body['customization']['theme_config'] = apply_filters( 'wpdc_theme_config', wpdc_theme_config() );
 
 	// ONE language for the whole window.
 	//
@@ -623,6 +621,8 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	if ( '' !== $language ) {
 		$body['customization']['force_language'] = $language;
 	}
+	$body['customization']['theme']        = 'light';
+	$body['customization']['theme_config'] = apply_filters( 'wpdc_theme_config', wpdc_theme_config( $language ) );
 
 	/**
 	 * Who is buying, when the site already knows.
@@ -1103,9 +1103,11 @@ function wpdc_return_url(): string {
  * https file (WPDC_CHECKOUT_FONT_URL); never Google, whose fonts would take
  * every buyer's address with them.
  */
-function wpdc_theme_config(): array {
+function wpdc_theme_config( string $language = '' ): array {
 	$config = array(
-		'font_size'   => 'lg',
+		// The largest size that still fits the 1040px window; the card block,
+		// which is the payment provider's own frame, keeps its size regardless.
+		'font_size'   => 'xl',
 		'font_weight' => 'medium',
 		'radius'      => '5px',
 		'light'       => array(
@@ -1127,6 +1129,15 @@ function wpdc_theme_config(): array {
 			'button_text_secondary'  => '#203159',
 		),
 	);
+	// § 312j BGB wants the closing button to say a payment follows. Without a
+	// known language Dodo's own wording stays.
+	$pay = array(
+		'de' => 'Zahlungspflichtig bestellen',
+		'en' => 'Place order and pay',
+	);
+	if ( isset( $pay[ $language ] ) ) {
+		$config['pay_button_text'] = $pay[ $language ];
+	}
 	if ( defined( 'WPDC_CHECKOUT_FONT_URL' ) && wpdc_is_font_url( WPDC_CHECKOUT_FONT_URL ) ) {
 		$config['font_primary_url'] = WPDC_CHECKOUT_FONT_URL;
 	}
