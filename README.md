@@ -143,12 +143,15 @@ Anybody else sees "Already a customer? Sign in" in the panel; signing in there
 re-opens the checkout prefilled. A site answering `wpdc_customer` itself still
 decides.
 
-**The look.** Dodo's form is dressed as UnleashWP on every session: larger
-type (`xl`), medium weight, the 5px corner, navy text and the yellow pay
-button reading "Zahlungspflichtig bestellen" or "Place order and pay" (§ 312j BGB). Change it with the `wpdc_theme_config` filter. A font is sent only when
-`WPDC_CHECKOUT_FONT_URL` names an https file the shop hosts itself (never
-Google), and the server must answer that file with CORS for
-`https://checkout.dodopayments.com`, or the frame falls back to its own font.
+**The look.** Dodo's form is dressed as UnleashWP on every session: the
+largest type (`2xl`), Ubuntu loaded from `account.unleash-wp.com/fonts/ubuntu.css?family=Ubuntu`
+(our own server, CORS open for `/fonts/*`, never Google; Dodo reads the family
+from `family=`), the 5px corner, navy text, radios, focus and pay button, and the
+pay button reading "Zahlungspflichtig bestellen" or "Place order and pay"
+(§ 312j BGB). Measured: `button_primary` paints the radios and focus ring, the
+enabled pay button takes `text_primary`, so a yellow pay button would need yellow
+text everywhere. Change it with the `wpdc_theme_config` filter;
+`WPDC_CHECKOUT_FONT_URL` overrides the font.
 
 **In the header.** `[wpdc_account]` prints a person icon named "My account"
 ("Mein Konto") that opens the modal. `label="Konto"` adds visible text,

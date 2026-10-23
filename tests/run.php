@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.14.0' );
+define( 'WPDC_VERSION', '0.15.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -4103,13 +4103,15 @@ check(
 $themed = ticket_sent( null, null );
 $tc     = $themed['customization']['theme_config'] ?? array();
 check(
-	'BELL: Dodo\'s form is dressed as UnleashWP: larger type, the 5px corner, yellow pay button with navy text',
+	'BELL: Dodo\'s form is dressed as UnleashWP: larger type, the 5px corner, navy radios, focus and pay button',
 	'light' === ( $themed['customization']['theme'] ?? '' )
-		&& 'xl' === ( $tc['font_size'] ?? '' )
+		&& '2xl' === ( $tc['font_size'] ?? '' )
 		&& 'medium' === ( $tc['font_weight'] ?? '' )
 		&& '5px' === ( $tc['radius'] ?? '' )
-		&& '#fcbe00' === ( $tc['light']['button_primary'] ?? '' )
-		&& '#203159' === ( $tc['light']['button_text_primary'] ?? '' )
+		// Measured on Dodo's page: button_primary paints the radios and the focus
+		// ring; the enabled pay button takes text_primary. Navy for all of them.
+		&& '#203159' === ( $tc['light']['button_primary'] ?? '' )
+		&& '#ffffff' === ( $tc['light']['button_text_primary'] ?? '' )
 		&& '#203159' === ( $tc['light']['text_primary'] ?? '' )
 		&& '#203159' === ( $tc['light']['input_focus_border'] ?? '' )
 );
@@ -4118,10 +4120,12 @@ check(
 	'de' === ( $themed['customization']['force_language'] ?? '' )
 );
 check(
-	// No font unless the shop names one it hosts itself: a Google Fonts URL in the
-	// frame would hand every buyer's address to Google.
-	'BELL: no font URL is sent unless the shop configured an https one',
-	! isset( $tc['font_primary_url'] ) && ! str_contains( (string) json_encode( $themed ), 'googleapis' )
+	// Ubuntu from the account's own server (CORS open for /fonts/*). Dodo reads the
+	// family from the URL's `family` parameter; without it the frame used Hanken Grotesk.
+	'BELL: the frame is set in Ubuntu from our own server, never from Google',
+	'https://account.unleash-wp.com/fonts/ubuntu.css?family=Ubuntu' === ( $tc['font_primary_url'] ?? '' )
+		&& ( $tc['font_primary_url'] ?? '' ) === ( $tc['font_secondary_url'] ?? '' )
+		&& ! str_contains( (string) json_encode( $themed ), 'googleapis' )
 );
 check(
 	'BELL: a site can change or drop the theme with a filter',
