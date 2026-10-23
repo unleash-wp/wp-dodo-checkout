@@ -3890,9 +3890,15 @@ check(
 );
 check(
 	'BELL: a honeypot field the person never sees, sent as x-uwp-hp only when filled',
-	str_contains( $modal, "name: 'website'" ) && str_contains( $modal, "tabindex: '-1'" ) && str_contains( $modal, "'aria-hidden': 'true'" )
+	str_contains( $modal, "name: 'uwp_extra_field'" ) && ! str_contains( $modal, "name: 'website'" ) && str_contains( $modal, "tabindex: '-1'" ) && str_contains( $modal, "'aria-hidden': 'true'" )
 		&& str_contains( $modal, "'x-uwp-hp'" )
 		&& str_contains( (string) file_get_contents( $root . '/assets/account-login.css' ), '.uwp-login__hp' )
+);
+
+check(
+	'BELL: while a refused send waits to retry, the button stays busy',
+	1 === preg_match( '/setTimeout\(go, 2100\); \}\)\.then\(function \(\) \{\s*busy\(button, false\);\s*return sendCode\(button, true\);/', $modal )
+		&& 0 === preg_match( '/prefetch\(\);\s*busy\(button, false\);\s*if \(r\.status === 403\)/', $modal )
 );
 
 if ( $failures ) {

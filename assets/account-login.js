@@ -111,16 +111,21 @@
       .then(function (r) {
         // Every proof is single use: the next one starts now.
         prefetch();
-        busy(button, false);
         if (r.status === 403) {
           return r.json().catch(function () { return {}; }).then(function (d) {
-            // The fresh challenge has to age past the server's two-second floor first.
+            // The fresh challenge has to age past the server's two-second floor first;
+            // the button stays busy meanwhile, so a second click cannot send twice.
             if (d && d.code === 'POW_REQUIRED' && !retried) {
-              return new Promise(function (go) { setTimeout(go, 2100); }).then(function () { return sendCode(button, true); });
+              return new Promise(function (go) { setTimeout(go, 2100); }).then(function () {
+                busy(button, false);
+                return sendCode(button, true);
+              });
             }
+            busy(button, false);
             say(c.s.powFailed);
           });
         }
+        busy(button, false);
         // Any answer but a throttle moves on: the wording never says whether the address exists.
         if (r.status === 429) { say(c.s.tooMany); return; }
         resendAt = Date.now() + 30000;
@@ -153,8 +158,9 @@
     var mailForm = el('form', { class: 'uwp-login__step uwp-login__step--email', novalidate: 'novalidate' }, [
       el('label', { for: 'uwp-login-email', class: 'uwp-login__label', text: c.s.email }),
       mailInput,
-      // Filled only by bots that complete every field; a person never sees it.
-      el('input', { type: 'text', name: 'website', class: 'uwp-login__hp', tabindex: '-1', autocomplete: 'off', 'aria-hidden': 'true' }),
+      // Filled only by bots that complete every field; a person never sees it. No name
+      // that autofill knows ("website", "url"), or a person would be taken for a bot.
+      el('input', { type: 'text', name: 'uwp_extra_field', class: 'uwp-login__hp', tabindex: '-1', autocomplete: 'off', 'aria-hidden': 'true' }),
       sendBtn
     ]);
     mailForm.addEventListener('submit', function (e) {
