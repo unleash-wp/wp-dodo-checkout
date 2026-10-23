@@ -20,7 +20,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.15.0' );
+define( 'WPDC_VERSION', '0.15.1' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -4105,7 +4105,8 @@ $tc     = $themed['customization']['theme_config'] ?? array();
 check(
 	'BELL: Dodo\'s form is dressed as UnleashWP: larger type, the 5px corner, navy radios, focus and pay button',
 	'light' === ( $themed['customization']['theme'] ?? '' )
-		&& '2xl' === ( $tc['font_size'] ?? '' )
+		// Owner: at 2xl the headings and the error line were far too large.
+		&& 'md' === ( $tc['font_size'] ?? '' )
 		&& 'medium' === ( $tc['font_weight'] ?? '' )
 		&& '5px' === ( $tc['radius'] ?? '' )
 		// Measured on Dodo's page: button_primary paints the radios and the focus
