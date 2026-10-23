@@ -378,7 +378,9 @@ function wpdc_render( $atts ): string {
 				<?php // Shown by the browser only when the account does not know this visitor. ?>
 				<p class="wpdc__signin" hidden>
 					<button type="button" class="wpdc__signin-link" data-wpdc-signin>
-						<?php echo esc_html__( 'Already a customer? Sign in', 'wp-dodo-checkout' ); ?>
+						<svg class="wpdc__signin-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.42 0-8 2.24-8 5v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1c0-2.76-3.58-5-8-5Z"/></svg>
+						<span class="wpdc__signin-text"><strong><?php echo esc_html__( 'Already a customer? Sign in', 'wp-dodo-checkout' ); ?></strong>
+						<span><?php echo esc_html__( 'Your details are filled in for you', 'wp-dodo-checkout' ); ?></span></span>
 					</button>
 				</p>
 				<form class="wpdc__discount" novalidate>

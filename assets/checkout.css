@@ -797,27 +797,35 @@
 /* Under the note, quiet: removing a code is a correction, not an action the
    panel is inviting. Underlined rather than boxed so it does not read as a
    second Apply. */
-/* "Already a customer? Sign in": a quiet line above the code field, armoured
-   like the panel's other controls because the theme styles every button. */
+/* "Already a customer? Sign in": a framed button above the code field, so a
+   returning buyer finds it. Armoured like the panel's other controls because
+   the theme styles every button. */
 .wpdc__signin {
-  margin: 0 0 10px;
+  margin: 0 0 14px;
 }
 .wpdc__signin[hidden] {
   display: none;
 }
 .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-link {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  width: 100% !important;
+  min-height: 44px;
   margin: 0 !important;
-  padding: 0 !important;
-  border: 0 !important;
-  background: none !important;
+  padding: 10px 12px !important;
+  border: 1px solid var(--wpdc-panel-accent) !important;
+  border-radius: var(--wpdc-radius, 5px);
+  background: rgb(252 190 0 / .08) !important;
   box-shadow: none !important;
   color: var(--wpdc-panel-fg) !important;
   font: inherit !important;
   font-size: 13px !important;
+  line-height: 1.35 !important;
+  text-align: left !important;
   text-transform: none !important;
   letter-spacing: normal !important;
-  text-decoration: underline !important;
-  text-underline-offset: 3px;
+  text-decoration: none !important;
   cursor: pointer;
 }
 .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-link::before,
@@ -825,7 +833,23 @@
   display: none !important;
 }
 .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-link:hover {
-  color: var(--wpdc-panel-accent) !important;
+  background: rgb(252 190 0 / .16) !important;
+  color: var(--wpdc-panel-fg) !important;
+}
+.wpdc__signin-icon {
+  flex: none;
+  color: var(--wpdc-panel-accent);
+}
+.wpdc__signin-text {
+  display: flex;
+  flex-direction: column;
+}
+.wpdc__signin-text strong {
+  font-weight: 700;
+}
+.wpdc__signin-text span {
+  opacity: .7;
+  font-size: 12px;
 }
 .wpdc__signin-link:focus-visible {
   outline: 2px solid var(--wpdc-panel-accent);
