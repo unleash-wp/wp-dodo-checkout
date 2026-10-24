@@ -154,7 +154,7 @@ sequenceDiagram
   D-->>WP: payment_status succeeded, payment_id
   WP->>D: GET /payments/pay_..., dann /customers/cus_.../entitlement-grants
   WP->>DL: GET /artifacts und /link, Lizenzschlüssel als Bearer
-  DL-->>WP: signierter Link, 15 Minuten gültig
+  DL-->>WP: signierter Link, 120 Sekunden gültig
   WP-->>JS: finished, files, keys, redirect
   JS-->>K: Panel mit Download-Knopf und Lizenzschlüssel
 ```
