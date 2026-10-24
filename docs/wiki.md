@@ -1,6 +1,6 @@
 # wp-dodo-checkout: Mitarbeiter-Wiki
 
-Stand 2026-10-24 · Version 0.16.5 · Standardzweig `main` · Repo öffentlich
+Stand 2026-10-25 · Version 0.17.0 · Standardzweig `main` · Repo öffentlich
 
 Dieses Wiki erklärt dir das Plugin so, dass du eine Änderung sicher bis auf die Verkaufsseite bringst. Die
 englische [README](../README.md) ist die Referenz für Shop-Betreiber; hier steht, wie es innen funktioniert.
@@ -465,3 +465,7 @@ sonst auf einer Maschine mit unseren Schlüsseln liefe.
 | [wp-updater](https://github.com/unleash-wp/wp-updater) | Lizenz und Updates in den Pro-Produkten | `docs/wiki.md` (privat) |
 | [easy-svg](https://github.com/unleash-wp/easy-svg) | Easy SVG Support Free | `docs/wiki.md` |
 | [easy-svg-pro](https://github.com/unleash-wp/easy-svg-pro) | Easy SVG Support Pro, wird über diesen Checkout verkauft | `docs/wiki.md` (privat) |
+
+## Hilfe-Widget (0.17.0)
+
+`includes/help-widget.php` gibt im Footer jeder Seite das UnleashWP-Hilfe-Widget aus, geladen vom Hilfe-Center (`support.unleash-wp.com/_dai/api/scripts/file/scripts/uwp-help.js`), Sprache aus `wpdc_page_language()`. Änderungen am Widget brauchen also kein Plugin-Release. Abschalten: `add_filter( 'wpdc_help_widget', '__return_false' )`.

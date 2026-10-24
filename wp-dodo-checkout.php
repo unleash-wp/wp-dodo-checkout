@@ -3,7 +3,7 @@
  * Plugin Name: WP Dodo Checkout
  * Plugin URI: https://unleash-wp.com
  * Description: Puts a Dodo Payments checkout on a WordPress page via shortcode, inline or as an overlay, with an optional order bump. Products come from your Dodo account; nothing is configured twice.
- * Version: 0.16.5
+ * Version: 0.17.0
  * Requires at least: 6.5
  * Requires PHP: 8.0
  * Author: UnleashWP
@@ -40,7 +40,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPDC_VERSION', '0.16.5' );
+define( 'WPDC_VERSION', '0.17.0' );
 define( 'WPDC_DIR', plugin_dir_path( __FILE__ ) );
 
 require_once WPDC_DIR . 'includes/config.php';
@@ -48,6 +48,7 @@ require_once WPDC_DIR . 'includes/client.php';
 require_once WPDC_DIR . 'includes/shortcode.php';
 require_once WPDC_DIR . 'includes/rest.php';
 require_once WPDC_DIR . 'includes/account.php';
+require_once WPDC_DIR . 'includes/help-widget.php';
 require_once WPDC_DIR . 'includes/apple-pay.php';
 require_once WPDC_DIR . 'includes/settings.php';
 
@@ -69,6 +70,7 @@ add_action( 'init', 'wpdc_register_shortcode' );
 add_action( 'init', 'wpdc_serve_apple_pay_association' );
 add_action( 'rest_api_init', 'wpdc_register_rest' );
 add_action( 'wp_footer', 'wpdc_print_account_login' );
+add_action( 'wp_footer', 'wpdc_print_help_widget' );
 add_action( 'template_redirect', 'wpdc_account_buffer', 0 );
 add_action( 'admin_init', 'wpdc_register_settings' );
 add_action( 'admin_menu', 'wpdc_register_settings_page' );

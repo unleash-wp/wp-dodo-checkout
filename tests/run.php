@@ -25,7 +25,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.16.5' );
+define( 'WPDC_VERSION', '0.17.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -216,6 +216,7 @@ require_once $root . '/includes/config.php';
 require_once $root . '/includes/client.php';
 require_once $root . '/includes/rest.php';
 require_once $root . '/includes/account.php';
+require_once $root . '/includes/help-widget.php';
 
 // ─── Runner ──────────────────────────────────────────────────────────────────
 
@@ -4457,6 +4458,21 @@ check(
 	'BELL: a return URL that is not http or https is refused even on the shop host',
 	'' === wpdc_return_url()
 );
+
+// ─── The UnleashWP help widget ───────────────────────────────────────────────
+
+$GLOBALS['wpdc_test_pll'] = 'de';
+$widget                   = wpdc_help_widget_tag();
+check(
+	'BELL: every page loads the help widget from the help center, deferred, in the page language',
+	'<script src="https://support.unleash-wp.com/_dai/api/scripts/file/scripts/uwp-help.js" data-lang="de" defer></script>' === $widget
+);
+$GLOBALS['wpdc_test_pll'] = 'en';
+check( 'BELL: an English page gets the English widget', str_contains( wpdc_help_widget_tag(), 'data-lang="en"' ) );
+$GLOBALS['wpdc_test_filters']['wpdc_help_widget'] = false;
+check( 'SILENCE: the wpdc_help_widget filter switches it off', '' === wpdc_help_widget_tag() );
+unset( $GLOBALS['wpdc_test_filters']['wpdc_help_widget'] );
+$GLOBALS['wpdc_test_pll'] = '';
 
 if ( $failures ) {
 	echo count( $failures ) . " of $checks checks FAILED\n";
