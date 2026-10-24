@@ -37,6 +37,36 @@ makes, and it is the reason for the wp-config route.
 The mode defaults to `test_mode`. Defaulting to live would mean a half-finished
 setup charges a real card.
 
+### Where the key goes, and where it never goes
+
+The key lives on the WordPress server, in `wp-config.php` or in the options
+table. There is no server in between: `includes/client.php` sends it as a
+`Bearer` header from PHP straight to `live.dodopayments.com` or
+`test.dodopayments.com`. It never reaches the browser. The page only gets the
+URLs of this plugin's own REST routes, the visitor's browser only talks to
+those routes, and the settings screen never prints a stored key back. Removing
+the plugin deletes the stored option (`uninstall.php`).
+
+So the honest claim is "the key never reaches the visitor", not "the key never
+reaches the site". A WordPress install runs every plugin its owner added, and
+any of them can read the options table, which is why the constant is the
+recommended route.
+
+### Every setting at a glance
+
+All optional except the key. Constants go in `wp-config.php`.
+
+| Constant | Default | What it does |
+|---|---|---|
+| `WPDC_API_KEY` | option `wpdc_api_key` | The Dodo API key. Wins over the settings field. |
+| `WPDC_MODE` | `test_mode` | `live_mode` or `test_mode`. A notice warns when the key and the mode disagree. |
+| `WPDC_ALLOWED_PRODUCTS` | unset | Comma list of `pdt_…` ids. Only these mint, price or ride as a bump. An empty value sells nothing. |
+| `WPDC_DOWNLOAD_URL` | unset | `https://` page where a licence key is redeemed for its file. |
+| `WPDC_RETURN_URL` | unset | A thank-you page on this site. Unset, the popup shows the completion. |
+| `WPDC_ACCOUNT_URL` | `https://account.unleash-wp.com` | The customer account the sign-in modal talks to. `https://` origin only. |
+| `WPDC_ACCOUNT_SECRET` | unset | Shared secret with that account, for "Open my account" after a purchase and for the signed prefill ticket. |
+| `WPDC_CHECKOUT_FONT_URL` | the account's Ubuntu stylesheet | Font stylesheet for Dodo's form. Google Fonts URLs are refused. |
+
 ## Usage
 
 The settings screen lists every product the account can sell, each with its
@@ -57,6 +87,19 @@ shortcode ready to copy.
 | `bump_label` | generic | What the checkbox says. Write the price here if you want one shown. |
 | `quantity` | `1` | 1 to 50. |
 | `lang` | site locale | Two letters. Forces the language of Dodo's own frame, which otherwise follows the browser rather than the page. |
+
+**Any element can open the checkout.** `<a href="#" data-wpdc-open="pdt_…">`
+names the product it opens; a bare `data-wpdc-open` inside a checkout block
+opens that block's product. When the product cannot be decided, nothing opens:
+an image that does not react is a fault you can see, one that opens the wrong
+order is not.
+
+**The price on the sales page.** `[wpdc_price product="pdt_…"]` prints the base
+price from the catalogue, so the HTML stays the same for every visitor and
+survives a page cache. The script then swaps in the price for the visitor's
+country through `GET /wp-json/wp-dodo-checkout/v1/price`. Only the number:
+"incl. VAT" and the rest of the sentence belong to the page. `lang="de"` forces
+the number format.
 
 ### What the customer sees when they finish
 
@@ -108,13 +151,21 @@ Dodo's own static payment link is `checkout.dodopayments.com/buy/<product id>`.
 The REST route is public, because buying does not require an account. So the id
 in a request is not trusted on its own: **Dodo's live product list is the
 allow-list**, cached ten minutes. An archived, deleted or never-listed id is
-refused before any checkout session exists.
+refused before any checkout session exists. An id the cache does not know
+triggers one forced refresh first, at most once every 30 seconds site-wide, so a
+product created a minute ago sells and a loop of invented ids costs one Dodo
+call per window.
 
-It does not stop a request naming a different *live* product than the page
-shows. They still pay that product's listed price for that product, so the
-exposure is "a live product can be bought". The case where that matters is a
-cheap test product left live, which anybody who finds its id can buy. Archive
-test products.
+Dodo's list alone does not stop a request naming a different *live* product
+than the page shows. They still pay that product's listed price for that
+product, so the exposure is "a live product can be bought". The case where that
+matters is a cheap test product left live. Two ways to close it: archive test
+products, or set `WPDC_ALLOWED_PRODUCTS` to the ids this site sells, and every
+other id is refused before any call to Dodo.
+
+The session route also has ceilings, all visitors together: 60 checkouts a
+minute, 20 of them with a discount code (so codes cannot be tested at the mint
+rate), and a per-session limit on the status poll.
 
 Archiving in Dodo is also the off switch: nothing on the site needs changing.
 
@@ -129,7 +180,7 @@ account: Dodo does not verify the address a buyer types, the code proves the
 inbox.
 
 ```php
-define( 'WPDC_ACCOUNT_SECRET', '...' ); // same value as UWP_CHECKOUT_SECRET on the account
+define( 'WPDC_ACCOUNT_SECRET', '...' ); // the shared checkout secret the account holds for this shop
 define( 'WPDC_ACCOUNT_URL', 'https://account.unleash-wp.com' ); // optional, https only
 ```
 
@@ -328,7 +379,6 @@ Branding belongs on Dodo's **Design page**, which styles the checkout, the
 customer portal and the storefront together, test and live apart. That is one
 place instead of three, and it survives their updates because it is theirs.
 
-### What is NOT done here, and where it belongs instead
 ### Payment methods are never restricted
 
 `allowed_payment_method_types` is deliberately not sent. Dodo's own note: adding
@@ -360,11 +410,13 @@ a 404.
 
 - **No prices or amounts.** Dodo settles what is charged.
 - **No product catalogue in the code.** It comes from the account, so a new
-  product sells within ten minutes of being created, with no deploy.
-- **No `@latest` from a CDN.** The checkout SDK is pinned to a major version.
-  `@latest` lets a third party change what executes on a checkout page with no
-  deploy here, and makes a subresource integrity hash impossible because the
-  file behind the URL is allowed to change.
+  product sells as soon as it is created, with no deploy.
+- **No `@latest` from a CDN.** The checkout SDK is pinned to an exact version
+  (`dodopayments-checkout@1.9.9` on jsDelivr) with a `sha384` integrity hash the
+  browser enforces, and it is loaded on the first touch of a buy control, not
+  with the page. `@latest` would let a third party change what executes on a
+  checkout page with no deploy here, and makes an integrity hash impossible
+  because the file behind the URL is allowed to change.
 - **No build step.** No bundler, no `node_modules`, no compiled assets.
 
 ## Testing
@@ -376,4 +428,28 @@ php tests/run.php
 No PHPUnit, no Composer, no WordPress bootstrap, for one reason: a guard
 nobody can run is a guard nobody runs. The handful of WordPress functions the client touches are stubbed,
 which is enough to exercise the things worth exercising: the failure vocabulary,
-the allow-list, and what does and does not reach the outbound request.
+the allow-list, and what does and does not reach the outbound request. It ends
+with `all N checks passed` and exit code 0; any failure exits 1.
+
+CI (`.github/workflows/ci.yml`, on every pull request and push to `main`) runs
+`php -l` on every PHP file under PHP 8.0 and 8.3, then `tests/run.php`, then two
+gates: no payment key literal (`sk_…`/`pk_…` live or test) is tracked, and the
+Apple Pay association file is not tracked.
+
+## Release
+
+Bump the version in both places in `wp-dodo-checkout.php` (the `Version:`
+header and `WPDC_VERSION`) and in `tests/run.php`, merge, then push a tag
+`vX.Y.Z`. `.github/workflows/release.yml` refuses a tag that disagrees with
+either version, runs the contract checks, builds `wp-dodo-checkout.zip` and
+attaches it to the GitHub Release. Run the workflow by hand to get the same zip
+as a build artifact without spending a version number.
+
+The zip is an allow-list: `wp-dodo-checkout.php`, `uninstall.php`, `includes/`,
+`assets/` and `languages/`. Nothing else ships, so `README.md`, `docs/`,
+`tests/` and `.github/` never reach a site. A new top-level file that the plugin
+needs at runtime has to be added to that list on purpose.
+
+The plugin is installed by hand on the shop; it is not on wordpress.org.
+
+More depth (flows, endpoints, traps): [`docs/wiki.md`](docs/wiki.md), in German.
