@@ -25,7 +25,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.17.1' );
+define( 'WPDC_VERSION', '0.18.0' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -1960,13 +1960,12 @@ check(
 check(
 	// On a 375px screen a 1rem margin spends room the form needs, and a card
 	// whose edges nobody can see does not need rounded corners.
-	// NOT edge to edge, on the operator's word: a margin down both sides and a
-	// strip of backdrop say "a layer over the shop", where full bleed reads as a
-	// new page and somebody who thinks they navigated away behaves differently
-	// about closing it.
-	'BELL: on a phone the page still shows around the checkout',
+	// Tablets keep a margin ("a layer over the shop"). Phones go edge to edge
+	// since 0.18.0, on the operator's word of 2026-10-27: at 390px the margin
+	// cost the form its width and the page behind it read as clutter.
+	'BELL: on a tablet the page still shows around the checkout, on a phone it does not',
 	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1400}width: min\(30rem/', $css )
-		&& ! preg_match( '/width: 100vw/', $css )
+		&& 1 === preg_match( '/@media \(max-width: 600px\)[\s\S]{0,200}width: 100vw/', $css )
 );
 
 check(
@@ -2073,7 +2072,7 @@ check(
 check(
 	// Full bleed reads as a new page, and a customer who thinks they navigated
 	// away behaves differently about closing it.
-	'BELL: on a phone the page still shows around the checkout',
+	'BELL: on a tablet the window keeps its margin',
 	1 === preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1200}width: min\(30rem, calc\(100vw - 2\.5rem\)\)/', $css )
 		&& ! preg_match( '/@media \(max-width: 900px\)[\s\S]{0,1200}width: 100vw/', $css )
 );
@@ -4489,6 +4488,33 @@ check(
 	'FONT: the checkout panel enqueues the font and its stylesheet depends on it',
 	str_contains( $enqueue_src, "'wp-dodo-checkout-font',\n\t\twpdc_account_font_css()" )
 		&& str_contains( $enqueue_src, "array( 'wp-dodo-checkout-font' )" )
+);
+
+// ─── 0.18.0: the phone checkout ──────────────────────────────────────────────
+// Site popups (Depicter, the flipbook) sit above 99000 and opened over a running
+// checkout. They step aside while body.wpdc-locked is set, i.e. while it is open.
+check(
+	'POPUPS: known site popups are hidden while the checkout is open',
+	'body.wpdc-locked :is(.depicter-popup-container,.fb3d-modal){display:none!important}' === wpdc_hidden_while_open_css()
+);
+$GLOBALS['wpdc_test_filters']['wpdc_hide_while_checkout_open'] = array( '.my-popup', 'x}body{display:none', '#promo' );
+check( 'POPUPS: the filter adds selectors and drops anything that could break out of the rule', 'body.wpdc-locked :is(.my-popup,#promo){display:none!important}' === wpdc_hidden_while_open_css() );
+$GLOBALS['wpdc_test_filters']['wpdc_hide_while_checkout_open'] = array();
+check( 'POPUPS: an empty list prints nothing', '' === wpdc_hidden_while_open_css() );
+unset( $GLOBALS['wpdc_test_filters']['wpdc_hide_while_checkout_open'] );
+$shortcode_src = (string) file_get_contents( $root . '/includes/shortcode.php' );
+check( 'POPUPS: the rule is printed with the checkout stylesheet', str_contains( $shortcode_src, "wp_add_inline_style( 'wp-dodo-checkout', \$hide )" ) );
+check( 'PHONE: the discount field folds behind a toggle', str_contains( $shortcode_src, 'class="wpdc__discount-toggle" aria-expanded="false"' ) );
+$css_src = (string) file_get_contents( $root . '/assets/checkout.css' );
+$phone   = substr( $css_src, (int) strpos( $css_src, '@media (max-width: 600px)' ) );
+check(
+	'PHONE: the checkout is a full-screen sheet with the header pinned',
+	str_contains( $css_src, '@media (max-width: 600px)' ) && str_contains( $phone, 'height: 100dvh' ) && str_contains( $phone, 'position: sticky' )
+);
+check(
+	'PHONE: the toggle opens the folded discount field, and the CSS listens for the same class',
+	str_contains( (string) file_get_contents( $root . '/assets/checkout.js' ), "panel.classList.toggle('is-discount-open', open)" )
+		&& str_contains( $phone, '.wpdc__panel:not(.is-discount-open)' )
 );
 
 if ( $failures ) {

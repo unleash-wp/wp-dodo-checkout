@@ -383,6 +383,10 @@ function wpdc_render( $atts ): string {
 						<span><?php echo esc_html__( 'Your details are filled in for you', 'wp-dodo-checkout' ); ?></span></span>
 					</button>
 				</p>
+				<?php // On a phone the field folds behind this, so the payment form comes first. ?>
+				<button type="button" class="wpdc__discount-toggle" aria-expanded="false">
+					<?php echo esc_html__( 'Discount code', 'wp-dodo-checkout' ); ?>
+				</button>
 				<form class="wpdc__discount" novalidate>
 					<input type="text" class="wpdc__discount-input"
 						name="wpdc_discount"
@@ -613,6 +617,10 @@ function wpdc_enqueue(): void {
 		array( 'wp-dodo-checkout-font' ),
 		WPDC_VERSION
 	);
+	$hide = wpdc_hidden_while_open_css();
+	if ( '' !== $hide ) {
+		wp_add_inline_style( 'wp-dodo-checkout', $hide );
+	}
 
 	wp_enqueue_script(
 		'wp-dodo-checkout',

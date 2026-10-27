@@ -1,6 +1,6 @@
 # wp-dodo-checkout: Mitarbeiter-Wiki
 
-Stand 2026-10-27 · Version 0.17.1 · Standardzweig `main` · Repo öffentlich
+Stand 2026-10-27 · Version 0.18.0 · Standardzweig `main` · Repo öffentlich
 
 Dieses Wiki erklärt dir das Plugin so, dass du eine Änderung sicher bis auf die Verkaufsseite bringst. Die
 englische [README](../README.md) ist die Referenz für Shop-Betreiber; hier steht, wie es innen funktioniert.
@@ -473,3 +473,9 @@ sonst auf einer Maschine mit unseren Schlüsseln liefe.
 ## Ubuntu im eigenen Panel und Anmeldefenster (0.17.1)
 
 Das Theme registriert seine Schnitte als `"Ubuntu Regular"`, `"Ubuntu Bold"` usw., nicht als `Ubuntu`. Panel und Anmeldefenster fragten nach `Ubuntu` und bekamen die Systemschrift. `wpdc_account_font_css()` liefert `…/fonts/ubuntu.css?family=Ubuntu` vom Konto (CORS offen); `wpdc_enqueue()` lädt es vor `checkout.css`, der Loader des Anmeldefensters hängt es mit an. Dodos Rahmen bekommt dieselbe Datei wie bisher.
+
+## Kasse auf dem Handy (0.18.0)
+
+Bis 600px ist die Kasse ein Vollbild-Blatt: oben ein fester, flacher Kopf (Cover, Name, Preis, Schließen), darunter in einer Zeile „Schon Kunde? Anmelden“ und der Link „Rabattcode“, der das Feld aufklappt (`.is-discount-open`; bleibt offen, solange ein Code gilt). Bis 900px bleibt das Fenster mit Rand, wie vorher. Solange die Kasse offen ist (`body.wpdc-locked`), werden fremde Popups ausgeblendet: Standard `.depicter-popup-container` und `.fb3d-modal`, erweiterbar über den Filter `wpdc_hide_while_checkout_open` (nur `.klasse` und `#id`). Die Kasse selbst bleibt bei z-index 99000, unter Apples 99998.
+
+Bekannt und bei Dodo: Eingebettet rendert Dodos Iframe englisch, obwohl `force_language` gesetzt ist. Direkt geöffnet ist dieselbe Sitzung deutsch.

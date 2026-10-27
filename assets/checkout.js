@@ -1614,6 +1614,18 @@
       });
   }
 
+  // On a phone the discount field is tucked away; the toggle opens it and hands it focus.
+  document.addEventListener('click', function (event) {
+    var toggle = event.target.closest('.wpdc__discount-toggle');
+    if (!toggle) return;
+    var panel = toggle.closest('.wpdc__panel');
+    var open = !panel.classList.contains('is-discount-open');
+    panel.classList.toggle('is-discount-open', open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    var input = panel.querySelector('.wpdc__discount-input');
+    if (open && input) input.focus();
+  });
+
   // Removing the code. Same operation, empty value.
   document.addEventListener('click', function (event) {
     var clear = event.target.closest('.wpdc__discount-clear');

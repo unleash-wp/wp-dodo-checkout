@@ -1226,6 +1226,92 @@
 /* Someone who asked for less motion is not asking for less information: the
    spinner keeps turning, because a still ring says "broken" where a moving one
    says "wait". Only the decoration goes. */
+/* The discount toggle only exists for the phone layout below. */
+.wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-toggle {
+  display: none !important;
+}
+
+/* 0.18.0, phones. The window becomes the screen: no strip of shop around it,
+   one short pinned header (cover, name, price, close), and the two extras
+   reduced to links in one line, so Dodo's form starts in the first glance.
+   The discount field folds behind its link and stays open once a code holds. */
+@media (max-width: 600px) {
+  .wpdc__dialog {
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+  }
+  .wpdc__panel {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    column-gap: .625rem;
+    row-gap: .5rem;
+    padding: .625rem 3.5rem .625rem 1rem;
+  }
+  .wpdc__item-img {
+    width: 2.25rem;
+  }
+  .wpdc__close {
+    top: .625rem;
+    inset-inline-end: .75rem;
+  }
+  .wpdc__signin {
+    grid-column: 1 / 3;
+    grid-row: 2;
+    margin: 0;
+  }
+  .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-link {
+    min-height: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none !important;
+    font-size: 13px !important;
+  }
+  .wpdc__signin-icon,
+  .wpdc__signin-text span {
+    display: none;
+  }
+  .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-text strong {
+    font-weight: 500;
+    color: var(--wpdc-panel-accent);
+  }
+  .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-toggle {
+    display: block !important;
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: end;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+    color: var(--wpdc-panel-fg) !important;
+    font: inherit !important;
+    font-size: 13px !important;
+    line-height: 1.35 !important;
+    text-decoration: underline !important;
+    text-underline-offset: 3px;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    opacity: .85;
+    cursor: pointer;
+  }
+  .wpdc__discount {
+    grid-row: 3;
+  }
+  .wpdc__panel:not(.is-discount-open):not(:has(.wpdc__discount-input[readonly])) .wpdc__discount {
+    display: none;
+  }
+  .wpdc__dialog .wpdc__frame {
+    padding: .5rem .75rem 1.25rem;
+  }
+  .wpdc__frame.is-payment {
+    padding-top: .75rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wpdc__frame.is-ready iframe,
   .wpdc__dialog[open],
