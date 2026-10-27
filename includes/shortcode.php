@@ -602,9 +602,15 @@ function wpdc_render_item( string $product ): void {
  */
 function wpdc_enqueue(): void {
 	wp_enqueue_style(
+		'wp-dodo-checkout-font',
+		wpdc_account_font_css(),
+		array(),
+		null
+	);
+	wp_enqueue_style(
 		'wp-dodo-checkout',
 		plugins_url( 'assets/checkout.css', WPDC_DIR . 'wp-dodo-checkout.php' ),
-		array(),
+		array( 'wp-dodo-checkout-font' ),
 		WPDC_VERSION
 	);
 

@@ -1167,7 +1167,7 @@ function wpdc_theme_config( string $language = '' ): array {
 	// Ubuntu from the account's own server; Dodo takes the family from `family=`.
 	$font = defined( 'WPDC_CHECKOUT_FONT_URL' ) && wpdc_is_font_url( WPDC_CHECKOUT_FONT_URL )
 		? WPDC_CHECKOUT_FONT_URL
-		: wpdc_account_url() . '/fonts/ubuntu.css?family=Ubuntu';
+		: wpdc_account_font_css();
 	$config['font_primary_url']   = $font;
 	$config['font_secondary_url'] = $font;
 	return $config;
