@@ -66,7 +66,7 @@ All optional except the key. Constants go in `wp-config.php`.
 | `WPDC_ACCOUNT_URL` | `https://account.unleash-wp.com` | The customer account the sign-in modal talks to. `https://` origin only. |
 | `WPDC_ACCOUNT_SECRET` | unset | Shared secret with that account, for "Open my account" after a purchase and for the signed prefill ticket. |
 | `WPDC_CHECKOUT_FONT_URL` | the account's Ubuntu stylesheet | Font stylesheet for Dodo's form. Google Fonts URLs are refused. |
-| `WPDC_PRESS_PRODUCTS` | unset | Comma list of `pdt_…` ids that may be given away under **Settings > Press access**. Independent of `WPDC_ALLOWED_PRODUCTS`. Empty or unset, the page does not exist. |
+| `WPDC_PRESS_PRODUCTS` | `all` | Which products **Settings > Press access** may give away. Unset or `all`: every product of the Dodo account, new ones included. A comma list of `pdt_…` ids narrows it; empty switches the page off. Independent of `WPDC_ALLOWED_PRODUCTS`. |
 
 ## Usage
 
@@ -229,11 +229,13 @@ signed in goes straight to the link. Without JavaScript the link still works.
 ## Press access
 
 Licence keys for press, promotion and testers, without a purchase, under
-**Settings > Press access**. The page exists only when `WPDC_PRESS_PRODUCTS`
-names at least one product:
+**Settings > Press access**. By default it offers every product of the Dodo
+account, read from the cached catalogue, so a new product appears on its own.
+To narrow it, or to switch the page off:
 
 ```php
-define( 'WPDC_PRESS_PRODUCTS', 'pdt_…,pdt_…' );
+define( 'WPDC_PRESS_PRODUCTS', 'pdt_…,pdt_…' ); // only these
+define( 'WPDC_PRESS_PRODUCTS', '' );            // no press access
 ```
 
 Name, email, product, site limit (empty is unlimited) and a reason. A
@@ -262,7 +264,7 @@ Every action checks the capability and a nonce.
 | Hook | Type | Receives | Default |
 |---|---|---|---|
 | `wpdc_press_capability` | filter | capability | `manage_options` |
-| `wpdc_press_products` | filter | list of `pdt_…` ids | `WPDC_PRESS_PRODUCTS`; anything not shaped like an id is dropped |
+| `wpdc_press_products` | filter | list of `pdt_…` ids | every catalogue product, or `WPDC_PRESS_PRODUCTS`; anything not shaped like an id is dropped |
 | `wpdc_press_generate_key` | filter | the generated key | 8 groups of 4 hex; a value that is not 8 to 128 letters, digits or dashes falls back to it |
 | `wpdc_press_key_args` | filter | body for `POST /license_keys`, form input | the body above; a product outside the list is refused, `expires_at` is set back to `null` |
 | `wpdc_press_key_created` | action | record, full key | after Dodo created it |

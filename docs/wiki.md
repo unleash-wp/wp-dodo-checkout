@@ -1,6 +1,6 @@
 # wp-dodo-checkout: Mitarbeiter-Wiki
 
-Stand 2026-10-28 · Version 0.19.0 · Standardzweig `main` · Repo öffentlich
+Stand 2026-10-28 · Version 0.19.1 · Standardzweig `main` · Repo öffentlich
 
 Dieses Wiki erklärt dir das Plugin so, dass du eine Änderung sicher bis auf die Verkaufsseite bringst. Die
 englische [README](../README.md) ist die Referenz für Shop-Betreiber; hier steht, wie es innen funktioniert.
@@ -263,7 +263,7 @@ Checkout**. Die Konstante gewinnt, und dann ist das Feld gesperrt.
 | `WPDC_ACCOUNT_URL` | `https://account.unleash-wp.com` | Kundenkonto, nur `https://`-Origin |
 | `WPDC_ACCOUNT_SECRET` | nicht gesetzt | gemeinsames Secret mit account; ohne gibt es keinen Code an die Kaufadresse und kein Ticket |
 | `WPDC_CHECKOUT_FONT_URL` | Ubuntu von account | Schrift-Stylesheet für Dodos Formular; Google Fonts werden abgelehnt |
-| `WPDC_PRESS_PRODUCTS` | nicht gesetzt | Kommaliste von `pdt_`-Ids für den Pressezugang; leer heißt: keine Seite |
+| `WPDC_PRESS_PRODUCTS` | `all` | Pressezugang: nicht gesetzt oder `all` = alle Produkte des Dodo-Kontos (neue automatisch); Kommaliste von `pdt_`-Ids schränkt ein; leer heißt: keine Seite |
 
 Die Einstellungsseite listet jedes Produkt, das der Key verkaufen kann, mit fertigem Shortcode.
 

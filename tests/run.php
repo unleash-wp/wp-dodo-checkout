@@ -25,7 +25,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.19.0' );
+define( 'WPDC_VERSION', '0.19.1' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -4595,6 +4595,8 @@ function press_reset(): void {
 	$GLOBALS['wpdc_test_actions'] = array();
 	$GLOBALS['wpdc_test_caps']    = null;
 	$GLOBALS['wpdc_test_filters']['wpdc_press_products'] = array( PRESS_PDT );
+	// A cached catalogue, so the "all products" default asks Dodo nothing here.
+	set_transient( wpdc_catalog_key(), array( PRESS_PDT => array( 'name' => 'Press product', 'image' => '', 'description' => '', 'price' => null, 'currency' => '' ) ), HOUR_IN_SECONDS );
 	unset( $GLOBALS['wpdc_test_options']['wpdc_press_keys'] );
 }
 
@@ -4654,7 +4656,13 @@ unset( $GLOBALS['wpdc_test_filters']['wpdc_press_generate_key'] );
 // The product allowlist.
 press_reset();
 unset( $GLOBALS['wpdc_test_filters']['wpdc_press_products'] );
-check( 'PRESS: no WPDC_PRESS_PRODUCTS means the feature is off', array() === wpdc_press_products() && false === wpdc_press_enabled() );
+delete_transient( wpdc_catalog_key() );
+catalogue( array( 'pdt_a', 'pdt_b' ) );
+check( 'PRESS: no WPDC_PRESS_PRODUCTS means every product of the account', array( 'pdt_a', 'pdt_b' ) === wpdc_press_products() && wpdc_press_enabled() );
+delete_transient( wpdc_catalog_key() );
+respond( 503, array() );
+check( 'SILENCE: a catalogue Dodo cannot list leaves nothing to give away', array() === wpdc_press_products() );
+set_transient( wpdc_catalog_key(), array( PRESS_PDT => array( 'name' => 'Press product', 'image' => '', 'description' => '', 'price' => null, 'currency' => '' ) ), HOUR_IN_SECONDS );
 $GLOBALS['wpdc_test_filters']['wpdc_press_products'] = array( PRESS_PDT, 'not-an-id', 'pdt_two' );
 check( 'PRESS: wpdc_press_products adds ids and drops what is not one', array( PRESS_PDT, 'pdt_two' ) === wpdc_press_products() );
 wpdc_register_press_page();
