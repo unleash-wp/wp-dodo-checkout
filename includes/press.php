@@ -22,15 +22,18 @@ function wpdc_press_capability(): string {
 }
 
 /**
- * Product ids that may be given away, from WPDC_PRESS_PRODUCTS.
- *
- * Its own list, independent of WPDC_ALLOWED_PRODUCTS: what may be sold and
- * what may be given away are different decisions. Empty switches the page off.
+ * Product ids that may be given away: every product of the Dodo account, or
+ * the comma list in WPDC_PRESS_PRODUCTS when one is set. Empty switches the
+ * page off; so does a catalogue Dodo cannot list right now.
  */
 function wpdc_press_products(): array {
-	$ids = array();
-	if ( defined( 'WPDC_PRESS_PRODUCTS' ) && is_string( WPDC_PRESS_PRODUCTS ) ) {
-		$ids = array_map( 'trim', explode( ',', WPDC_PRESS_PRODUCTS ) );
+	$setting = defined( 'WPDC_PRESS_PRODUCTS' ) && is_string( WPDC_PRESS_PRODUCTS ) ? trim( WPDC_PRESS_PRODUCTS ) : 'all';
+	if ( 'all' === $setting ) {
+		// New products appear here on their own, from the cached catalogue.
+		$catalog = wpdc_is_configured() ? wpdc_catalog() : array();
+		$ids     = is_array( $catalog ) && ! wpdc_is_error( $catalog ) ? array_keys( $catalog ) : array();
+	} else {
+		$ids = array_map( 'trim', explode( ',', $setting ) );
 	}
 	$ids = apply_filters( 'wpdc_press_products', $ids );
 	return is_array( $ids ) ? array_values( array_unique( array_filter( $ids, 'wpdc_is_product_id' ) ) ) : array();
