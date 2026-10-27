@@ -315,6 +315,11 @@ function wpdc_render( $atts ): string {
 			// button already carries the label -- a screen reader that announced
 			// the drawing as well would say the action twice.
 			?>
+			<?php // Phones only: the one strip that stays while the sheet scrolls. ?>
+			<div class="wpdc__bar">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+				<span><?php echo esc_html__( 'Secure checkout', 'wp-dodo-checkout' ); ?></span>
+			</div>
 			<button type="button" class="wpdc__close" aria-label="<?php echo esc_attr__( 'Close checkout', 'wp-dodo-checkout' ); ?>">
 				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
 					stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
@@ -365,6 +370,12 @@ function wpdc_render( $atts ): string {
 
 				<?php wpdc_render_item( $atts['product'] ); ?>
 
+				<?php // Phones only. Both hold for every product this plugin sells. ?>
+				<ul class="wpdc__trust">
+					<li><?php echo esc_html__( 'In your account right after payment', 'wp-dodo-checkout' ); ?></li>
+					<li><?php echo esc_html__( 'Paid securely via Dodo Payments', 'wp-dodo-checkout' ); ?></li>
+				</ul>
+
 				<?php
 				// Dodo's own discount field lives in their order summary, and
 				// inline mode does not render one -- so it is here, in the
@@ -381,11 +392,13 @@ function wpdc_render( $atts ): string {
 						<svg class="wpdc__signin-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.42 0-8 2.24-8 5v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1c0-2.76-3.58-5-8-5Z"/></svg>
 						<span class="wpdc__signin-text"><strong><?php echo esc_html__( 'Already a customer? Sign in', 'wp-dodo-checkout' ); ?></strong>
 						<span><?php echo esc_html__( 'Your details are filled in for you', 'wp-dodo-checkout' ); ?></span></span>
+						<svg class="wpdc__chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6"/></svg>
 					</button>
 				</p>
 				<?php // On a phone the field folds behind this, so the payment form comes first. ?>
 				<button type="button" class="wpdc__discount-toggle" aria-expanded="false">
-					<?php echo esc_html__( 'Discount code', 'wp-dodo-checkout' ); ?>
+					<span><?php echo esc_html__( 'Add discount code', 'wp-dodo-checkout' ); ?></span>
+					<svg class="wpdc__chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6"/></svg>
 				</button>
 				<form class="wpdc__discount" novalidate>
 					<input type="text" class="wpdc__discount-input"
