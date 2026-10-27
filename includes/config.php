@@ -600,3 +600,24 @@ function wpdc_api_base(): string {
 function wpdc_is_configured(): bool {
 	return '' !== wpdc_api_key();
 }
+
+/**
+ * Site popups that step aside while the checkout is open.
+ *
+ * The checkout stays below Apple Pay's 99998 so the wallet sheet can land on
+ * it, which leaves room for a theme's popup to open above a running payment.
+ * Measured on the shop: Depicter at 111111, the flipbook modal at 500001.
+ * Only plain class and id selectors pass, so a filter cannot write CSS.
+ */
+function wpdc_hidden_while_open_css(): string {
+	$selectors = apply_filters( 'wpdc_hide_while_checkout_open', array( '.depicter-popup-container', '.fb3d-modal' ) );
+	$safe      = array_values(
+		array_filter(
+			is_array( $selectors ) ? $selectors : array(),
+			function ( $selector ) {
+				return is_string( $selector ) && 1 === preg_match( '/^[.#][A-Za-z0-9_-]+$/', $selector );
+			}
+		)
+	);
+	return $safe ? 'body.wpdc-locked :is(' . implode( ',', $safe ) . '){display:none!important}' : '';
+}
