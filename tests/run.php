@@ -25,7 +25,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.17.0' );
+define( 'WPDC_VERSION', '0.17.1' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -4473,6 +4473,23 @@ $GLOBALS['wpdc_test_filters']['wpdc_help_widget'] = false;
 check( 'SILENCE: the wpdc_help_widget filter switches it off', '' === wpdc_help_widget_tag() );
 unset( $GLOBALS['wpdc_test_filters']['wpdc_help_widget'] );
 $GLOBALS['wpdc_test_pll'] = '';
+
+// ─── Ubuntu in our own UI, not only in Dodo's frame ─────────────────────────
+// The theme registers its faces as "Ubuntu Regular" / "Ubuntu Bold", so a stack
+// that asks for "Ubuntu" fell back to the system font in the panel and the modal.
+check(
+	'FONT: our own UI takes Ubuntu from the account, the same file Dodo gets',
+	'https://account.unleash-wp.com/fonts/ubuntu.css?family=Ubuntu' === wpdc_account_font_css()
+);
+check( 'FONT: the sign-in modal is told where the font lives', wpdc_account_font_css() === ( wpdc_account_login_config()['font'] ?? '' ) );
+check( 'FONT: the modal loader adds the font stylesheet', str_contains( WPDC_ACCOUNT_LOGIN_LOADER, 'f.href=c.font' ) );
+$shortcode_src = (string) file_get_contents( $root . '/includes/shortcode.php' );
+$enqueue_src   = substr( $shortcode_src, (int) strpos( $shortcode_src, 'function wpdc_enqueue(): void {' ), 600 );
+check(
+	'FONT: the checkout panel enqueues the font and its stylesheet depends on it',
+	str_contains( $enqueue_src, "'wp-dodo-checkout-font',\n\t\twpdc_account_font_css()" )
+		&& str_contains( $enqueue_src, "array( 'wp-dodo-checkout-font' )" )
+);
 
 if ( $failures ) {
 	echo count( $failures ) . " of $checks checks FAILED\n";

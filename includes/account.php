@@ -111,9 +111,19 @@ function wpdc_rest_account_code( WP_REST_Request $request ): WP_REST_Response {
  * is fetched on the first click; only this and a few hundred bytes of loader
  * ride on every page.
  */
+/**
+ * Ubuntu from the account, for our own panel and modal as well as Dodo's frame.
+ * The theme names its faces "Ubuntu Regular" and "Ubuntu Bold", so asking for
+ * "Ubuntu" without this drew the system font.
+ */
+function wpdc_account_font_css(): string {
+	return wpdc_account_url() . '/fonts/ubuntu.css?family=Ubuntu';
+}
+
 function wpdc_account_login_config(): array {
 	return array(
 		'account' => wpdc_account_url(),
+		'font'    => wpdc_account_font_css(),
 		'lang'    => wpdc_page_language(),
 		'script'  => add_query_arg( 'ver', WPDC_VERSION, plugins_url( 'assets/account-login.js', WPDC_DIR . 'wp-dodo-checkout.php' ) ),
 		'style'   => add_query_arg( 'ver', WPDC_VERSION, plugins_url( 'assets/account-login.css', WPDC_DIR . 'wp-dodo-checkout.php' ) ),
@@ -158,7 +168,7 @@ const WPDC_ACCOUNT_LOGIN_LOADER = <<<'JS'
 (function(c){var asked=0;
 function hit(t){var a=t&&t.closest&&t.closest('a[href],[data-uwp-login]');if(!a)return null;if(a.hasAttribute('data-uwp-login'))return a;var h=a.href||'';return h===c.account||h.indexOf(c.account+'/')===0?a:null}
 function ask(){if(asked)return;asked=1;fetch(c.account+'/api/sso/session',{credentials:'include'}).then(function(r){return r.json()}).then(function(d){c.signedIn=!!(d&&d.signedIn)}).catch(function(){})}
-function load(a,o){if(c.open){c.open(a,o);return}var n=2,go=function(){if(--n===0&&c.open)c.open(a,o)};var l=document.createElement('link');l.rel='stylesheet';l.href=c.style;l.onload=l.onerror=go;document.head.appendChild(l);var s=document.createElement('script');s.src=c.script;s.onload=go;document.head.appendChild(s)}
+function load(a,o){if(c.open){c.open(a,o);return}var n=2,go=function(){if(--n===0&&c.open)c.open(a,o)};var f=document.createElement('link');f.rel='stylesheet';f.href=c.font;document.head.appendChild(f);var l=document.createElement('link');l.rel='stylesheet';l.href=c.style;l.onload=l.onerror=go;document.head.appendChild(l);var s=document.createElement('script');s.src=c.script;s.onload=go;document.head.appendChild(s)}
 document.addEventListener('pointerover',function(e){if(hit(e.target))ask()},{passive:true});
 document.addEventListener('focusin',function(e){if(hit(e.target))ask()});
 document.addEventListener('click',function(e){var a=hit(e.target);if(!a||e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();if(c.signedIn){window.open(a.href||c.account+'/downloads','_blank','noopener');return}load(a)});

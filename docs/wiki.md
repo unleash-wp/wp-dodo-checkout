@@ -1,6 +1,6 @@
 # wp-dodo-checkout: Mitarbeiter-Wiki
 
-Stand 2026-10-25 · Version 0.17.0 · Standardzweig `main` · Repo öffentlich
+Stand 2026-10-27 · Version 0.17.1 · Standardzweig `main` · Repo öffentlich
 
 Dieses Wiki erklärt dir das Plugin so, dass du eine Änderung sicher bis auf die Verkaufsseite bringst. Die
 englische [README](../README.md) ist die Referenz für Shop-Betreiber; hier steht, wie es innen funktioniert.
@@ -469,3 +469,7 @@ sonst auf einer Maschine mit unseren Schlüsseln liefe.
 ## Hilfe-Widget (0.17.0)
 
 `includes/help-widget.php` gibt im Footer jeder Seite das UnleashWP-Hilfe-Widget aus, geladen vom Hilfe-Center (`support.unleash-wp.com/_dai/api/scripts/file/scripts/uwp-help.js`), Sprache aus `wpdc_page_language()`. Änderungen am Widget brauchen also kein Plugin-Release. Abschalten: `add_filter( 'wpdc_help_widget', '__return_false' )`.
+
+## Ubuntu im eigenen Panel und Anmeldefenster (0.17.1)
+
+Das Theme registriert seine Schnitte als `"Ubuntu Regular"`, `"Ubuntu Bold"` usw., nicht als `Ubuntu`. Panel und Anmeldefenster fragten nach `Ubuntu` und bekamen die Systemschrift. `wpdc_account_font_css()` liefert `…/fonts/ubuntu.css?family=Ubuntu` vom Konto (CORS offen); `wpdc_enqueue()` lädt es vor `checkout.css`, der Loader des Anmeldefensters hängt es mit an. Dodos Rahmen bekommt dieselbe Datei wie bisher.
