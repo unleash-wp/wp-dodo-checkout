@@ -1256,6 +1256,7 @@
     gap: .5rem;
     height: 3.25rem;
     padding: 0 3.75rem 0 1.25rem;
+    border-top: 3px solid #fcbe00;
     border-bottom: 1px solid #e3e7f0;
     background: #fff;
     color: #203159;
@@ -1264,7 +1265,7 @@
     font-weight: 500;
   }
   .wpdc__close {
-    top: .5rem;
+    top: calc(.5rem + 3px);
     inset-inline-end: .75rem;
     width: 2.25rem;
     height: 2.25rem;
@@ -1311,6 +1312,11 @@
     font-size: 20px;
     font-weight: 700;
     color: #203159;
+  }
+  /* The yellow, as a marker under the number: on white it carries no text. */
+  .wpdc__row--total dd {
+    padding: 0 .125rem;
+    background: linear-gradient(transparent 62%, #fcbe00 62%);
   }
   .wpdc__trust {
     display: grid;

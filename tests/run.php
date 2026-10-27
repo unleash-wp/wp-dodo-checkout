@@ -4523,6 +4523,10 @@ check(
 );
 check( 'CALM: the discount toggle says what it does', str_contains( $shortcode_src, "esc_html__( 'Add discount code', 'wp-dodo-checkout' )" ) );
 check( 'CALM: on a phone the summary is light, not the navy strip', str_contains( $phone, '--wpdc-panel-bg: #ffffff' ) );
+check(
+	'CALM: the brand yellow stays: a stripe over the bar and a marker under the price',
+	str_contains( $phone, 'border-top: 3px solid #fcbe00' ) && str_contains( $phone, 'linear-gradient(transparent 62%, #fcbe00 62%)' )
+);
 check( 'CALM: bar and promises stay off the desktop', 1 === preg_match( '/^\.wpdc__bar,\n\.wpdc__trust \{\n  display: none;/m', $css_src ) );
 check(
 	'PHONE: the toggle opens the folded discount field, and the CSS listens for the same class',
