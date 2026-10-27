@@ -263,6 +263,7 @@ Checkout**. Die Konstante gewinnt, und dann ist das Feld gesperrt.
 | `WPDC_ACCOUNT_URL` | `https://account.unleash-wp.com` | Kundenkonto, nur `https://`-Origin |
 | `WPDC_ACCOUNT_SECRET` | nicht gesetzt | gemeinsames Secret mit account; ohne gibt es keinen Code an die Kaufadresse und kein Ticket |
 | `WPDC_CHECKOUT_FONT_URL` | Ubuntu von account | Schrift-Stylesheet für Dodos Formular; Google Fonts werden abgelehnt |
+| `WPDC_PRESS_PRODUCTS` | nicht gesetzt | Kommaliste von `pdt_`-Ids für den Pressezugang; leer heißt: keine Seite |
 
 Die Einstellungsseite listet jedes Produkt, das der Key verkaufen kann, mit fertigem Shortcode.
 
@@ -479,3 +480,12 @@ Das Theme registriert seine Schnitte als `"Ubuntu Regular"`, `"Ubuntu Bold"` usw
 Bis 600px ist die Kasse ein Vollbild-Blatt („Ruhige Kasse“, 0.18.1): fest bleibt nur eine schlanke weiße Leiste mit Schloss, „Sichere Kasse“ und Schließen (gelber Markenstreifen oben). Darunter scrollt eine helle Zusammenfassung (Cover, Name, großer Preis mit gelbem Textmarker, zwei Zusagen: „Direkt nach dem Kauf in deinem Konto“, „Sicher bezahlt über Dodo Payments“), dann „Schon Kunde? Anmelden“ und „Rabattcode hinzufügen“ als volle Zeilen mit Pfeil; der Rabatt klappt auf (`.is-discount-open`; bleibt offen, solange ein Code gilt). Bis 900px bleibt das Fenster mit Rand, wie vorher. Solange die Kasse offen ist (`body.wpdc-locked`), werden fremde Popups ausgeblendet: Standard `.depicter-popup-container` und `.fb3d-modal`, erweiterbar über den Filter `wpdc_hide_while_checkout_open` (nur `.klasse` und `#id`). Die Kasse selbst bleibt bei z-index 99000, unter Apples 99998.
 
 Bekannt und bei Dodo: Eingebettet rendert Dodos Iframe englisch, obwohl `force_language` gesetzt ist. Direkt geöffnet ist dieselbe Sitzung deutsch.
+
+## Pressezugang (#44)
+
+**Einstellungen > Pressezugang** vergibt Lizenzschlüssel ohne Kauf: Kunde bei Dodo Payments per E-Mail
+finden oder anlegen, Schlüssel mit `random_bytes` erzeugen, `POST /license_keys`. Der Schlüssel steht genau
+einmal auf der Seite; gespeichert werden nur `lic_`-Id, letzte vier Zeichen, Empfänger, Produkt, Grund,
+Datum, Ersteller und Modus (Option `wpdc_press_keys`). Sperren und Entsperren über `PATCH
+/license_keys/{id}`. Recht, Nonce und Produktliste prüft `wpdc_press_handle()`. Hooks und Beispiele im
+README.

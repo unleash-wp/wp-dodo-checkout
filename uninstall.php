@@ -11,3 +11,5 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 }
 
 delete_option( 'wpdc_api_key' );
+// Press access records hold recipients' names and emails.
+delete_option( 'wpdc_press_keys' );

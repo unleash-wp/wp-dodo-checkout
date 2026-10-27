@@ -51,6 +51,7 @@ require_once WPDC_DIR . 'includes/account.php';
 require_once WPDC_DIR . 'includes/help-widget.php';
 require_once WPDC_DIR . 'includes/apple-pay.php';
 require_once WPDC_DIR . 'includes/settings.php';
+require_once WPDC_DIR . 'includes/press.php';
 
 /**
  * Bundled translations, loaded explicitly.
@@ -74,4 +75,5 @@ add_action( 'wp_footer', 'wpdc_print_help_widget' );
 add_action( 'template_redirect', 'wpdc_account_buffer', 0 );
 add_action( 'admin_init', 'wpdc_register_settings' );
 add_action( 'admin_menu', 'wpdc_register_settings_page' );
+add_action( 'admin_menu', 'wpdc_register_press_page' );
 add_action( 'admin_notices', 'wpdc_render_mode_mismatch_notice' );

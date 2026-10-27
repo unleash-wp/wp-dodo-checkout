@@ -658,7 +658,8 @@ check( 'BELL: a key with no known prefix is never flagged, so nothing is guessed
 // Enough wp-admin to render the page. Audit 2026-10-23: the stored key was
 // echoed into the HTML, so anyone who could view the page source had it.
 function current_user_can( string $cap ): bool {
-	return true;
+	// Unset grants everything; a list grants only what it names.
+	return ! is_array( $GLOBALS['wpdc_test_caps'] ?? null ) || in_array( $cap, $GLOBALS['wpdc_test_caps'], true );
 }
 function esc_html__( string $text, string $domain = '' ): string {
 	return esc_html( $text );
@@ -4533,6 +4534,344 @@ check(
 	str_contains( (string) file_get_contents( $root . '/assets/checkout.js' ), "panel.classList.toggle('is-discount-open', open)" )
 		&& str_contains( $phone, '.wpdc__panel:not(.is-discount-open)' )
 );
+
+// ─── Press access (#44) ─────────────────────────────────────────────────────
+//
+// Licence keys without a purchase. What must hold: nobody without the right,
+// the nonce or an allowed product creates anything; the full key is shown once
+// and stored nowhere; Dodo receives exactly the body the dashboard would make.
+
+define( 'DAY_IN_SECONDS', 86400 );
+
+$GLOBALS['wpdc_test_actions'] = array();
+function do_action( string $hook, ...$args ): void {
+	$GLOBALS['wpdc_test_actions'][] = array( $hook, $args );
+}
+function update_option( string $name, $value, $autoload = null ): bool {
+	$GLOBALS['wpdc_test_options'][ $name ] = $value;
+	return true;
+}
+function get_current_user_id(): int {
+	return 7;
+}
+function get_userdata( $id ) {
+	return 7 === (int) $id ? (object) array( 'display_name' => 'Owner' ) : false;
+}
+function sanitize_email( $value ): string {
+	return trim( (string) $value );
+}
+function sanitize_textarea_field( $value ): string {
+	return trim( strip_tags( (string) $value ) );
+}
+function wp_unslash( $value ) {
+	return $value;
+}
+function wp_nonce_field( string $action ): void {
+	echo '<input type="hidden" name="_wpnonce" value="good" />';
+}
+function admin_url( string $path = '' ): string {
+	return 'https://shop.example/wp-admin/' . $path;
+}
+function add_submenu_page( ...$args ) {
+	$GLOBALS['wpdc_test_submenu'] = $args;
+	return 'hook';
+}
+function wp_date( string $format, int $ts ): string {
+	return gmdate( $format, $ts );
+}
+function esc_textarea( $text ): string {
+	return htmlspecialchars( (string) $text, ENT_QUOTES );
+}
+
+require_once $root . '/includes/press.php';
+
+const PRESS_PDT = 'pdt_press1';
+
+function press_reset(): void {
+	configure();
+	$GLOBALS['wpdc_test_actions'] = array();
+	$GLOBALS['wpdc_test_caps']    = null;
+	$GLOBALS['wpdc_test_filters']['wpdc_press_products'] = array( PRESS_PDT );
+	unset( $GLOBALS['wpdc_test_options']['wpdc_press_keys'] );
+}
+
+/** A complete, valid create form as the browser posts it. */
+function press_form( array $over = array() ): array {
+	return array_merge(
+		array(
+			'wpdc_press'      => 'create',
+			'_wpnonce'        => 'good',
+			'wpdc_press_once' => bin2hex( random_bytes( 8 ) ),
+			'name'            => 'Kim Reporter',
+			'email'           => 'kim@press.example',
+			'product'         => PRESS_PDT,
+			'duration'        => 'lifetime',
+			'expires_on'      => '',
+			'limit'           => '',
+			'reason'          => 'Review in c\'t',
+		),
+		$over
+	);
+}
+
+/** Customer lookup finds nobody, creation answers, the key is created. */
+function press_script_success( string $customer = 'cus_new' ): void {
+	respond( 200, array( 'items' => array() ) );
+	respond( 200, array( 'customer_id' => $customer, 'email' => 'kim@press.example', 'name' => 'Kim Reporter' ) );
+	respond(
+		200,
+		array(
+			'id'          => 'lic_abc123',
+			'key'         => 'ECHOED-BY-DODO',
+			'status'      => 'active',
+			'source'      => 'import',
+			'customer_id' => $customer,
+			'product_id'  => PRESS_PDT,
+		)
+	);
+}
+
+function press_license_post(): ?array {
+	foreach ( $GLOBALS['wpdc_test_requests'] as $r ) {
+		if ( str_ends_with( $r['url'], '/license_keys' ) && 'POST' === $r['args']['method'] ) {
+			return $r;
+		}
+	}
+	return null;
+}
+
+// The key format.
+$generated = wpdc_press_generate_key();
+check( 'PRESS: a generated key is 8 groups of 4 uppercase hex', 1 === preg_match( '/^[0-9A-F]{4}(-[0-9A-F]{4}){7}$/', $generated ) );
+check( 'PRESS: two generated keys differ', wpdc_press_generate_key() !== $generated );
+$GLOBALS['wpdc_test_filters']['wpdc_press_generate_key'] = 'MY-OWN-KEY-0001';
+check( 'PRESS: wpdc_press_generate_key can replace the key', 'MY-OWN-KEY-0001' === wpdc_press_generate_key() );
+$GLOBALS['wpdc_test_filters']['wpdc_press_generate_key'] = '';
+check( 'PRESS: an empty filtered key falls back to a random one', 1 === preg_match( '/^[0-9A-F]{4}(-[0-9A-F]{4}){7}$/', wpdc_press_generate_key() ) );
+unset( $GLOBALS['wpdc_test_filters']['wpdc_press_generate_key'] );
+
+// The product allowlist.
+press_reset();
+unset( $GLOBALS['wpdc_test_filters']['wpdc_press_products'] );
+check( 'PRESS: no WPDC_PRESS_PRODUCTS means the feature is off', array() === wpdc_press_products() && false === wpdc_press_enabled() );
+$GLOBALS['wpdc_test_filters']['wpdc_press_products'] = array( PRESS_PDT, 'not-an-id', 'pdt_two' );
+check( 'PRESS: wpdc_press_products adds ids and drops what is not one', array( PRESS_PDT, 'pdt_two' ) === wpdc_press_products() );
+wpdc_register_press_page();
+check( 'PRESS: the page sits under Settings when enabled', 'options-general.php' === ( $GLOBALS['wpdc_test_submenu'][0] ?? '' ) );
+$GLOBALS['wpdc_test_submenu']                        = null;
+$GLOBALS['wpdc_test_filters']['wpdc_press_products'] = array();
+wpdc_register_press_page();
+check( 'PRESS: no page at all when the list is empty', null === $GLOBALS['wpdc_test_submenu'] );
+
+press_reset();
+$res = wpdc_press_handle( press_form( array( 'product' => 'pdt_notallowed' ) ) );
+check( 'PRESS: a product outside the list creates nothing', false === $res['ok'] && 'product_not_allowed' === $res['reason'] && array() === $GLOBALS['wpdc_test_requests'] );
+
+// Capability and nonce.
+press_reset();
+$GLOBALS['wpdc_test_caps'] = array( 'edit_posts' );
+$res                       = wpdc_press_handle( press_form() );
+check( 'PRESS: without manage_options nothing is created', false === $res['ok'] && 'forbidden' === $res['reason'] && array() === $GLOBALS['wpdc_test_requests'] );
+$GLOBALS['wpdc_test_filters']['wpdc_press_capability'] = 'edit_posts';
+press_script_success();
+$res = wpdc_press_handle( press_form() );
+check( 'PRESS: wpdc_press_capability moves the right', true === $res['ok'] );
+
+press_reset();
+$res = wpdc_press_handle( press_form( array( '_wpnonce' => 'forged' ) ) );
+check( 'PRESS: a bad nonce creates nothing', false === $res['ok'] && 'bad_nonce' === $res['reason'] && array() === $GLOBALS['wpdc_test_requests'] );
+$form = press_form();
+unset( $form['_wpnonce'] );
+$res = wpdc_press_handle( $form );
+check( 'PRESS: a missing nonce creates nothing', false === $res['ok'] && 'bad_nonce' === $res['reason'] && array() === $GLOBALS['wpdc_test_requests'] );
+
+// Input validation.
+press_reset();
+$res = wpdc_press_handle( press_form( array( 'email' => 'nope' ) ) );
+check( 'PRESS: an invalid email creates nothing', false === $res['ok'] && 'invalid_input' === $res['reason'] && array() === $GLOBALS['wpdc_test_requests'] );
+$res = wpdc_press_handle( press_form( array( 'limit' => '-3' ) ) );
+check( 'PRESS: a negative site limit creates nothing', false === $res['ok'] && 'invalid_input' === $res['reason'] );
+$res = wpdc_press_handle( press_form( array( 'duration' => 'forever-and-a-day' ) ) );
+check( 'PRESS: an unknown duration creates nothing', false === $res['ok'] && 'invalid_input' === $res['reason'] );
+$res = wpdc_press_handle( press_form( array( 'duration' => 'date', 'expires_on' => '2001-01-01' ) ) );
+check( 'PRESS: an expiry in the past creates nothing', false === $res['ok'] && 'invalid_input' === $res['reason'] && array() === $GLOBALS['wpdc_test_requests'] );
+
+// The request body to Dodo.
+press_reset();
+press_script_success();
+$res  = wpdc_press_handle( press_form() );
+$post = press_license_post();
+$body = $post ? json_decode( $post['args']['body'], true ) : array();
+check( 'PRESS: a lifetime key is created', true === $res['ok'] && 'lic_abc123' === $res['record']['id'] );
+check(
+	'PRESS: exactly these keys go to POST /license_keys',
+	array( 'customer_id', 'product_id', 'key', 'activations_limit', 'expires_at' ) === array_keys( $body )
+);
+check(
+	'PRESS: lifetime and no limit are sent as null, like a key made in the dashboard',
+	'cus_new' === $body['customer_id'] && PRESS_PDT === $body['product_id'] && null === $body['activations_limit'] && null === $body['expires_at']
+);
+check( 'PRESS: the key sent is the key shown', $res['key'] === $body['key'] && 1 === preg_match( '/^[0-9A-F]{4}(-[0-9A-F]{4}){7}$/', $body['key'] ) );
+check(
+	'PRESS: the customer is looked up by email first, then created',
+	str_contains( $GLOBALS['wpdc_test_requests'][0]['url'], '/customers?email=kim%40press.example' )
+		&& 'GET' === $GLOBALS['wpdc_test_requests'][0]['args']['method']
+		&& str_ends_with( $GLOBALS['wpdc_test_requests'][1]['url'], '/customers' )
+		&& array( 'email' => 'kim@press.example', 'name' => 'Kim Reporter' ) === json_decode( $GLOBALS['wpdc_test_requests'][1]['args']['body'], true )
+);
+check( 'PRESS: test mode talks to the test host', str_starts_with( $post['url'] ?? '', 'https://test.dodopayments.com/' ) );
+
+press_reset();
+respond( 200, array( 'items' => array( array( 'customer_id' => 'cus_old', 'email' => 'KIM@press.example', 'name' => 'Kim' ) ) ) );
+respond( 200, array( 'id' => 'lic_two', 'status' => 'active' ) );
+$res  = wpdc_press_handle( press_form( array( 'limit' => '3', 'duration' => 'date', 'expires_on' => gmdate( 'Y-m-d', time() + 40 * DAY_IN_SECONDS ) ) ) );
+$body = json_decode( press_license_post()['args']['body'] ?? '{}', true );
+check( 'PRESS: an existing customer is reused, not created twice', true === $res['ok'] && 'cus_old' === $body['customer_id'] && 2 === count( $GLOBALS['wpdc_test_requests'] ) );
+check( 'PRESS: the site limit travels as a number', 3 === $body['activations_limit'] );
+check( 'PRESS: an expiry date ends that day in UTC', gmdate( 'Y-m-d', time() + 40 * DAY_IN_SECONDS ) . 'T23:59:59Z' === $body['expires_at'] );
+
+press_reset();
+press_script_success();
+wpdc_press_handle( press_form( array( 'duration' => '30d' ) ) );
+$body = json_decode( press_license_post()['args']['body'] ?? '{}', true );
+$diff = strtotime( (string) $body['expires_at'] ) - ( time() + 30 * DAY_IN_SECONDS );
+check( 'PRESS: 30 days means 30 days from now', abs( $diff ) < 120 );
+
+press_reset();
+$GLOBALS['wpdc_test_filters']['wpdc_press_key_args'] = array( 'customer_id' => 'cus_x', 'product_id' => 'pdt_sneaky', 'key' => 'K', 'activations_limit' => null, 'expires_at' => null );
+press_script_success();
+$res = wpdc_press_handle( press_form() );
+check( 'PRESS: wpdc_press_key_args cannot swap in a product outside the list', false === $res['ok'] && null === press_license_post() );
+press_reset();
+$GLOBALS['wpdc_test_filters']['wpdc_press_key_args'] = array( 'customer_id' => 'cus_new', 'product_id' => PRESS_PDT, 'key' => 'FILTERED-KEY', 'activations_limit' => 5, 'expires_at' => null );
+press_script_success();
+$res  = wpdc_press_handle( press_form() );
+$body = json_decode( press_license_post()['args']['body'] ?? '{}', true );
+check( 'PRESS: wpdc_press_key_args shapes the body before the call', 5 === $body['activations_limit'] && 'FILTERED-KEY' === $res['key'] );
+unset( $GLOBALS['wpdc_test_filters']['wpdc_press_key_args'] );
+
+// What is stored, and the created action.
+press_reset();
+press_script_success();
+$res    = wpdc_press_handle( press_form() );
+$stored = $GLOBALS['wpdc_test_options']['wpdc_press_keys'] ?? array();
+$record = $stored['lic_abc123'] ?? array();
+check(
+	'PRESS: the record holds exactly id, last four, recipient, product, reason, date, author and mode',
+	array( 'id', 'last4', 'name', 'email', 'product', 'reason', 'created_at', 'created_by', 'mode' ) === array_keys( $record )
+);
+check( 'PRESS: the record keeps the last four characters', substr( $res['key'], -4 ) === $record['last4'] && 7 === $record['created_by'] );
+$everything = json_encode( array( $GLOBALS['wpdc_test_options'], $GLOBALS['wpdc_test_transients'] ) );
+check( 'PRESS: the full key is nowhere in options or transients', ! str_contains( (string) $everything, $res['key'] ) && ! str_contains( (string) $everything, str_replace( '-', '', $res['key'] ) ) );
+check( 'PRESS: what Dodo echoes back is not stored either', ! str_contains( (string) $everything, 'ECHOED-BY-DODO' ) );
+$created = array_values( array_filter( $GLOBALS['wpdc_test_actions'], static fn( $a ) => 'wpdc_press_key_created' === $a[0] ) );
+check( 'PRESS: wpdc_press_key_created fires once with the record and the key', 1 === count( $created ) && $record === $created[0][1][0] && $res['key'] === $created[0][1][1] );
+
+press_reset();
+respond( 200, array( 'items' => array() ) );
+respond( 200, array( 'customer_id' => 'cus_new' ) );
+respond( 422, array( 'message' => 'nope' ) );
+$res = wpdc_press_handle( press_form() );
+check( 'PRESS: a refused key stores nothing and fires nothing', false === $res['ok'] && ! isset( $GLOBALS['wpdc_test_options']['wpdc_press_keys'] ) && array() === $GLOBALS['wpdc_test_actions'] );
+
+// One submission, one key.
+press_reset();
+press_script_success();
+$form = press_form();
+wpdc_press_handle( $form );
+$before = count( $GLOBALS['wpdc_test_requests'] );
+$again  = wpdc_press_handle( $form );
+check( 'PRESS: reposting the same form creates no second key', false === $again['ok'] && 'already_done' === $again['reason'] && count( $GLOBALS['wpdc_test_requests'] ) === $before );
+
+// The one-time display.
+press_reset();
+press_script_success();
+respond( 200, array( 'id' => 'lic_abc123', 'status' => 'active', 'key' => 'ECHOED-BY-DODO', 'instances_count' => 0 ) );
+$_POST = press_form();
+ob_start();
+wpdc_render_press_page();
+$first = (string) ob_get_clean();
+$_POST = array();
+respond( 200, array( 'id' => 'lic_abc123', 'status' => 'active', 'key' => 'ECHOED-BY-DODO', 'instances_count' => 0 ) );
+ob_start();
+wpdc_render_press_page();
+$second = (string) ob_get_clean();
+preg_match( '/id="wpdc-press-key"[^>]*value="([^"]+)"/', $first, $shown );
+$full = $shown[1] ?? '';
+check( 'PRESS: the page shows the full key after creating it', 1 === preg_match( '/^[0-9A-F]{4}(-[0-9A-F]{4}){7}$/', $full ) );
+check( 'PRESS: the full key appears once in that page', '' !== $full && 1 === substr_count( $first, $full ) );
+check( 'PRESS: the next visit shows only the last four', '' !== $full && ! str_contains( $second, $full ) && str_contains( $second, substr( $full, -4 ) ) );
+check( 'PRESS: the list shows Dodo\'s status but never Dodo\'s copy of the key', str_contains( $second, 'Active' ) && ! str_contains( $first . $second, 'ECHOED-BY-DODO' ) );
+check( 'PRESS: every form on the page carries a nonce', substr_count( $second, '<form' ) === substr_count( $second, 'name="_wpnonce"' ) && substr_count( $second, '<form' ) >= 2 );
+
+press_reset();
+$GLOBALS['wpdc_test_caps'] = array( 'edit_posts' );
+ob_start();
+wpdc_render_press_page();
+check( 'PRESS: the page renders nothing without the right', '' === trim( (string) ob_get_clean() ) );
+
+press_reset();
+$GLOBALS['wpdc_test_options']['wpdc_press_keys'] = array(
+	'lic_x' => array( 'id' => 'lic_x', 'last4' => 'ABCD', 'name' => '<script>x</script>', 'email' => 'a@b.c', 'product' => PRESS_PDT, 'reason' => '"><img src=x>', 'created_at' => time(), 'created_by' => 7, 'mode' => 'test_mode' ),
+);
+respond( 200, array( 'id' => 'lic_x', 'status' => 'disabled' ) );
+ob_start();
+wpdc_render_press_page();
+$html = (string) ob_get_clean();
+check( 'PRESS: names and reasons are escaped', ! str_contains( $html, '<script>x' ) && ! str_contains( $html, '"><img' ) && str_contains( $html, 'Disabled' ) );
+
+// Disable and enable.
+press_reset();
+$GLOBALS['wpdc_test_options']['wpdc_press_keys'] = array(
+	'lic_x' => array( 'id' => 'lic_x', 'last4' => 'ABCD', 'name' => 'Kim', 'email' => 'a@b.c', 'product' => PRESS_PDT, 'reason' => 'r', 'created_at' => time(), 'created_by' => 7, 'mode' => 'test_mode' ),
+);
+respond( 200, array( 'id' => 'lic_x', 'status' => 'disabled' ) );
+$res = wpdc_press_handle( array( 'wpdc_press' => 'disable', 'id' => 'lic_x', '_wpnonce' => 'good' ) );
+$req = last_request();
+check(
+	'PRESS: disabling sends PATCH /license_keys/{id} with disabled true and nothing else',
+	true === $res['ok'] && 'PATCH' === $req['args']['method'] && str_ends_with( $req['url'], '/license_keys/lic_x' )
+		&& array( 'disabled' => true ) === json_decode( $req['args']['body'], true )
+);
+$revoked = array_values( array_filter( $GLOBALS['wpdc_test_actions'], static fn( $a ) => 'wpdc_press_key_revoked' === $a[0] ) );
+check( 'PRESS: wpdc_press_key_revoked fires with the record', 1 === count( $revoked ) && 'lic_x' === $revoked[0][1][0]['id'] );
+
+$GLOBALS['wpdc_test_actions'] = array();
+respond( 200, array( 'id' => 'lic_x', 'status' => 'active' ) );
+$res = wpdc_press_handle( array( 'wpdc_press' => 'enable', 'id' => 'lic_x', '_wpnonce' => 'good' ) );
+check(
+	'PRESS: enabling sends disabled false, and is not a revocation',
+	true === $res['ok'] && array( 'disabled' => false ) === json_decode( last_request()['args']['body'], true ) && array() === $GLOBALS['wpdc_test_actions']
+);
+
+$GLOBALS['wpdc_test_requests'] = array();
+$res = wpdc_press_handle( array( 'wpdc_press' => 'disable', 'id' => 'lic_someoneElse', '_wpnonce' => 'good' ) );
+check( 'PRESS: a key this page did not issue cannot be touched', false === $res['ok'] && array() === $GLOBALS['wpdc_test_requests'] );
+$res = wpdc_press_handle( array( 'wpdc_press' => 'disable', 'id' => 'lic_x', '_wpnonce' => 'forged' ) );
+check( 'PRESS: disabling needs the nonce', false === $res['ok'] && 'bad_nonce' === $res['reason'] && array() === $GLOBALS['wpdc_test_requests'] );
+$GLOBALS['wpdc_test_caps'] = array();
+$res = wpdc_press_handle( array( 'wpdc_press' => 'disable', 'id' => 'lic_x', '_wpnonce' => 'good' ) );
+check( 'PRESS: disabling needs the right', false === $res['ok'] && 'forbidden' === $res['reason'] && array() === $GLOBALS['wpdc_test_requests'] );
+
+// Source-level promises.
+$press_src = source( $root . '/includes/press.php' );
+check( 'PRESS: nothing in press.php writes to a log', ! str_contains( $press_src, 'error_log' ) );
+check( 'PRESS: no mail is sent', ! str_contains( $press_src, 'wp_mail' ) );
+preg_match_all( "/(?:esc_html__|esc_attr__|__)\(\s*'([^']+)'/", $press_src, $press_strings );
+$press_strings = array_values( array_unique( $press_strings[1] ) );
+$press_missing = array_values( array_filter( $press_strings, static fn( $s ) => ! str_contains( $po, 'msgid "' . str_replace( '"', '\\"', $s ) . '"' ) ) );
+check( 'PRESS: there are UI strings, so the checks below are not vacuous', count( $press_strings ) > 10 );
+check( 'PRESS: every press string is in the German catalogue' . ( $press_missing ? ' [' . implode( ' | ', array_slice( $press_missing, 0, 3 ) ) . ']' : '' ), array() === $press_missing );
+$dashed = array_filter( $press_strings, static fn( $s ) => str_contains( $s, "\u{2013}" ) || str_contains( $s, "\u{2014}" ) );
+check( 'PRESS: no en or em dash in a press string', array() === $dashed );
+$po_press = '';
+foreach ( $press_strings as $s ) {
+	if ( preg_match( '/msgid "' . preg_quote( str_replace( '"', '\\"', $s ), '/' ) . '"\nmsgstr "([^\n]*)"/', $po, $m ) ) {
+		$po_press .= $m[1];
+	}
+}
+check( 'PRESS: no en or em dash in their German either', '' !== $po_press && ! str_contains( $po_press, "\u{2013}" ) && ! str_contains( $po_press, "\u{2014}" ) );
+check( 'PRESS: uninstall removes the records with their names and emails', str_contains( source( $root . '/uninstall.php' ), "delete_option( 'wpdc_press_keys' )" ) );
 
 if ( $failures ) {
 	echo count( $failures ) . " of $checks checks FAILED\n";
