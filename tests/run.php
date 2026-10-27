@@ -4579,6 +4579,9 @@ function add_submenu_page( ...$args ) {
 function wp_date( string $format, int $ts ): string {
 	return gmdate( $format, $ts );
 }
+function _n( string $single, string $plural, int $n, string $domain = '' ): string {
+	return 1 === $n ? $single : $plural;
+}
 function esc_textarea( $text ): string {
 	return htmlspecialchars( (string) $text, ENT_QUOTES );
 }
@@ -4605,8 +4608,6 @@ function press_form( array $over = array() ): array {
 			'name'            => 'Kim Reporter',
 			'email'           => 'kim@press.example',
 			'product'         => PRESS_PDT,
-			'duration'        => 'lifetime',
-			'expires_on'      => '',
 			'limit'           => '',
 			'reason'          => 'Review in c\'t',
 		),
@@ -4691,10 +4692,6 @@ $res = wpdc_press_handle( press_form( array( 'email' => 'nope' ) ) );
 check( 'PRESS: an invalid email creates nothing', false === $res['ok'] && 'invalid_input' === $res['reason'] && array() === $GLOBALS['wpdc_test_requests'] );
 $res = wpdc_press_handle( press_form( array( 'limit' => '-3' ) ) );
 check( 'PRESS: a negative site limit creates nothing', false === $res['ok'] && 'invalid_input' === $res['reason'] );
-$res = wpdc_press_handle( press_form( array( 'duration' => 'forever-and-a-day' ) ) );
-check( 'PRESS: an unknown duration creates nothing', false === $res['ok'] && 'invalid_input' === $res['reason'] );
-$res = wpdc_press_handle( press_form( array( 'duration' => 'date', 'expires_on' => '2001-01-01' ) ) );
-check( 'PRESS: an expiry in the past creates nothing', false === $res['ok'] && 'invalid_input' === $res['reason'] && array() === $GLOBALS['wpdc_test_requests'] );
 
 // The request body to Dodo.
 press_reset();
@@ -4724,18 +4721,35 @@ check( 'PRESS: test mode talks to the test host', str_starts_with( $post['url'] 
 press_reset();
 respond( 200, array( 'items' => array( array( 'customer_id' => 'cus_old', 'email' => 'KIM@press.example', 'name' => 'Kim' ) ) ) );
 respond( 200, array( 'id' => 'lic_two', 'status' => 'active' ) );
-$res  = wpdc_press_handle( press_form( array( 'limit' => '3', 'duration' => 'date', 'expires_on' => gmdate( 'Y-m-d', time() + 40 * DAY_IN_SECONDS ) ) ) );
+$res  = wpdc_press_handle( press_form( array( 'limit' => '3', 'duration' => '1y', 'expires_on' => '2099-01-01' ) ) );
 $body = json_decode( press_license_post()['args']['body'] ?? '{}', true );
 check( 'PRESS: an existing customer is reused, not created twice', true === $res['ok'] && 'cus_old' === $body['customer_id'] && 2 === count( $GLOBALS['wpdc_test_requests'] ) );
 check( 'PRESS: the site limit travels as a number', 3 === $body['activations_limit'] );
-check( 'PRESS: an expiry date ends that day in UTC', gmdate( 'Y-m-d', time() + 40 * DAY_IN_SECONDS ) . 'T23:59:59Z' === $body['expires_at'] );
+check( 'PRESS: a posted duration or date is ignored: the key never expires', array_key_exists( 'expires_at', $body ) && null === $body['expires_at'] );
 
 press_reset();
+$GLOBALS['wpdc_test_filters']['wpdc_press_key_args'] = array( 'customer_id' => 'cus_new', 'product_id' => PRESS_PDT, 'key' => 'K-FILTERED', 'activations_limit' => null, 'expires_at' => '2030-01-01T00:00:00Z' );
 press_script_success();
-wpdc_press_handle( press_form( array( 'duration' => '30d' ) ) );
+$res  = wpdc_press_handle( press_form() );
 $body = json_decode( press_license_post()['args']['body'] ?? '{}', true );
-$diff = strtotime( (string) $body['expires_at'] ) - ( time() + 30 * DAY_IN_SECONDS );
-check( 'PRESS: 30 days means 30 days from now', abs( $diff ) < 120 );
+check( 'PRESS: a filter setting expires_at is stripped back to null', true === $res['ok'] && array_key_exists( 'expires_at', $body ) && null === $body['expires_at'] );
+unset( $GLOBALS['wpdc_test_filters']['wpdc_press_key_args'] );
+check( 'PRESS: there is no duration filter any more', ! function_exists( 'wpdc_press_durations' ) && ! str_contains( (string) file_get_contents( $root . '/includes/press.php' ), 'wpdc_press_durations' ) );
+
+// Product names from Dodo, cached, the id when Dodo cannot say.
+press_reset();
+respond( 200, array( 'product_id' => PRESS_PDT, 'name' => 'Easy SVG Pro' ) );
+$name1 = wpdc_press_product_name( PRESS_PDT );
+$name2 = wpdc_press_product_name( PRESS_PDT );
+check(
+	'PRESS: the product name comes from GET /products/{id}, once',
+	'Easy SVG Pro' === $name1 && 'Easy SVG Pro' === $name2 && 1 === count( $GLOBALS['wpdc_test_requests'] )
+		&& str_ends_with( $GLOBALS['wpdc_test_requests'][0]['url'], '/products/' . PRESS_PDT ) && 'GET' === $GLOBALS['wpdc_test_requests'][0]['args']['method']
+);
+press_reset();
+respond( 503, array() );
+check( 'PRESS: a failed lookup shows the id', PRESS_PDT === wpdc_press_product_name( PRESS_PDT ) );
+check( 'PRESS: and a failure is not cached', array() === $GLOBALS['wpdc_test_transients'] || ! in_array( PRESS_PDT, $GLOBALS['wpdc_test_transients'], true ) );
 
 press_reset();
 $GLOBALS['wpdc_test_filters']['wpdc_press_key_args'] = array( 'customer_id' => 'cus_x', 'product_id' => 'pdt_sneaky', 'key' => 'K', 'activations_limit' => null, 'expires_at' => null );
@@ -4786,7 +4800,8 @@ check( 'PRESS: reposting the same form creates no second key', false === $again[
 // The one-time display.
 press_reset();
 press_script_success();
-respond( 200, array( 'id' => 'lic_abc123', 'status' => 'active', 'key' => 'ECHOED-BY-DODO', 'instances_count' => 0 ) );
+respond( 200, array( 'product_id' => PRESS_PDT, 'name' => 'Easy SVG Pro' ) );
+respond( 200, array( 'id' => 'lic_abc123', 'status' => 'active', 'key' => 'ECHOED-BY-DODO', 'instances_count' => 0, 'activations_limit' => null ) );
 $_POST = press_form();
 ob_start();
 wpdc_render_press_page();
@@ -4802,6 +4817,15 @@ check( 'PRESS: the page shows the full key after creating it', 1 === preg_match(
 check( 'PRESS: the full key appears once in that page', '' !== $full && 1 === substr_count( $first, $full ) );
 check( 'PRESS: the next visit shows only the last four', '' !== $full && ! str_contains( $second, $full ) && str_contains( $second, substr( $full, -4 ) ) );
 check( 'PRESS: the list shows Dodo\'s status but never Dodo\'s copy of the key', str_contains( $second, 'Active' ) && ! str_contains( $first . $second, 'ECHOED-BY-DODO' ) );
+check(
+	'PRESS: the dropdown and the list show the product name, the id only beside it',
+	str_contains( $second, '>Easy SVG Pro (' . PRESS_PDT . ')</option>' ) && str_contains( $second, '<td>Easy SVG Pro<br><code>' . PRESS_PDT . '</code></td>' )
+);
+check(
+	'PRESS: the status cell says the status and the site limit, nothing else',
+	str_contains( $second, 'Active<br><span class="description">Websites: unlimited</span>' ) && ! str_contains( $second, 'lifetime' ) && ! str_contains( $second, 'sites,' )
+);
+check( 'PRESS: no duration or date field is left in the form', ! str_contains( $second, 'name="duration"' ) && ! str_contains( $second, 'name="expires_on"' ) );
 check( 'PRESS: every form on the page carries a nonce', substr_count( $second, '<form' ) === substr_count( $second, 'name="_wpnonce"' ) && substr_count( $second, '<form' ) >= 2 );
 
 press_reset();
@@ -4814,10 +4838,12 @@ press_reset();
 $GLOBALS['wpdc_test_options']['wpdc_press_keys'] = array(
 	'lic_x' => array( 'id' => 'lic_x', 'last4' => 'ABCD', 'name' => '<script>x</script>', 'email' => 'a@b.c', 'product' => PRESS_PDT, 'reason' => '"><img src=x>', 'created_at' => time(), 'created_by' => 7, 'mode' => 'test_mode' ),
 );
-respond( 200, array( 'id' => 'lic_x', 'status' => 'disabled' ) );
+respond( 200, array( 'name' => 'Easy SVG Pro' ) );
+respond( 200, array( 'id' => 'lic_x', 'status' => 'disabled', 'activations_limit' => 3 ) );
 ob_start();
 wpdc_render_press_page();
 $html = (string) ob_get_clean();
+check( 'PRESS: a limit reads as Websites: N', str_contains( $html, 'Disabled<br><span class="description">Websites: 3</span>' ) );
 check( 'PRESS: names and reasons are escaped', ! str_contains( $html, '<script>x' ) && ! str_contains( $html, '"><img' ) && str_contains( $html, 'Disabled' ) );
 
 // Disable and enable.
@@ -4858,15 +4884,17 @@ $press_src = source( $root . '/includes/press.php' );
 check( 'PRESS: nothing in press.php writes to a log', ! str_contains( $press_src, 'error_log' ) );
 check( 'PRESS: no mail is sent', ! str_contains( $press_src, 'wp_mail' ) );
 preg_match_all( "/(?:esc_html__|esc_attr__|__)\(\s*'([^']+)'/", $press_src, $press_strings );
-$press_strings = array_values( array_unique( $press_strings[1] ) );
-$press_missing = array_values( array_filter( $press_strings, static fn( $s ) => ! str_contains( $po, 'msgid "' . str_replace( '"', '\\"', $s ) . '"' ) ) );
+preg_match_all( "/_n\(\s*'([^']+)',\s*'([^']+)'/", $press_src, $press_plurals );
+check( 'PRESS: counted strings use _n', count( $press_plurals[1] ) >= 2 );
+$press_strings = array_values( array_unique( array_merge( $press_strings[1], $press_plurals[1], $press_plurals[2] ) ) );
+$press_missing = array_values( array_filter( $press_strings, static fn( $s ) => 1 !== preg_match( '/^msgid(?:_plural)? "' . preg_quote( str_replace( '"', '\\"', $s ), '/' ) . '"$/m', $po ) ) );
 check( 'PRESS: there are UI strings, so the checks below are not vacuous', count( $press_strings ) > 10 );
 check( 'PRESS: every press string is in the German catalogue' . ( $press_missing ? ' [' . implode( ' | ', array_slice( $press_missing, 0, 3 ) ) . ']' : '' ), array() === $press_missing );
 $dashed = array_filter( $press_strings, static fn( $s ) => str_contains( $s, "\u{2013}" ) || str_contains( $s, "\u{2014}" ) );
 check( 'PRESS: no en or em dash in a press string', array() === $dashed );
 $po_press = '';
 foreach ( $press_strings as $s ) {
-	if ( preg_match( '/msgid "' . preg_quote( str_replace( '"', '\\"', $s ), '/' ) . '"\nmsgstr "([^\n]*)"/', $po, $m ) ) {
+	if ( preg_match( '/msgid "' . preg_quote( str_replace( '"', '\\"', $s ), '/' ) . '"\n(?:msgid_plural "[^\n]*"\n)?((?:msgstr(?:\[\d\])? "[^\n]*"\n?)+)/', $po, $m ) ) {
 		$po_press .= $m[1];
 	}
 }

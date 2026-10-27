@@ -31,8 +31,6 @@ msgstr "MwSt."
 msgid "Total"
 msgstr "Gesamt"
 
-
-
 msgid "Opening checkout…"
 msgstr "Kasse wird geöffnet …"
 
@@ -41,7 +39,6 @@ msgstr "Die Kasse konnte nicht geöffnet werden. Bitte versuchen Sie es gleich n
 
 msgid "The checkout could not be opened. Please try again."
 msgstr "Die Kasse konnte nicht geöffnet werden. Bitte versuchen Sie es noch einmal."
-
 
 msgid "Checkout is not available right now. This is a fault on our side."
 msgstr "Die Kasse ist gerade nicht verfügbar. Der Fehler liegt bei uns."
@@ -297,29 +294,11 @@ msgstr "Rabattcode hinzufügen"
 msgid "Press access"
 msgstr "Pressezugang"
 
-msgid "Lifetime"
-msgstr "Lebenslang"
-
-msgid "30 days"
-msgstr "30 Tage"
-
-msgid "90 days"
-msgstr "90 Tage"
-
-msgid "1 year"
-msgstr "1 Jahr"
-
-msgid "Until a date"
-msgstr "Bis zu einem Datum"
-
 msgid "Dodo Payments refused the API key. Check the key and the mode."
 msgstr "Dodo Payments hat den API-Schlüssel abgelehnt. Prüfe Schlüssel und Modus."
 
 msgid "Dodo Payments did not accept this. Nothing was created or changed."
 msgstr "Dodo Payments hat das nicht angenommen. Es wurde nichts angelegt oder geändert."
-
-msgid "Please check the form: name, a valid email, an allowed product, a duration in the future and a site limit of 1 or more."
-msgstr "Bitte prüfe das Formular: Name, eine gültige E-Mail, ein freigegebenes Produkt, eine Dauer in der Zukunft und ein Seitenlimit ab 1."
 
 msgid "This product is not released for press access."
 msgstr "Dieses Produkt ist für den Pressezugang nicht freigegeben."
@@ -375,15 +354,6 @@ msgstr "Neuer Schlüssel"
 msgid "Name"
 msgstr "Name"
 
-msgid "Duration"
-msgstr "Dauer"
-
-msgid "Expiry date"
-msgstr "Ablaufdatum"
-
-msgid "The date applies only with \"Until a date\". The key ends at the end of that day (UTC)."
-msgstr "Das Datum gilt nur bei „Bis zu einem Datum“. Der Schlüssel endet am Ende dieses Tages (UTC)."
-
 msgid "Site limit"
 msgstr "Seitenlimit"
 
@@ -414,23 +384,24 @@ msgstr "Angelegt"
 msgid "Status"
 msgstr "Status"
 
-msgid "until %s"
-msgstr "bis %s"
-
-msgid "lifetime"
-msgstr "lebenslang"
-
-msgid "%1$d of %2$d sites"
-msgstr "%1$d von %2$d Websites"
-
-msgid "%d sites, unlimited"
-msgstr "%d Websites, unbegrenzt"
-
 msgid "Disable"
 msgstr "Sperren"
 
 msgid "Enable"
 msgstr "Entsperren"
 
-msgid "%d keys from the other mode are not shown."
-msgstr "%d Schlüssel aus dem anderen Modus werden nicht angezeigt."
+msgid "Please check the form: name, a valid email, an allowed product and a site limit of 1 or more."
+msgstr "Bitte prüfe das Formular: Name, eine gültige E-Mail, ein freigegebenes Produkt und ein Seitenlimit ab 1."
+
+msgid "Websites: unlimited"
+msgstr "Websites: unbegrenzt"
+
+msgid "Websites: %d"
+msgid_plural "Websites: %d"
+msgstr[0] "Websites: %d"
+msgstr[1] "Websites: %d"
+
+msgid "%d key from the other mode is not shown."
+msgid_plural "%d keys from the other mode are not shown."
+msgstr[0] "%d Schlüssel aus dem anderen Modus wird nicht angezeigt."
+msgstr[1] "%d Schlüssel aus dem anderen Modus werden nicht angezeigt."

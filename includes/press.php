@@ -5,7 +5,7 @@
  * The key is made here, sent to Dodo once and shown once. WordPress keeps only
  * the lic_ id and the last four characters, so a database dump cannot activate
  * anything. Same shape as a key made by hand in the dashboard: no payment, no
- * subscription.
+ * subscription, no expiry. A complimentary key never carries a date.
  */
 
 declare(strict_types=1);
@@ -41,32 +41,6 @@ function wpdc_press_enabled(): bool {
 }
 
 /**
- * Duration choices: key => label and a DateTime modifier.
- *
- * `null` is lifetime; `'date'` takes the date field instead.
- */
-function wpdc_press_durations(): array {
-	$durations = apply_filters(
-		'wpdc_press_durations',
-		array(
-			'lifetime' => array( 'label' => __( 'Lifetime', 'wp-dodo-checkout' ), 'modify' => null ),
-			'30d'      => array( 'label' => __( '30 days', 'wp-dodo-checkout' ), 'modify' => '+30 days' ),
-			'90d'      => array( 'label' => __( '90 days', 'wp-dodo-checkout' ), 'modify' => '+90 days' ),
-			'1y'       => array( 'label' => __( '1 year', 'wp-dodo-checkout' ), 'modify' => '+1 year' ),
-			'date'     => array( 'label' => __( 'Until a date', 'wp-dodo-checkout' ), 'modify' => 'date' ),
-		)
-	);
-	$out = array();
-	foreach ( is_array( $durations ) ? $durations : array() as $key => $row ) {
-		if ( is_string( $key ) && is_array( $row ) && is_string( $row['label'] ?? null )
-			&& ( null === ( $row['modify'] ?? null ) || is_string( $row['modify'] ) ) ) {
-			$out[ $key ] = array( 'label' => $row['label'], 'modify' => $row['modify'] ?? null );
-		}
-	}
-	return $out;
-}
-
-/**
  * XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX from 128 random bits.
  */
 function wpdc_press_generate_key(): string {
@@ -74,6 +48,27 @@ function wpdc_press_generate_key(): string {
 	$filtered = apply_filters( 'wpdc_press_generate_key', $key );
 	// A filter that returns nothing usable must not produce an empty or spaced key.
 	return is_string( $filtered ) && 1 === preg_match( '/^[A-Za-z0-9-]{8,128}$/', $filtered ) ? $filtered : $key;
+}
+
+/**
+ * The Dodo product name for an id, cached; the id itself when Dodo cannot say.
+ */
+function wpdc_press_product_name( string $id ): string {
+	$key    = 'wpdc_press_name_' . md5( wpdc_mode() . $id );
+	$cached = get_transient( $key );
+	if ( is_string( $cached ) && '' !== $cached ) {
+		return $cached;
+	}
+	if ( ! wpdc_is_product_id( $id ) || ! wpdc_is_configured() ) {
+		return $id;
+	}
+	$product = wpdc_dodo_request( 'GET', '/products/' . rawurlencode( $id ) );
+	$name    = wpdc_is_error( $product ) ? '' : trim( (string) ( $product['name'] ?? '' ) );
+	if ( '' === $name ) {
+		return $id;
+	}
+	set_transient( $key, $name, HOUR_IN_SECONDS );
+	return $name;
 }
 
 function wpdc_press_records(): array {
@@ -121,37 +116,10 @@ function wpdc_press_customer( string $email, string $name ) {
 }
 
 /**
- * The expiry as Dodo wants it, null for lifetime, false when invalid.
- *
- * @return string|null|false
- */
-function wpdc_press_expires_at( string $duration, string $date ) {
-	$durations = wpdc_press_durations();
-	if ( ! isset( $durations[ $duration ] ) ) {
-		return false;
-	}
-	$modify = $durations[ $duration ]['modify'];
-	if ( null === $modify ) {
-		return null;
-	}
-	$utc = new DateTimeZone( 'UTC' );
-	if ( 'date' === $modify ) {
-		$day = DateTimeImmutable::createFromFormat( '!Y-m-d', $date, $utc );
-		if ( ! $day || $day->format( 'Y-m-d' ) !== $date ) {
-			return false;
-		}
-		$at = $day->setTime( 23, 59, 59 );
-	} else {
-		$at = ( new DateTimeImmutable( 'now', $utc ) )->modify( $modify );
-	}
-	return $at && $at->getTimestamp() > time() ? $at->format( 'Y-m-d\TH:i:s\Z' ) : false;
-}
-
-/**
  * Create one key. Validated input in, the record and the key out.
  */
 function wpdc_press_create( array $input, int $user_id ): array {
-	$invalid = __( 'Please check the form: name, a valid email, an allowed product, a duration in the future and a site limit of 1 or more.', 'wp-dodo-checkout' );
+	$invalid = __( 'Please check the form: name, a valid email, an allowed product and a site limit of 1 or more.', 'wp-dodo-checkout' );
 
 	$name    = sanitize_text_field( (string) ( $input['name'] ?? '' ) );
 	$email   = sanitize_email( (string) ( $input['email'] ?? '' ) );
@@ -163,10 +131,6 @@ function wpdc_press_create( array $input, int $user_id ): array {
 		return wpdc_error( 'product_not_allowed', false, __( 'This product is not released for press access.', 'wp-dodo-checkout' ) );
 	}
 	if ( '' === $name || ! is_email( $email ) || ( '' !== $limit && 1 !== preg_match( '/^[1-9][0-9]{0,5}$/', $limit ) ) ) {
-		return wpdc_error( 'invalid_input', false, $invalid );
-	}
-	$expires_at = wpdc_press_expires_at( (string) ( $input['duration'] ?? '' ), trim( (string) ( $input['expires_on'] ?? '' ) ) );
-	if ( false === $expires_at ) {
 		return wpdc_error( 'invalid_input', false, $invalid );
 	}
 	if ( ! wpdc_is_configured() ) {
@@ -185,10 +149,14 @@ function wpdc_press_create( array $input, int $user_id ): array {
 			'product_id'        => $product,
 			'key'               => wpdc_press_generate_key(),
 			'activations_limit' => '' === $limit ? null : (int) $limit,
-			'expires_at'        => $expires_at,
+			'expires_at'        => null,
 		),
 		$input
 	);
+	if ( is_array( $args ) ) {
+		// Owner rule: a complimentary key never expires, whatever a filter says.
+		$args['expires_at'] = null;
+	}
 	// The filter shapes the body; it does not get to widen the allowlist.
 	if ( ! is_array( $args ) || ! in_array( $args['product_id'] ?? null, wpdc_press_products(), true )
 		|| ! is_string( $args['key'] ?? null ) || '' === $args['key'] || ! is_string( $args['customer_id'] ?? null ) ) {
@@ -309,12 +277,10 @@ function wpdc_render_press_page(): void {
 		$result = wpdc_press_handle( wp_unslash( $_POST ) );
 	}
 
-	$products = wpdc_press_products();
-	// Only the cached catalogue for names: this page should not spend a call on labels.
-	$catalog  = get_transient( wpdc_catalog_key() );
-	$names    = array();
-	foreach ( $products as $id ) {
-		$names[ $id ] = is_array( $catalog ) && isset( $catalog[ $id ]['name'] ) ? $catalog[ $id ]['name'] . ' (' . $id . ')' : $id;
+	$names = array();
+	foreach ( wpdc_press_products() as $id ) {
+		$name         = wpdc_press_product_name( $id );
+		$names[ $id ] = $name === $id ? $id : $name . ' (' . $id . ')';
 	}
 	?>
 	<div class="wrap">
@@ -367,18 +333,6 @@ function wpdc_render_press_page(): void {
 					</td>
 				</tr>
 				<tr>
-					<th scope="row"><label for="wpdc-press-duration"><?php echo esc_html__( 'Duration', 'wp-dodo-checkout' ); ?></label></th>
-					<td>
-						<select id="wpdc-press-duration" name="duration">
-							<?php foreach ( wpdc_press_durations() as $key => $row ) : ?>
-								<option value="<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $row['label'] ); ?></option>
-							<?php endforeach; ?>
-						</select>
-						<input type="date" name="expires_on" aria-label="<?php echo esc_attr__( 'Expiry date', 'wp-dodo-checkout' ); ?>" />
-						<p class="description"><?php echo esc_html__( 'The date applies only with "Until a date". The key ends at the end of that day (UTC).', 'wp-dodo-checkout' ); ?></p>
-					</td>
-				</tr>
-				<tr>
 					<th scope="row"><label for="wpdc-press-limit"><?php echo esc_html__( 'Site limit', 'wp-dodo-checkout' ); ?></label></th>
 					<td>
 						<input type="number" id="wpdc-press-limit" name="limit" min="1" step="1" class="small-text" />
@@ -420,20 +374,19 @@ function wpdc_render_press_list(): void {
 			$live   = wpdc_dodo_request( 'GET', '/license_keys/' . rawurlencode( (string) $id ) );
 			$status = wpdc_is_error( $live ) ? '' : (string) ( $live['status'] ?? '' );
 			$author = get_userdata( (int) $record['created_by'] );
-			$detail = array();
+			$sites  = '';
 			if ( ! wpdc_is_error( $live ) ) {
-				$detail[] = isset( $live['expires_at'] ) && is_string( $live['expires_at'] )
-					? sprintf( __( 'until %s', 'wp-dodo-checkout' ), substr( $live['expires_at'], 0, 10 ) )
-					: __( 'lifetime', 'wp-dodo-checkout' );
-				$detail[] = isset( $live['activations_limit'] ) && is_int( $live['activations_limit'] )
-					? sprintf( __( '%1$d of %2$d sites', 'wp-dodo-checkout' ), (int) ( $live['instances_count'] ?? 0 ), $live['activations_limit'] )
-					: sprintf( __( '%d sites, unlimited', 'wp-dodo-checkout' ), (int) ( $live['instances_count'] ?? 0 ) );
+				$limit = $live['activations_limit'] ?? null;
+				$sites = is_int( $limit )
+					? sprintf( _n( 'Websites: %d', 'Websites: %d', $limit, 'wp-dodo-checkout' ), $limit )
+					: __( 'Websites: unlimited', 'wp-dodo-checkout' );
 			}
 
 			printf(
-				'<tr><td>%s<br>%s</td><td><code>%s</code></td><td><code>&hellip;%s</code><br><code>%s</code></td><td>%s</td><td>%s<br>%s</td><td>%s<br><span class="description">%s</span></td><td>',
+				'<tr><td>%s<br>%s</td><td>%s<br><code>%s</code></td><td><code>&hellip;%s</code><br><code>%s</code></td><td>%s</td><td>%s<br>%s</td><td>%s<br><span class="description">%s</span></td><td>',
 				esc_html( (string) $record['name'] ),
 				esc_html( (string) $record['email'] ),
+				esc_html( wpdc_press_product_name( (string) $record['product'] ) ),
 				esc_html( (string) $record['product'] ),
 				esc_html( (string) $record['last4'] ),
 				esc_html( (string) $id ),
@@ -441,7 +394,7 @@ function wpdc_render_press_list(): void {
 				esc_html( wp_date( 'Y-m-d H:i', (int) $record['created_at'] ) ),
 				esc_html( $author ? (string) $author->display_name : '#' . (int) $record['created_by'] ),
 				esc_html( wpdc_press_status_label( $status ) ),
-				esc_html( implode( ', ', $detail ) )
+				esc_html( $sites )
 			);
 			if ( 'active' === $status || 'disabled' === $status ) {
 				$disable = 'active' === $status;
@@ -462,6 +415,6 @@ function wpdc_render_press_list(): void {
 	}
 
 	if ( $hidden > 0 ) {
-		echo '<p class="description">' . esc_html( sprintf( __( '%d keys from the other mode are not shown.', 'wp-dodo-checkout' ), $hidden ) ) . '</p>';
+		echo '<p class="description">' . esc_html( sprintf( _n( '%d key from the other mode is not shown.', '%d keys from the other mode are not shown.', $hidden, 'wp-dodo-checkout' ), $hidden ) ) . '</p>';
 	}
 }

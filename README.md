@@ -236,13 +236,15 @@ names at least one product:
 define( 'WPDC_PRESS_PRODUCTS', 'pdt_…,pdt_…' );
 ```
 
-Name, email, product, duration (lifetime, 30 days, 90 days, 1 year or until a
-date), site limit (empty is unlimited) and a reason. The plugin finds the Dodo
+Name, email, product, site limit (empty is unlimited) and a reason. A
+complimentary key never carries a date: there is no duration field, and
+`expires_at` is always `null`. The product shows with its Dodo name (one
+`GET /products/{id}`, cached for an hour; the id when Dodo cannot say). The plugin finds the Dodo
 customer by email or creates one, generates the key from `random_bytes` as
 `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX` and sends `POST /license_keys` with
-`customer_id`, `product_id`, `key`, `activations_limit` and `expires_at` (both
-`null` for unlimited and lifetime, like a key made in the dashboard: no payment,
-no subscription). It follows the mode like everything else, so in test mode the
+`customer_id`, `product_id`, `key`, `activations_limit` (`null` for unlimited)
+and `expires_at` (always `null`), like a key made in the dashboard: no payment,
+no subscription, no expiry. It follows the mode like everything else, so in test mode the
 key exists only in Dodo's test environment.
 
 The key is shown once, on the page that created it. WordPress stores only the
@@ -261,14 +263,10 @@ Every action checks the capability and a nonce.
 |---|---|---|---|
 | `wpdc_press_capability` | filter | capability | `manage_options` |
 | `wpdc_press_products` | filter | list of `pdt_…` ids | `WPDC_PRESS_PRODUCTS`; anything not shaped like an id is dropped |
-| `wpdc_press_durations` | filter | `key => [ 'label', 'modify' ]` | lifetime, 30d, 90d, 1y, date |
 | `wpdc_press_generate_key` | filter | the generated key | 8 groups of 4 hex; a value that is not 8 to 128 letters, digits or dashes falls back to it |
-| `wpdc_press_key_args` | filter | body for `POST /license_keys`, form input | the body above; a product outside the list is refused |
+| `wpdc_press_key_args` | filter | body for `POST /license_keys`, form input | the body above; a product outside the list is refused, `expires_at` is set back to `null` |
 | `wpdc_press_key_created` | action | record, full key | after Dodo created it |
 | `wpdc_press_key_revoked` | action | record | after Dodo disabled it |
-
-`modify` in a duration is a PHP date modifier (`'+6 months'`), `null` for
-lifetime, or `'date'` to use the date field.
 
 ```php
 // Editors may hand out press keys too.
@@ -276,13 +274,6 @@ add_filter( 'wpdc_press_capability', fn() => 'edit_others_posts' );
 
 // One more product, only on this site.
 add_filter( 'wpdc_press_products', fn( $ids ) => array_merge( $ids, array( 'pdt_…' ) ) );
-
-// A six month option, and no "until a date".
-add_filter( 'wpdc_press_durations', function ( $durations ) {
-	$durations['6m'] = array( 'label' => '6 months', 'modify' => '+6 months' );
-	unset( $durations['date'] );
-	return $durations;
-} );
 
 // A prefix the support team recognises.
 add_filter( 'wpdc_press_generate_key', fn( $key ) => 'PRESS-' . $key );

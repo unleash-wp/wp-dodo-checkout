@@ -484,7 +484,9 @@ Bekannt und bei Dodo: Eingebettet rendert Dodos Iframe englisch, obwohl `force_l
 ## Pressezugang (#44)
 
 **Einstellungen > Pressezugang** vergibt Lizenzschlüssel ohne Kauf: Kunde bei Dodo Payments per E-Mail
-finden oder anlegen, Schlüssel mit `random_bytes` erzeugen, `POST /license_keys`. Der Schlüssel steht genau
+finden oder anlegen, Schlüssel mit `random_bytes` erzeugen, `POST /license_keys`. Ein Gratis-Schlüssel hat
+nie ein Ablaufdatum: kein Feld für die Dauer, `expires_at` ist immer `null`, auch wenn ein Filter es setzt.
+Produkte erscheinen mit ihrem Namen aus `GET /products/{id}` (eine Stunde gecacht, sonst die Id). Der Schlüssel steht genau
 einmal auf der Seite; gespeichert werden nur `lic_`-Id, letzte vier Zeichen, Empfänger, Produkt, Grund,
 Datum, Ersteller und Modus (Option `wpdc_press_keys`). Sperren und Entsperren über `PATCH
 /license_keys/{id}`. Recht, Nonce und Produktliste prüft `wpdc_press_handle()`. Hooks und Beispiele im
