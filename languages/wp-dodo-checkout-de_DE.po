@@ -31,8 +31,6 @@ msgstr "MwSt."
 msgid "Total"
 msgstr "Gesamt"
 
-
-
 msgid "Opening checkout…"
 msgstr "Kasse wird geöffnet …"
 
@@ -41,7 +39,6 @@ msgstr "Die Kasse konnte nicht geöffnet werden. Bitte versuchen Sie es gleich n
 
 msgid "The checkout could not be opened. Please try again."
 msgstr "Die Kasse konnte nicht geöffnet werden. Bitte versuchen Sie es noch einmal."
-
 
 msgid "Checkout is not available right now. This is a fault on our side."
 msgstr "Die Kasse ist gerade nicht verfügbar. Der Fehler liegt bei uns."
@@ -293,3 +290,118 @@ msgstr "Sicher bezahlt über Dodo Payments"
 
 msgid "Add discount code"
 msgstr "Rabattcode hinzufügen"
+
+msgid "Press access"
+msgstr "Pressezugang"
+
+msgid "Dodo Payments refused the API key. Check the key and the mode."
+msgstr "Dodo Payments hat den API-Schlüssel abgelehnt. Prüfe Schlüssel und Modus."
+
+msgid "Dodo Payments did not accept this. Nothing was created or changed."
+msgstr "Dodo Payments hat das nicht angenommen. Es wurde nichts angelegt oder geändert."
+
+msgid "This product is not released for press access."
+msgstr "Dieses Produkt ist für den Pressezugang nicht freigegeben."
+
+msgid "No Dodo API key is set, so no key can be created."
+msgstr "Es ist kein Dodo API-Schlüssel gesetzt, daher kann kein Lizenzschlüssel angelegt werden."
+
+msgid "This key was not issued here."
+msgstr "Dieser Schlüssel wurde nicht hier vergeben."
+
+msgid "You are not allowed to do this."
+msgstr "Dafür fehlt dir die Berechtigung."
+
+msgid "This form has expired. Please reload the page and try again."
+msgstr "Dieses Formular ist abgelaufen. Bitte lade die Seite neu und versuche es noch einmal."
+
+msgid "This form was already sent. Reloading does not create a second key."
+msgstr "Dieses Formular wurde schon gesendet. Neu laden legt keinen zweiten Schlüssel an."
+
+msgid "Unknown action."
+msgstr "Unbekannte Aktion."
+
+msgid "Active"
+msgstr "Aktiv"
+
+msgid "Disabled"
+msgstr "Gesperrt"
+
+msgid "Expired"
+msgstr "Abgelaufen"
+
+msgid "Status unknown"
+msgstr "Status unbekannt"
+
+msgid "Licence keys for press, promotion and testers, without a purchase. No email is sent: you pass the key on yourself."
+msgstr "Lizenzschlüssel für Presse, Werbung und Tester, ohne Kauf. Es wird keine E-Mail verschickt: Du gibst den Schlüssel selbst weiter."
+
+msgid "Test mode: keys are created in the Dodo Payments test environment and do not work against live."
+msgstr "Testmodus: Schlüssel entstehen in der Testumgebung von Dodo Payments und funktionieren nicht gegen Live."
+
+msgid "Key created. Copy it now: it is shown only this once and is not stored on this site."
+msgstr "Schlüssel angelegt. Kopiere ihn jetzt: Er wird nur dieses eine Mal angezeigt und nicht auf dieser Website gespeichert."
+
+msgid "Copy key"
+msgstr "Schlüssel kopieren"
+
+msgid "Saved at Dodo Payments."
+msgstr "Bei Dodo Payments gespeichert."
+
+msgid "New key"
+msgstr "Neuer Schlüssel"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Site limit"
+msgstr "Seitenlimit"
+
+msgid "Empty means unlimited."
+msgstr "Leer bedeutet unbegrenzt."
+
+msgid "Reason"
+msgstr "Grund"
+
+msgid "Create key"
+msgstr "Schlüssel anlegen"
+
+msgid "Issued keys"
+msgstr "Vergebene Schlüssel"
+
+msgid "No keys issued yet in this mode."
+msgstr "In diesem Modus wurden noch keine Schlüssel vergeben."
+
+msgid "Recipient"
+msgstr "Empfänger"
+
+msgid "Key"
+msgstr "Schlüssel"
+
+msgid "Created"
+msgstr "Angelegt"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Disable"
+msgstr "Sperren"
+
+msgid "Enable"
+msgstr "Entsperren"
+
+msgid "Please check the form: name, a valid email, an allowed product and a site limit of 1 or more."
+msgstr "Bitte prüfe das Formular: Name, eine gültige E-Mail, ein freigegebenes Produkt und ein Seitenlimit ab 1."
+
+msgid "Websites: unlimited"
+msgstr "Websites: unbegrenzt"
+
+msgid "Websites: %d"
+msgid_plural "Websites: %d"
+msgstr[0] "Websites: %d"
+msgstr[1] "Websites: %d"
+
+msgid "%d key from the other mode is not shown."
+msgid_plural "%d keys from the other mode are not shown."
+msgstr[0] "%d Schlüssel aus dem anderen Modus wird nicht angezeigt."
+msgstr[1] "%d Schlüssel aus dem anderen Modus werden nicht angezeigt."

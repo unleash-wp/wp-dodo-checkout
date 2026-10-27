@@ -66,6 +66,7 @@ All optional except the key. Constants go in `wp-config.php`.
 | `WPDC_ACCOUNT_URL` | `https://account.unleash-wp.com` | The customer account the sign-in modal talks to. `https://` origin only. |
 | `WPDC_ACCOUNT_SECRET` | unset | Shared secret with that account, for "Open my account" after a purchase and for the signed prefill ticket. |
 | `WPDC_CHECKOUT_FONT_URL` | the account's Ubuntu stylesheet | Font stylesheet for Dodo's form. Google Fonts URLs are refused. |
+| `WPDC_PRESS_PRODUCTS` | unset | Comma list of `pdt_…` ids that may be given away under **Settings > Press access**. Independent of `WPDC_ALLOWED_PRODUCTS`. Empty or unset, the page does not exist. |
 
 ## Usage
 
@@ -224,6 +225,77 @@ code, then "Open my downloads" in a new tab. The modal talks to the account
 directly (CORS for `https://unleash-wp.com` only) and is fetched on the first
 click; every page carries a loader under 1.5 KB. A visitor who is already
 signed in goes straight to the link. Without JavaScript the link still works.
+
+## Press access
+
+Licence keys for press, promotion and testers, without a purchase, under
+**Settings > Press access**. The page exists only when `WPDC_PRESS_PRODUCTS`
+names at least one product:
+
+```php
+define( 'WPDC_PRESS_PRODUCTS', 'pdt_…,pdt_…' );
+```
+
+Name, email, product, site limit (empty is unlimited) and a reason. A
+complimentary key never carries a date: there is no duration field, and
+`expires_at` is always `null`. The product shows with its Dodo name (one
+`GET /products/{id}`, cached for an hour; the id when Dodo cannot say). The plugin finds the Dodo
+customer by email or creates one, generates the key from `random_bytes` as
+`XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX` and sends `POST /license_keys` with
+`customer_id`, `product_id`, `key`, `activations_limit` (`null` for unlimited)
+and `expires_at` (always `null`), like a key made in the dashboard: no payment,
+no subscription, no expiry. It follows the mode like everything else, so in test mode the
+key exists only in Dodo's test environment.
+
+The key is shown once, on the page that created it. WordPress stores only the
+`lic_…` id, the last four characters, recipient name and email, product,
+reason, date, the user who created it and the mode (option `wpdc_press_keys`,
+not autoloaded, removed on uninstall). Reposting the form does not create a
+second key. The list reads each key's status from Dodo and disables or enables
+it with `PATCH /license_keys/{id}` and `disabled`. Only keys issued on this page
+can be changed there. No email is sent; you pass the key on yourself.
+
+Every action checks the capability and a nonce.
+
+### Hooks
+
+| Hook | Type | Receives | Default |
+|---|---|---|---|
+| `wpdc_press_capability` | filter | capability | `manage_options` |
+| `wpdc_press_products` | filter | list of `pdt_…` ids | `WPDC_PRESS_PRODUCTS`; anything not shaped like an id is dropped |
+| `wpdc_press_generate_key` | filter | the generated key | 8 groups of 4 hex; a value that is not 8 to 128 letters, digits or dashes falls back to it |
+| `wpdc_press_key_args` | filter | body for `POST /license_keys`, form input | the body above; a product outside the list is refused, `expires_at` is set back to `null` |
+| `wpdc_press_key_created` | action | record, full key | after Dodo created it |
+| `wpdc_press_key_revoked` | action | record | after Dodo disabled it |
+
+```php
+// Editors may hand out press keys too.
+add_filter( 'wpdc_press_capability', fn() => 'edit_others_posts' );
+
+// One more product, only on this site.
+add_filter( 'wpdc_press_products', fn( $ids ) => array_merge( $ids, array( 'pdt_…' ) ) );
+
+// A prefix the support team recognises.
+add_filter( 'wpdc_press_generate_key', fn( $key ) => 'PRESS-' . $key );
+
+// Every press key is limited to three sites, whatever the form said.
+add_filter( 'wpdc_press_key_args', function ( $args, $input ) {
+	$args['activations_limit'] = 3;
+	return $args;
+}, 10, 2 );
+
+// Note who got a key, without the key.
+add_action( 'wpdc_press_key_created', function ( $record, $key ) {
+	my_crm_note( $record['email'], 'Press key …' . $record['last4'] . ' for ' . $record['product'] );
+}, 10, 2 );
+
+add_action( 'wpdc_press_key_revoked', function ( $record ) {
+	my_crm_note( $record['email'], 'Press key …' . $record['last4'] . ' disabled' );
+} );
+```
+
+`wpdc_press_key_created` is the only place the full key exists after the page
+is rendered. Do not log or store it.
 
 ## The checkout is a modal on your page
 
