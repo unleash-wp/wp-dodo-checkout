@@ -1226,48 +1226,151 @@
 /* Someone who asked for less motion is not asking for less information: the
    spinner keeps turning, because a still ring says "broken" where a moving one
    says "wait". Only the decoration goes. */
-/* The discount toggle only exists for the phone layout below. */
-.wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-toggle {
+/* Phone-only parts of the "calm checkout" below. */
+.wpdc__bar,
+.wpdc__trust {
+  display: none;
+}
+.wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-toggle,
+.wpdc__chevron {
   display: none !important;
 }
 
-/* 0.18.0, phones. The window becomes the screen: no strip of shop around it,
-   one short pinned header (cover, name, price, close), and the two extras
-   reduced to links in one line, so Dodo's form starts in the first glance.
-   The discount field folds behind its link and stays open once a code holds. */
+/* 0.18.1, phones: the calm checkout. The window takes the screen; only a slim
+   white bar with the lock and the close button stays put. Below it a light
+   summary with room to breathe (cover, name, a large price, two promises that
+   hold for every product), then sign-in and the discount code as full rows a
+   thumb can hit, then Dodo's form. The navy strip it replaces squeezed five
+   things into 80px and read as a banner rather than a till. */
 @media (max-width: 600px) {
   .wpdc__dialog {
     width: 100vw;
     height: 100dvh;
     max-height: none;
     border-radius: 0;
+    grid-template-rows: auto minmax(0, 1fr);
   }
-  .wpdc__panel {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    column-gap: .625rem;
-    row-gap: .5rem;
-    padding: .625rem 3.5rem .625rem 1rem;
-  }
-  .wpdc__item-img {
-    width: 2.25rem;
+  .wpdc__bar {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    height: 3.25rem;
+    padding: 0 3.75rem 0 1.25rem;
+    border-bottom: 1px solid #e3e7f0;
+    background: #fff;
+    color: #203159;
+    font-family: Ubuntu, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
   }
   .wpdc__close {
-    top: .625rem;
+    top: .5rem;
     inset-inline-end: .75rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-color: transparent;
+    background: #f5f7fa;
   }
-  .wpdc__signin {
-    grid-column: 1 / 3;
+  .wpdc__panel {
+    --wpdc-panel-bg: #ffffff;
+    --wpdc-panel-fg: #203159;
+    --wpdc-panel-accent: #203159;
+    display: grid;
+    grid-template-columns: 3.5rem 1fr auto;
+    grid-template-rows: none;
+    align-items: start;
+    column-gap: .875rem;
+    row-gap: 0;
+    padding: 1.25rem 1.25rem 0;
+    background: #fff;
+    color: #203159;
+  }
+  .wpdc__item-img {
+    grid-column: 1;
+    grid-row: 1;
+    width: 3.5rem;
+    box-shadow: 0 1px 3px rgb(32 49 89 / .15);
+  }
+  .wpdc__item > div {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+  .wpdc__item-name {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: #203159;
+  }
+  .wpdc__totals {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
+  }
+  .wpdc__row.wpdc__row--total {
+    font-size: 20px;
+    font-weight: 700;
+    color: #203159;
+  }
+  .wpdc__trust {
+    display: grid;
+    grid-column: 1 / -1;
     grid-row: 2;
-    margin: 0;
+    gap: .375rem;
+    margin: 1rem 0 1.25rem;
+    padding: 0;
+    list-style: none;
+    font-size: 13px;
+    color: #55607a;
   }
-  .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-link {
-    min-height: 0;
-    padding: 0 !important;
+  .wpdc__trust li {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .wpdc__trust li::before {
+    content: "";
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231a8f57' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+  /* Sign-in and the discount code: full-width rows with a chevron. */
+  .wpdc__signin {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin: 0 -1.25rem;
+    border-top: 1px solid #e3e7f0;
+  }
+  .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-link,
+  .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    width: 100% !important;
+    min-height: 3rem;
+    margin: 0 !important;
+    padding: 0 1.25rem !important;
     border: 0 !important;
-    background: none !important;
-    font-size: 13px !important;
+    border-radius: 0;
+    background: #fff !important;
+    box-shadow: none !important;
+    color: #203159 !important;
+    font: inherit !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    line-height: 1.3 !important;
+    text-align: left !important;
+    text-decoration: none !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    opacity: 1;
+    cursor: pointer;
+  }
+  .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-link:hover,
+  .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-toggle:hover {
+    background: #f5f7fa !important;
   }
   .wpdc__signin-icon,
   .wpdc__signin-text span {
@@ -1275,37 +1378,62 @@
   }
   .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__signin-text strong {
     font-weight: 500;
-    color: var(--wpdc-panel-accent);
+    color: #203159;
+  }
+  .wpdc__chevron {
+    display: block !important;
+    flex: none;
+    color: #727f9f;
+    transition: transform .2s;
   }
   .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-toggle {
-    display: block !important;
-    grid-column: 3;
-    grid-row: 2;
-    justify-self: end;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: 0 !important;
-    background: none !important;
-    box-shadow: none !important;
-    color: var(--wpdc-panel-fg) !important;
-    font: inherit !important;
-    font-size: 13px !important;
-    line-height: 1.35 !important;
-    text-decoration: underline !important;
-    text-underline-offset: 3px;
-    text-transform: none !important;
-    letter-spacing: normal !important;
-    opacity: .85;
-    cursor: pointer;
+    grid-column: 1 / -1;
+    grid-row: 4;
+    width: auto !important;
+    margin: 0 -1.25rem !important;
+    border-top: 1px solid #e3e7f0 !important;
+  }
+  .wpdc__panel.is-discount-open .wpdc__discount-toggle .wpdc__chevron {
+    transform: rotate(90deg);
   }
   .wpdc__discount {
-    grid-row: 3;
+    grid-column: 1 / -1;
+    grid-row: 5;
+    margin: 0 0 1rem;
   }
   .wpdc__panel:not(.is-discount-open):not(:has(.wpdc__discount-input[readonly])) .wpdc__discount {
     display: none;
   }
+  /* The field and its button were drawn for the navy strip: white on white here. */
+  .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-input {
+    border-color: #c9d0de !important;
+    background: #fff !important;
+    color: #203159 !important;
+  }
+  .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-input::placeholder {
+    color: #727f9f !important;
+  }
+  .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-apply {
+    border-color: #203159 !important;
+    background: #203159 !important;
+    color: #fff !important;
+  }
+  .wp-dodo-checkout.wpdc__dialog .wpdc__panel .wpdc__discount-apply:hover:not([disabled]) {
+    background: #fcbe00 !important;
+    border-color: #fcbe00 !important;
+    color: #203159 !important;
+  }
+  .wpdc__panel::after {
+    content: "";
+    grid-column: 1 / -1;
+    grid-row: 6;
+    height: .5rem;
+    margin: 0 -1.25rem;
+    border-top: 1px solid #e3e7f0;
+    background: #f5f7fa;
+  }
   .wpdc__dialog .wpdc__frame {
-    padding: .5rem .75rem 1.25rem;
+    padding: .25rem .75rem 1.25rem;
   }
   .wpdc__frame.is-payment {
     padding-top: .75rem;

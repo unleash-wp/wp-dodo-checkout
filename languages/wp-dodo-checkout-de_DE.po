@@ -281,3 +281,15 @@ msgstr "Schon Kunde? Anmelden"
 
 msgid "Your details are filled in for you"
 msgstr "Deine Daten werden übernommen"
+
+msgid "Secure checkout"
+msgstr "Sichere Kasse"
+
+msgid "In your account right after payment"
+msgstr "Direkt nach dem Kauf in deinem Konto"
+
+msgid "Paid securely via Dodo Payments"
+msgstr "Sicher bezahlt über Dodo Payments"
+
+msgid "Add discount code"
+msgstr "Rabattcode hinzufügen"

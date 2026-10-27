@@ -4508,9 +4508,22 @@ check( 'PHONE: the discount field folds behind a toggle', str_contains( $shortco
 $css_src = (string) file_get_contents( $root . '/assets/checkout.css' );
 $phone   = substr( $css_src, (int) strpos( $css_src, '@media (max-width: 600px)' ) );
 check(
-	'PHONE: the checkout is a full-screen sheet with the header pinned',
-	str_contains( $css_src, '@media (max-width: 600px)' ) && str_contains( $phone, 'height: 100dvh' ) && str_contains( $phone, 'position: sticky' )
+	'PHONE: the checkout is a full-screen sheet; only the slim bar stays, the summary scrolls',
+	str_contains( $css_src, '@media (max-width: 600px)' ) && str_contains( $phone, 'height: 100dvh' )
+		&& str_contains( $phone, 'grid-template-rows: auto minmax(0, 1fr)' ) && ! str_contains( $phone, 'position: sticky' )
 );
+// 0.18.1 "Ruhige Kasse": a white bar with the lock, a summary with room and two
+// true promises beside the price, and full-width rows instead of small links.
+check( 'CALM: a slim secure-checkout bar heads the sheet', str_contains( $shortcode_src, '<div class="wpdc__bar">' ) && str_contains( $shortcode_src, "esc_html__( 'Secure checkout', 'wp-dodo-checkout' )" ) );
+check(
+	'CALM: the summary carries two promises that hold for every product',
+	str_contains( $shortcode_src, '<ul class="wpdc__trust">' )
+		&& str_contains( $shortcode_src, "esc_html__( 'In your account right after payment', 'wp-dodo-checkout' )" )
+		&& str_contains( $shortcode_src, "esc_html__( 'Paid securely via Dodo Payments', 'wp-dodo-checkout' )" )
+);
+check( 'CALM: the discount toggle says what it does', str_contains( $shortcode_src, "esc_html__( 'Add discount code', 'wp-dodo-checkout' )" ) );
+check( 'CALM: on a phone the summary is light, not the navy strip', str_contains( $phone, '--wpdc-panel-bg: #ffffff' ) );
+check( 'CALM: bar and promises stay off the desktop', 1 === preg_match( '/^\.wpdc__bar,\n\.wpdc__trust \{\n  display: none;/m', $css_src ) );
 check(
 	'PHONE: the toggle opens the folded discount field, and the CSS listens for the same class',
 	str_contains( (string) file_get_contents( $root . '/assets/checkout.js' ), "panel.classList.toggle('is-discount-open', open)" )
