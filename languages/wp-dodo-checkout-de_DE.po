@@ -405,3 +405,6 @@ msgid "%d key from the other mode is not shown."
 msgid_plural "%d keys from the other mode are not shown."
 msgstr[0] "%d Schlüssel aus dem anderen Modus wird nicht angezeigt."
 msgstr[1] "%d Schlüssel aus dem anderen Modus werden nicht angezeigt."
+
+msgid "The daily limit for free keys is reached. Try again tomorrow, or raise it with the wpdc_press_daily_limit filter."
+msgstr "Das Tageslimit für kostenlose Schlüssel ist erreicht. Morgen wieder versuchen oder das Limit mit dem Filter wpdc_press_daily_limit anheben."

@@ -265,6 +265,7 @@ Every action checks the capability and a nonce.
 |---|---|---|---|
 | `wpdc_press_capability` | filter | capability | `manage_options` |
 | `wpdc_press_products` | filter | list of `pdt_…` ids | every catalogue product, or `WPDC_PRESS_PRODUCTS`; anything not shaped like an id is dropped |
+| `wpdc_press_daily_limit` | filter | int | `20` keys in 24 hours; `0` closes the page's create form |
 | `wpdc_press_generate_key` | filter | the generated key | 8 groups of 4 hex; a value that is not 8 to 128 letters, digits or dashes falls back to it |
 | `wpdc_press_key_args` | filter | body for `POST /license_keys`, form input | the body above; a product outside the list is refused, `expires_at` is set back to `null` |
 | `wpdc_press_key_created` | action | record, full key | after Dodo created it |

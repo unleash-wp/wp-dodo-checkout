@@ -25,7 +25,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.19.2' );
+define( 'WPDC_VERSION', '0.19.3' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -4276,8 +4276,9 @@ function ticket_sent( ?array $prefill, ?array $ticket ): array {
 
 $withCid = ticket_sent( wpdc_prefill_customer( 'kunde@example.com', 'K' ), array( 'cid' => 'cus_0Abc123', 'billing' => $billing ) );
 check(
-	'BELL: with a signed customer id Dodo gets the customer itself, with the address, all still editable',
+	'BELL: with a signed customer id Dodo gets the customer itself, with the address, editable but the email',
 	array( 'customer_id' => 'cus_0Abc123' ) === ( $withCid['customer'] ?? null )
+		&& false === ( $withCid['feature_flags']['allow_customer_editing_email'] ?? null )
 		&& $billing === ( $withCid['billing_address'] ?? null )
 		&& true === ( $withCid['show_saved_payment_methods'] ?? null )
 		&& true === ( $withCid['feature_flags']['allow_customer_editing_zipcode'] ?? null )
@@ -4893,6 +4894,27 @@ check( 'PRESS: disabling needs the nonce', false === $res['ok'] && 'bad_nonce' =
 $GLOBALS['wpdc_test_caps'] = array();
 $res = wpdc_press_handle( array( 'wpdc_press' => 'disable', 'id' => 'lic_x', '_wpnonce' => 'good' ) );
 check( 'PRESS: disabling needs the right', false === $res['ok'] && 'forbidden' === $res['reason'] && array() === $GLOBALS['wpdc_test_requests'] );
+
+// The daily limit: a stolen admin login must not hand out keys by the hundred.
+press_reset();
+$full = array();
+for ( $i = 0; $i < 20; $i++ ) {
+	$full[ 'lic_d' . $i ] = array( 'id' => 'lic_d' . $i, 'created_at' => time() - 60 );
+}
+$GLOBALS['wpdc_test_options']['wpdc_press_keys'] = $full;
+$res = wpdc_press_handle( press_form() );
+check( 'BELL: PRESS: the 21st key in a day is refused before Dodo is asked', false === $res['ok'] && 'daily_limit' === $res['reason'] && array() === $GLOBALS['wpdc_test_requests'] );
+foreach ( $full as $id => $r ) {
+	$full[ $id ]['created_at'] = time() - DAY_IN_SECONDS - 60;
+}
+$GLOBALS['wpdc_test_options']['wpdc_press_keys'] = $full;
+press_script_success();
+check( 'SILENCE: PRESS: keys older than a day do not count', true === wpdc_press_handle( press_form() )['ok'] );
+press_reset();
+$GLOBALS['wpdc_test_filters']['wpdc_press_daily_limit'] = 0;
+$res = wpdc_press_handle( press_form() );
+check( 'PRESS: wpdc_press_daily_limit can close it', false === $res['ok'] && 'daily_limit' === $res['reason'] );
+unset( $GLOBALS['wpdc_test_filters']['wpdc_press_daily_limit'] );
 
 // Source-level promises.
 $press_src = source( $root . '/includes/press.php' );

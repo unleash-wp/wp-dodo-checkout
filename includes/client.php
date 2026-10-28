@@ -668,7 +668,9 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 		// Dodo fills name and address from its own record and offers the saved cards.
 		$body['customer']                   = array( 'customer_id' => $signed['cid'] );
 		$body['show_saved_payment_methods'] = true;
-		$body['feature_flags']['allow_customer_editing_email'] = true;
+		// Locked while saved cards are offered: a ticket replayed by a script on
+		// this site must not pay with somebody's card for an address of its own.
+		$body['feature_flags']['allow_customer_editing_email'] = false;
 		$body['feature_flags']['allow_customer_editing_name']  = true;
 	} elseif ( is_array( $customer ) && is_string( $customer['email'] ?? null ) && is_email( $customer['email'] ) ) {
 		$body['customer'] = array( 'email' => $customer['email'] );

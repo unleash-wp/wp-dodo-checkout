@@ -1,6 +1,6 @@
 # wp-dodo-checkout: Mitarbeiter-Wiki
 
-Stand 2026-10-28 · Version 0.19.2 · Standardzweig `main` · Repo öffentlich
+Stand 2026-10-28 · Version 0.19.3 · Standardzweig `main` · Repo öffentlich
 
 Dieses Wiki erklärt dir das Plugin so, dass du eine Änderung sicher bis auf die Verkaufsseite bringst. Die
 englische [README](../README.md) ist die Referenz für Shop-Betreiber; hier steht, wie es innen funktioniert.
@@ -489,5 +489,7 @@ nie ein Ablaufdatum: kein Feld für die Dauer, `expires_at` ist immer `null`, au
 Produkte erscheinen mit ihrem Namen aus `GET /products/{id}` (eine Stunde gecacht, sonst die Id). Der Schlüssel steht genau
 einmal auf der Seite; gespeichert werden nur `lic_`-Id, letzte vier Zeichen, Empfänger, Produkt, Grund,
 Datum, Ersteller und Modus (Option `wpdc_press_keys`). Sperren und Entsperren über `PATCH
-/license_keys/{id}`. Recht, Nonce und Produktliste prüft `wpdc_press_handle()`. Hooks und Beispiele im
+/license_keys/{id}`. Recht, Nonce und Produktliste prüft `wpdc_press_handle()`. Höchstens 20 Schlüssel in
+24 Stunden (Filter `wpdc_press_daily_limit`, Audit 2026-10-28), gezählt aus `wpdc_press_keys`; der 21. wird
+abgewiesen, bevor Dodo Payments gefragt wird. Keine Mails, auch nicht an den Admin. Hooks und Beispiele im
 README.
