@@ -25,7 +25,7 @@ define( 'ABSPATH', $root . '/' );
 // Defined by the plugin's main file, which these tests deliberately do not load
 // -- so the harness stands in for it, exactly as WordPress would. Leaving it out
 // made config.php fatal on a constant that is always present in production.
-define( 'WPDC_VERSION', '0.19.1' );
+define( 'WPDC_VERSION', '0.19.2' );
 
 $GLOBALS['wpdc_test_options']    = array();
 $GLOBALS['wpdc_test_transients'] = array();
@@ -4179,8 +4179,15 @@ $checkoutJs = (string) file_get_contents( $root . '/assets/checkout.js' );
 check(
 	'BELL: the checkout asks the account who is signed in, with the cookie, and waits at most 800 ms',
 	str_contains( $checkoutJs, "login.account + '/api/checkout/prefill', { credentials: 'include' }" )
-		&& str_contains( $checkoutJs, 'setTimeout(function () { resolve(null); }, 800)' )
+		&& str_contains( $checkoutJs, 'setTimeout(function () { resolve(null); }, wait || 800)' )
 		&& 1 === preg_match( '/if \(me && me\.email\) \{\s*body\.email = me\.email;/', $checkoutJs )
+);
+// The first answer after a sign-in asks Dodo Payments three times; 800 ms dropped the prefill until a reload.
+check(
+	'BELL: after signing in from the checkout it waits for the prefill, up to six seconds',
+	str_contains( $checkoutJs, 'var WHO_PATIENT_MS = 6000;' )
+		&& str_contains( $checkoutJs, 'return requestUrl(root, wait)' )
+		&& str_contains( $checkoutJs, 'return whoSoon(wait).then(function (me) {' )
 );
 check(
 	'BELL: the account is asked as early as the SDK is warmed, not on the click',
@@ -4195,7 +4202,7 @@ check(
 check(
 	'BELL: signing in from the checkout continues the purchase prefilled, it does not leave for Downloads',
 	str_contains( $checkoutJs, 'login.show(btn, { onDone: function () {' )
-		&& str_contains( $checkoutJs, 'remintWith(root, root.dataset.discount || ' )
+		&& str_contains( $checkoutJs, "remintWith(root, root.dataset.discount || '', note, controls, WHO_PATIENT_MS)" )
 		&& str_contains( $modal = (string) file_get_contents( $root . '/assets/account-login.js' ), 'if (onDone) { var next = onDone; onDone = null; dialog.close(); next(); return; }' )
 		&& str_contains( (string) file_get_contents( $root . '/includes/account.php' ), "'continue'    => __( 'Continue to checkout'" )
 );

@@ -1,6 +1,6 @@
 # wp-dodo-checkout: Mitarbeiter-Wiki
 
-Stand 2026-10-28 · Version 0.19.1 · Standardzweig `main` · Repo öffentlich
+Stand 2026-10-28 · Version 0.19.2 · Standardzweig `main` · Repo öffentlich
 
 Dieses Wiki erklärt dir das Plugin so, dass du eine Änderung sicher bis auf die Verkaufsseite bringst. Die
 englische [README](../README.md) ist die Referenz für Shop-Betreiber; hier steht, wie es innen funktioniert.
