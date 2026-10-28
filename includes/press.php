@@ -118,6 +118,17 @@ function wpdc_press_customer( string $email, string $name ) {
 		: wpdc_error( 'bad_response', true, __( 'Dodo Payments did not accept this. Nothing was created or changed.', 'wp-dodo-checkout' ) );
 }
 
+function wpdc_press_daily_limit(): int {
+	$limit = apply_filters( 'wpdc_press_daily_limit', 20 );
+	return is_int( $limit ) && $limit >= 0 ? $limit : 20;
+}
+
+/** Keys this page made in the last 24 hours. */
+function wpdc_press_made_today(): int {
+	$since = time() - DAY_IN_SECONDS;
+	return count( array_filter( wpdc_press_records(), static fn( $r ) => (int) ( $r['created_at'] ?? 0 ) > $since ) );
+}
+
 /**
  * Create one key. Validated input in, the record and the key out.
  */
@@ -138,6 +149,10 @@ function wpdc_press_create( array $input, int $user_id ): array {
 	}
 	if ( ! wpdc_is_configured() ) {
 		return wpdc_error( 'not_configured', false, __( 'No Dodo API key is set, so no key can be created.', 'wp-dodo-checkout' ) );
+	}
+	// A stolen admin login must not hand out keys by the hundred.
+	if ( wpdc_press_made_today() >= wpdc_press_daily_limit() ) {
+		return wpdc_error( 'daily_limit', false, __( 'The daily limit for free keys is reached. Try again tomorrow, or raise it with the wpdc_press_daily_limit filter.', 'wp-dodo-checkout' ) );
 	}
 
 	$customer = wpdc_press_customer( $email, $name );
