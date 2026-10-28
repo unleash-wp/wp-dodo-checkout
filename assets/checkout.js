@@ -228,11 +228,14 @@
   }
 
   // Never more than a moment: a slow account must not slow down a purchase.
-  function whoSoon() {
-    return Promise.race([who(), new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 800); })]);
+  // Right after signing in from the checkout the person waits for exactly
+  // this answer, and the account's first one asks Dodo Payments three times.
+  var WHO_PATIENT_MS = 6000;
+  function whoSoon(wait) {
+    return Promise.race([who(), new Promise(function (resolve) { setTimeout(function () { resolve(null); }, wait || 800); })]);
   }
 
-  function requestUrl(root) {
+  function requestUrl(root, wait) {
     var bump = part(root, '.wpdc__bump-input');
     var body = {
       product: root.dataset.product,
@@ -257,7 +260,7 @@
     // settled on Dodo's page, where a browser cannot reach it.
     if (bump && bump.checked) body.bump = bump.value;
 
-    return whoSoon().then(function (me) {
+    return whoSoon(wait).then(function (me) {
       if (me && me.email) {
         body.email = me.email;
         if (me.name) body.name = me.name;
@@ -1484,7 +1487,7 @@
       var note = part(root, '.wpdc__discount-note');
       var controls = [part(root, '.wpdc__discount-input'), part(root, '.wpdc__discount-apply')];
       if (note) {
-        remintWith(root, root.dataset.discount || '', note, controls)
+        remintWith(root, root.dataset.discount || '', note, controls, WHO_PATIENT_MS)
           .then(function () { note.textContent = ''; })
           .catch(function () { note.textContent = ''; say(root, cfg.failed); });
       }
@@ -1564,7 +1567,7 @@
    * here, and the only difference is what `root.dataset.discount` holds when it
    * runs.
    */
-  function remintWith(root, code, note, controls) {
+  function remintWith(root, code, note, controls, wait) {
     var previous = root.dataset.discount || '';
     // A re-mint is a different checkout, so any wait belonging to the old one
     // stops here. Without this a reply about the abandoned session could show
@@ -1580,7 +1583,7 @@
     note.classList.remove('is-error');
     note.textContent = cfg.busy;
 
-    return requestUrl(root)
+    return requestUrl(root, wait)
       .then(function (url) {
         var dodo = sdk();
         var frame = part(root, '.wpdc__frame');
