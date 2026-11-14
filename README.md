@@ -64,7 +64,7 @@ All optional except the key. Constants go in `wp-config.php`.
 | `WPDC_DOWNLOAD_URL` | unset | `https://` page where a licence key is redeemed for its file. |
 | `WPDC_RETURN_URL` | unset | A thank-you page on this site. Unset, the popup shows the completion. |
 | `WPDC_ACCOUNT_URL` | `https://account.unleash-wp.com` | The customer account the sign-in modal talks to. `https://` origin only. |
-| `WPDC_ACCOUNT_SECRET` | unset | Shared secret with that account, for "Open my account" after a purchase and for the signed prefill ticket. |
+| `WPDC_ACCOUNT_SECRET` | unset | Shared secret with that account, for "Open my account" after a purchase and for the prefill ticket, signed (v1) or sealed (v2). |
 | `WPDC_CHECKOUT_FONT_URL` | the account's Ubuntu stylesheet | Font stylesheet for Dodo's form. Google Fonts URLs are refused. |
 | `WPDC_PRESS_PRODUCTS` | `all` | Which products **Settings > Press access** may give away. Unset or `all`: every product of the Dodo account, new ones included. A comma list of `pdt_…` ids narrows it; empty switches the page off. Independent of `WPDC_ALLOWED_PRODUCTS`. |
 

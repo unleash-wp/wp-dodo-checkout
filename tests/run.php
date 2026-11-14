@@ -4324,6 +4324,87 @@ check(
 	} )()
 );
 
+// ─── Sealed prefill ticket (v2): the browser cannot read what it carries ─────
+
+/** A sealed ticket as account makes it: v2. + base64url( nonce, ciphertext, tag ). */
+function sealed_for( array $claims, string $secret = 'test-checkout-secret', string $aad = 'v2' ): string {
+	$nonce  = random_bytes( 12 );
+	$tag    = '';
+	$cipher = (string) openssl_encrypt( (string) json_encode( $claims ), 'aes-256-gcm', hash_hkdf( 'sha256', $secret, 32, 'uwp checkout prefill ticket v2' ), OPENSSL_RAW_DATA, $nonce, $tag, $aad );
+	return 'v2.' . rtrim( strtr( base64_encode( $nonce . $cipher . $tag ), '+/', '-_' ), '=' );
+}
+
+// Sealed by account's TypeScript (the-browser-holds-no-readable-address.test.ts) with the
+// same secret, nonce 00..0b and exp in 2100. Both ends are pinned to these characters.
+$sealed_vector = 'v2.AAECAwQFBgcICQoLRuf-rJ6aBPA1_zXPD4PeOyBen-JR_-P0lpwq41E2hJ14lT1HxfRqkFtX-Cgnszb0ToZtJiAufM2cB9g3HLWya-hwDLeV_91IJ2vI8s_5btvTy2ztBA-9ESeIWGinDcfe-0hE2WQ_2X7w3yeKByCjM5Y0aNg9qpM3WthKPZuhny2i2NDPyQF-3WgTEzypXj4bFkf7';
+
+check(
+	'BELL: the sealed ticket account made opens to its customer id and address',
+	array( 'cid' => 'cus_0Abc123', 'billing' => array( 'country' => 'DE', 'zipcode' => '10115', 'city' => 'Berlin', 'street' => 'Hauptstr. 1' ) ) === wpdc_prefill_ticket( $sealed_vector )
+);
+check(
+	'BELL: a sealed ticket made here opens too, and reads the same as a signed one',
+	array( 'cid' => 'cus_0Abc123', 'billing' => $billing ) === wpdc_prefill_ticket( sealed_for( array( 'v' => 2, 'cid' => 'cus_0Abc123', 'billing' => $billing, 'exp' => $soon ) ) )
+		&& wpdc_prefill_ticket( sealed_for( array( 'v' => 2, 'cid' => 'cus_0Abc123', 'billing' => $billing, 'exp' => $soon ) ) ) === wpdc_prefill_ticket( ticket_for( array( 'v' => 1, 'cid' => 'cus_0Abc123', 'billing' => $billing, 'exp' => $soon ) ) )
+);
+check(
+	'BELL: nothing of a sealed ticket is readable without the secret',
+	( function () use ( $sealed_vector ): bool {
+		$raw = (string) base64_decode( strtr( substr( $sealed_vector, 3 ), '-_', '+/' ) );
+		return ! str_contains( $raw, 'cus_' ) && ! str_contains( $raw, 'Berlin' ) && ! str_contains( $raw, 'Hauptstr' );
+	} )()
+);
+check(
+	'BELL: a sealed ticket under another secret, changed by one character, cut short or expired is no ticket',
+	( function () use ( $sealed_vector, $soon ): bool {
+		$flipped = substr( $sealed_vector, 0, 40 ) . ( 'A' === $sealed_vector[40] ? 'B' : 'A' ) . substr( $sealed_vector, 41 );
+		return null === wpdc_prefill_ticket( sealed_for( array( 'v' => 2, 'cid' => 'cus_0Abc123', 'exp' => $soon ), 'other-secret' ) )
+			&& null === wpdc_prefill_ticket( $flipped )
+			&& null === wpdc_prefill_ticket( substr( $sealed_vector, 0, -4 ) )
+			&& null === wpdc_prefill_ticket( sealed_for( array( 'v' => 2, 'cid' => 'cus_0Abc123', 'exp' => $soon - 600000 ) ) )
+			&& null === wpdc_prefill_ticket( 'v2.' )
+			&& null === wpdc_prefill_ticket( 'v2.abc' )
+			&& null === wpdc_prefill_ticket( 'v2.' . str_repeat( '!', 60 ) )
+			&& null === wpdc_prefill_ticket( 'v3.' . substr( $sealed_vector, 3 ) );
+	} )()
+);
+check(
+	'BELL: the version inside must be the version outside, both ways',
+	null === wpdc_prefill_ticket( sealed_for( array( 'v' => 1, 'cid' => 'cus_0Abc123', 'exp' => $soon ) ) )
+		&& null === wpdc_prefill_ticket( sealed_for( array( 'v' => 2, 'cid' => 'cus_0Abc123', 'exp' => $soon ), 'test-checkout-secret', 'v1' ) )
+		&& null === wpdc_prefill_ticket( ticket_for( array( 'v' => 2, 'cid' => 'cus_0Abc123', 'exp' => $soon ) ) )
+);
+check(
+	'BELL: inside a sealed ticket, a strange id or country is dropped and fields are capped, as in a signed one',
+	( function () use ( $soon ): bool {
+		$t = wpdc_prefill_ticket( sealed_for( array( 'v' => 2, 'cid' => 'pay_notacustomer', 'billing' => array( 'country' => 'Germany', 'city' => 'X' ), 'exp' => $soon ) ) );
+		$u = wpdc_prefill_ticket( sealed_for( array( 'v' => 2, 'billing' => array( 'country' => 'DE', 'city' => str_repeat( 'x', 300 ), 'street' => '<b>A</b>' ), 'exp' => $soon ) ) );
+		return is_array( $t ) && ! isset( $t['cid'] ) && ! isset( $t['billing'] )
+			&& 100 === strlen( $u['billing']['city'] ?? '' ) && 'A' === ( $u['billing']['street'] ?? '' );
+	} )()
+);
+check(
+	'BELL: even a correctly sealed ticket is refused past 2048 characters',
+	null === wpdc_prefill_ticket( sealed_for( array( 'v' => 2, 'cid' => 'cus_0Abc123', 'pad' => str_repeat( 'x', 2100 ), 'exp' => $soon ) ) )
+);
+check(
+	'BELL: a sealed ticket reaches Dodo exactly as a signed one does: the customer, the address, saved cards',
+	( function () use ( $sealed_vector ): bool {
+		$sent = ticket_sent( wpdc_prefill_customer( 'kunde@example.com', 'K' ), wpdc_prefill_ticket( $sealed_vector ) );
+		return array( 'customer_id' => 'cus_0Abc123' ) === ( $sent['customer'] ?? null )
+			&& 'Hauptstr. 1' === ( $sent['billing_address']['street'] ?? null )
+			&& true === ( $sent['show_saved_payment_methods'] ?? null )
+			&& false === ( $sent['feature_flags']['allow_customer_editing_email'] ?? null );
+	} )()
+);
+check(
+	'SILENCE: a sealed ticket that does not open is the buyer without a ticket, never an error',
+	( function (): bool {
+		$sent = ticket_sent( wpdc_prefill_customer( 'kunde@example.com', 'K' ), wpdc_prefill_ticket( 'v2.abc' ) );
+		return array( 'email' => 'kunde@example.com', 'name' => 'K' ) === ( $sent['customer'] ?? null ) && ! isset( $sent['billing_address'] );
+	} )()
+);
+
 // ─── The checkout dressed as UnleashWP ───────────────────────────────────────
 
 $themed = ticket_sent( null, null );
