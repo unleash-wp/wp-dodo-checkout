@@ -199,10 +199,21 @@ Bestellung ist davon nie betroffen.
 ### Ablauf 3: Vorbelegung für angemeldete Kunden
 
 `checkout.js` fragt beim ersten Berühren `account /api/checkout/prefill` (mit Cookie). account antwortet mit
-E-Mail, Name, Rechnungsadresse und einem **signierten Ticket** (HMAC-SHA256 mit dem gemeinsamen Secret).
-`wpdc_prefill_ticket()` prüft Signatur und Ablauf. Nur mit gültigem Ticket schickt das Plugin `customer_id`
-und `billing_address` an Dodo und zeigt gespeicherte Zahlungsarten. Ohne Ticket gehen höchstens E-Mail und
-Name mit, beide im Formular änderbar. So kann kein Browser eine fremde `customer_id` einschleusen.
+E-Mail, Name und einem **Ticket**. Das Ticket trägt `customer_id` und Rechnungsadresse und kommt in zwei
+Fassungen, das Plugin nimmt beide:
+
+- **v1, signiert:** `payload.signatur`, HMAC-SHA256 mit dem gemeinsamen Secret. Der Inhalt ist im Browser lesbar.
+- **v2, versiegelt:** `v2.` plus base64url aus 12 Byte Nonce, Chiffrat und 16 Byte Tag. AES-256-GCM, der
+  Schlüssel entsteht per HKDF-SHA256 aus dem gemeinsamen Secret mit dem Zweck `uwp checkout prefill ticket v2`,
+  `v2` ist als Zusatzdaten gebunden. Der Browser kann Straße und `customer_id` nicht lesen. account schickt
+  v2 erst, wenn dort `UWP_PREFILL_SEALED=1` gesetzt ist. Reihenfolge: zuerst dieses Plugin ausrollen, dann
+  das Flag setzen.
+
+`wpdc_prefill_ticket()` prüft Fassung, Echtheit und Ablauf. Nur mit gültigem Ticket schickt das Plugin
+`customer_id` und `billing_address` an Dodo und zeigt gespeicherte Zahlungsarten. Ohne Ticket, auch wenn
+sich ein v2 nicht öffnen lässt, gehen höchstens E-Mail und Name mit, beide im Formular änderbar. So kann
+kein Browser eine fremde `customer_id` einschleusen. Ein Testvektor hält beide Enden auf einem Format:
+`tests/run.php` hier und `the-browser-holds-no-readable-address.test.ts` in account.
 
 ### Ablauf 4: Anmelde-Modal überall
 
@@ -301,8 +312,9 @@ Härtung aus dem Audit vom 2026-10-23 (Version 0.16.5, PR #38):
 | `tests/run.php` | läuft nur auf der Kommandozeile |
 | Workflows | Actions auf Commit-SHAs gepinnt; Release prüft vor dem ZIP |
 
-Bewusst offen geblieben: das gemeinsame Secret wird nicht pro Zweck abgeleitet, und das Ticket trägt kein
-`aud`/Nonce. Das ist ein Vertrag zwischen zwei Repos und braucht einen abgestimmten Rollout.
+Bewusst offen geblieben: für v1 und den Code an die Kaufadresse wird das gemeinsame Secret nicht pro Zweck
+abgeleitet (v2 leitet ab), und das Ticket trägt kein `aud`. Das ist ein Vertrag zwischen zwei Repos und
+braucht einen abgestimmten Rollout.
 
 ## Lokal einrichten und starten
 

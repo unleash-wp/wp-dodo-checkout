@@ -283,20 +283,49 @@ function wpdc_prefill_customer( ?string $email, ?string $name ): ?array {
 }
 
 /**
- * The account's signed word on who is buying: a Dodo customer id and the last
- * billing address. Only a ticket the account signed with the shared secret is
- * believed; a browser cannot name somebody else's customer and see their cards.
+ * Opens a sealed ticket: v2. + base64url( 12-byte nonce, ciphertext, 16-byte tag ),
+ * AES-256-GCM under a key derived from the shared secret for this purpose only.
+ * Anything that does not open is null, which the caller reads as "no ticket".
+ */
+function wpdc_open_sealed_ticket( string $ticket, string $secret ): ?array {
+	if ( ! function_exists( 'openssl_decrypt' ) || ! function_exists( 'hash_hkdf' ) || 1 !== preg_match( '/^v2\.([A-Za-z0-9_-]+)$/', $ticket, $m ) ) {
+		return null;
+	}
+	$raw = base64_decode( strtr( $m[1], '-_', '+/' ), true );
+	if ( ! is_string( $raw ) || strlen( $raw ) <= 28 ) {
+		return null;
+	}
+	// The same purpose string as account; the prefix is bound in as associated data.
+	$key   = hash_hkdf( 'sha256', $secret, 32, 'uwp checkout prefill ticket v2' );
+	$plain = openssl_decrypt( substr( $raw, 12, -16 ), 'aes-256-gcm', $key, OPENSSL_RAW_DATA, substr( $raw, 0, 12 ), substr( $raw, -16 ), 'v2' );
+	if ( ! is_string( $plain ) ) {
+		return null;
+	}
+	$claims = json_decode( $plain, true );
+	return is_array( $claims ) ? $claims : null;
+}
+
+/**
+ * The account's word on who is buying: a Dodo customer id and the last billing
+ * address. Only a ticket made with the shared secret is believed, signed (v1)
+ * or sealed (v2); a browser cannot name somebody else's customer and see their cards.
  */
 function wpdc_prefill_ticket( string $ticket ): ?array {
 	$secret = wpdc_account_secret();
-	if ( '' === $secret || strlen( $ticket ) > 2048 || 1 !== preg_match( '/^([A-Za-z0-9_-]+)\.([0-9a-f]{64})$/', $ticket, $m ) ) {
+	if ( '' === $secret || strlen( $ticket ) > 2048 ) {
 		return null;
 	}
-	if ( ! hash_equals( hash_hmac( 'sha256', $m[1], $secret ), $m[2] ) ) {
-		return null;
+	if ( 0 === strpos( $ticket, 'v2.' ) ) {
+		$version = 2;
+		$claims  = wpdc_open_sealed_ticket( $ticket, $secret );
+	} else {
+		$version = 1;
+		if ( 1 !== preg_match( '/^([A-Za-z0-9_-]+)\.([0-9a-f]{64})$/', $ticket, $m ) || ! hash_equals( hash_hmac( 'sha256', $m[1], $secret ), $m[2] ) ) {
+			return null;
+		}
+		$claims = json_decode( (string) base64_decode( strtr( $m[1], '-_', '+/' ), true ), true );
 	}
-	$claims = json_decode( (string) base64_decode( strtr( $m[1], '-_', '+/' ), true ), true );
-	if ( ! is_array( $claims ) || 1 !== ( $claims['v'] ?? null ) || ! is_int( $claims['exp'] ?? null ) || $claims['exp'] <= (int) ( microtime( true ) * 1000 ) ) {
+	if ( ! is_array( $claims ) || $version !== ( $claims['v'] ?? null ) || ! is_int( $claims['exp'] ?? null ) || $claims['exp'] <= (int) ( microtime( true ) * 1000 ) ) {
 		return null;
 	}
 
