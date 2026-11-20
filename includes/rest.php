@@ -165,6 +165,12 @@ function wpdc_register_rest(): void {
 					'validate_callback' => static fn( $value ): bool =>
 						is_numeric( $value ) && (int) $value >= 1 && (int) $value <= 50,
 				),
+				// The page to come back to after a bank's full-page check. Only
+				// this site's own pages are used (wpdc_return_url).
+				'return'   => array(
+					'required'          => false,
+					'validate_callback' => static fn( $value ): bool => is_string( $value ) && strlen( $value ) <= 2048,
+				),
 			),
 		)
 	);
@@ -250,7 +256,8 @@ function wpdc_rest_session( WP_REST_Request $request ): WP_REST_Response {
 			null !== $request->get_param( 'email' ) ? (string) $request->get_param( 'email' ) : null,
 			null !== $request->get_param( 'name' ) ? (string) $request->get_param( 'name' ) : null
 		),
-		null !== $request->get_param( 'ticket' ) ? wpdc_prefill_ticket( (string) $request->get_param( 'ticket' ) ) : null
+		null !== $request->get_param( 'ticket' ) ? wpdc_prefill_ticket( (string) $request->get_param( 'ticket' ) ) : null,
+		null !== $request->get_param( 'return' ) ? (string) $request->get_param( 'return' ) : null
 	);
 
 	if ( ! $result['ok'] ) {

@@ -406,6 +406,22 @@ check(
 	'BELL: no destination is invented when nobody configured one',
 	! isset( $sent['return_url'] )
 );
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_2' ) );
+$asked = wpdc_create_session( 'pdt_pro', 1, null, null, null, null, null, 'https://shop.example/plugins/pro/?wpdc_return=1' );
+$askedBody = json_decode( last_request()['args']['body'], true );
+check(
+	'SILENCE: the page the browser named travels as return_url and as cancel_url',
+	true === $asked['ok']
+		&& 'https://shop.example/plugins/pro/?wpdc_return=1' === ( $askedBody['return_url'] ?? null )
+		&& 'https://shop.example/plugins/pro/?wpdc_return=1' === ( $askedBody['cancel_url'] ?? null )
+);
+respond( 200, array( 'checkout_url' => 'https://checkout.dodopayments.com/session/cks_2' ) );
+$foreign = wpdc_create_session( 'pdt_pro', 1, null, null, null, null, null, 'https://evil.example/' );
+$foreignBody = json_decode( last_request()['args']['body'], true );
+check(
+	'BELL: a foreign page named by the browser never reaches Dodo',
+	true === $foreign['ok'] && ! isset( $foreignBody['return_url'] ) && ! str_contains( $foreignBody['cancel_url'] ?? '', 'evil' )
+);
 check(
 	// Their status page is a page on their domain that this shop never wrote.
 	// The last screen of a purchase belongs to the seller.
@@ -3264,12 +3280,28 @@ check(
 	wp_parse_url( 'https://evil.example/thanks', PHP_URL_HOST ) !== wp_parse_url( home_url(), PHP_URL_HOST )
 		&& wp_parse_url( 'https://shop.example/thanks', PHP_URL_HOST ) === wp_parse_url( home_url(), PHP_URL_HOST )
 		&& 1 === preg_match(
-			'/function wpdc_return_url\(\)[\s\S]{0,600}wp_parse_url\(\s*\$configured,\s*PHP_URL_HOST\s*\)\s*===\s*wp_parse_url\(\s*home_url\(\),\s*PHP_URL_HOST\s*\)/',
+			'/function wpdc_is_own_url\([\s\S]{0,600}wp_parse_url\(\s*\$url,\s*PHP_URL_HOST\s*\)\s*===\s*wp_parse_url\(\s*home_url\(\),\s*PHP_URL_HOST\s*\)/',
 			file_get_contents( $root . '/includes/client.php' )
 		)
 		// Undefined in this harness, so the function must answer with the empty
 		// string that means "no thank-you page" rather than inventing one.
 		&& '' === wpdc_return_url()
+);
+check(
+	// The page the checkout was opened on, asked for by the browser, so a bank's
+	// full-page 3-D Secure check comes back to this shop instead of ending on
+	// Dodo's status page (which reloaded itself for good, 2026-11-20).
+	'SILENCE: a page on this site is accepted as the way back, without its fragment',
+	'https://shop.example/plugins/pro/?wpdc_return=1' === wpdc_return_url( 'https://shop.example/plugins/pro/?wpdc_return=1#pricing' )
+);
+check(
+	// Run, not read: every shape that names another host is refused.
+	'BELL: a way back the browser names on another host is refused',
+	'' === wpdc_return_url( 'https://evil.example/' )
+		&& '' === wpdc_return_url( 'https://shop.example@evil.example/' )
+		&& '' === wpdc_return_url( '//evil.example/' )
+		&& '' === wpdc_return_url( 'javascript://shop.example/%0Aalert(1)' )
+		&& '' === wpdc_return_url( 'https://shop.example/' . str_repeat( 'a', 2100 ) )
 );
 check(
 	// A deadline that outlives the window it belonged to would redirect somebody
