@@ -177,6 +177,13 @@ class WP_REST_Response {
 	}
 }
 
+function wp_strip_all_tags( string $text ): string {
+	return trim( strip_tags( $text ) );
+}
+function wp_trim_words( string $text, int $num = 55, ?string $more = null ): string {
+	$words = preg_split( '/\s+/', trim( $text ), -1, PREG_SPLIT_NO_EMPTY );
+	return count( $words ) > $num ? implode( ' ', array_slice( $words, 0, $num ) ) . ( $more ?? '&hellip;' ) : implode( ' ', $words );
+}
 function shortcode_atts( array $pairs, $atts, string $tag = '' ): array {
 	$atts = (array) $atts;
 	$out  = array();
@@ -3535,6 +3542,46 @@ check(
 		return 1 === (int) get_transient( 'wpdc_price_lookups' );
 	} )()
 );
+
+
+// ─── The item route ─────────────────────────────────────────────────────────
+
+configure();
+respond( 200, array( 'items' => array( array(
+	'product_id'  => 'pdt_book',
+	'name'        => 'UnleashWP Learn | Band 1',
+	'image'       => 'https://cdn.example/cover.png',
+	'description' => '**Nur hier erhaeltlich**: eins zwei drei vier fuenf sechs sieben acht neun zehn elf zwoelf dreizehn vierzehn fuenfzehn sechzehn siebzehn achtzehn neunzehn zwanzig einundzwanzig',
+	'price'       => 999,
+	'currency'    => 'EUR',
+) ) ) );
+$item = wpdc_rest_item( new WP_REST_Request( array( 'product' => 'pdt_book' ) ) );
+$data = $item->get_data();
+check(
+	'BELL: the item route answers with the catalogue name, image and the trimmed plain description',
+	true === $data['ok']
+		&& 'UnleashWP Learn | Band 1' === $data['name']
+		&& 'https://cdn.example/cover.png' === $data['image']
+		&& str_starts_with( $data['description'], 'Nur hier erhaeltlich: eins' )
+		&& ! str_contains( $data['description'], '*' )
+		&& 22 === count( explode( ' ', str_replace( '&hellip;', '', $data['description'] ) ) )
+);
+check(
+	'BELL: the item route is the same for everyone, so a cache may keep it',
+	'public, max-age=300' === ( $item->headers['cache-control'] ?? '' )
+);
+$unknown_item = wpdc_rest_item( new WP_REST_Request( array( 'product' => 'pdt_not_listed' ) ) )->get_data();
+check( 'BELL: the item route says nothing about a product Dodo does not list', array( 'ok' => false ) === $unknown_item );
+
+configure();
+respond( 200, array( 'items' => array( array( 'product_id' => 'pdt_book', 'name' => 'Book', 'image' => 'http://cdn.example/cover.png', 'description' => '', 'price' => 999, 'currency' => 'EUR' ) ) ) );
+$plain = wpdc_rest_item( new WP_REST_Request( array( 'product' => 'pdt_book' ) ) )->get_data();
+check( 'BELL: an image not served over https is dropped, never passed on', true === $plain['ok'] && '' === $plain['image'] && '' === $plain['description'] );
+
+configure();
+respond( 500, array() );
+$down = wpdc_rest_item( new WP_REST_Request( array( 'product' => 'pdt_book' ) ) );
+check( 'BELL: with Dodo down and no copy the item route answers ok false, uncached', array( 'ok' => false ) === $down->get_data() && 'private, no-store' === ( $down->headers['cache-control'] ?? '' ) );
 
 configure();
 catalogue( array( 'pdt_book' ) );
