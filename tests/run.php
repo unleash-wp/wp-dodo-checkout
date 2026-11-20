@@ -3564,7 +3564,9 @@ check(
 		&& 'https://cdn.example/cover.png' === $data['image']
 		&& str_starts_with( $data['description'], 'Nur hier erhaeltlich: eins' )
 		&& ! str_contains( $data['description'], '*' )
-		&& 22 === count( explode( ' ', str_replace( '&hellip;', '', $data['description'] ) ) )
+		&& str_ends_with( $data['description'], '…' )
+		&& ! str_contains( $data['description'], '&' )
+		&& 22 === count( explode( ' ', rtrim( $data['description'], '…' ) ) )
 );
 check(
 	'BELL: the item route is the same for everyone, so a cache may keep it',
