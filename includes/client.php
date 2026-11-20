@@ -491,7 +491,7 @@ function wpdc_price_for_country( string $product, string $country ) {
  * @param int         $quantity How many.
  * @param string|null $bump     Optional second product id, one copy.
  */
-function wpdc_create_session( string $product, int $quantity = 1, ?string $bump = null, ?string $lang = null, ?string $discount = null, ?array $prefill = null, ?array $ticket = null ): array {
+function wpdc_create_session( string $product, int $quantity = 1, ?string $bump = null, ?string $lang = null, ?string $discount = null, ?array $prefill = null, ?array $ticket = null, ?string $return_to = null ): array {
 	if ( ! wpdc_is_configured() ) {
 		return wpdc_error(
 			'not_configured',
@@ -744,7 +744,9 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	 * says nothing about the purchase. With no destination their frame stays
 	 * put, and the shop finishes the order itself where the customer already is.
 	 */
-	$return = wpdc_return_url();
+	// Or the page the checkout opened on, when the browser names it: a bank's
+	// full-page 3-D Secure check then comes back here, not to Dodo's status page.
+	$return = wpdc_return_url( $return_to );
 	if ( '' !== $return ) {
 		$body['return_url'] = $return;
 	}
@@ -758,9 +760,9 @@ function wpdc_create_session( string $product, int $quantity = 1, ?string $bump 
 	 * check the address they had typed -- they could only close the window and
 	 * start again.
 	 *
-	 * Same-origin like the return url, and never taken from the request: a
-	 * cancel target a visitor can choose turns this into an open redirect on the
-	 * shop's own domain.
+	 * Same-origin like the return url, and checked the same way
+	 * (wpdc_is_own_url): a cancel target on another host would turn this into
+	 * an open redirect on the shop's own domain.
 	 */
 	$body['cancel_url'] = '' !== $return ? $return : home_url();
 
@@ -1124,18 +1126,27 @@ function wpdc_download_url(): string {
 	return '';
 }
 
-function wpdc_return_url(): string {
-	if ( defined( 'WPDC_RETURN_URL' ) && is_string( WPDC_RETURN_URL ) ) {
-		$configured = trim( WPDC_RETURN_URL );
-		// Same-origin only, checked rather than trusted. The scheme too: a
-		// javascript: URL can carry the shop's own host.
-		$scheme = strtolower( (string) wp_parse_url( $configured, PHP_URL_SCHEME ) );
-		if ( '' !== $configured && in_array( $scheme, array( 'http', 'https' ), true )
-			&& wp_parse_url( $configured, PHP_URL_HOST ) === wp_parse_url( home_url(), PHP_URL_HOST ) ) {
-			return $configured;
-		}
+function wpdc_return_url( ?string $requested = null ): string {
+	if ( defined( 'WPDC_RETURN_URL' ) && is_string( WPDC_RETURN_URL ) && wpdc_is_own_url( trim( WPDC_RETURN_URL ) ) ) {
+		return trim( WPDC_RETURN_URL );
+	}
+	if ( null !== $requested && wpdc_is_own_url( trim( $requested ) ) ) {
+		// The fragment is the browser's own and Dodo appends its query after it.
+		return (string) strtok( trim( $requested ), '#' );
 	}
 	return '';
+}
+
+/**
+ * A URL on this site and nowhere else: checked rather than trusted, because a
+ * return target from the request is otherwise an open redirect on the shop's
+ * own domain. The scheme too: a javascript: URL can carry the shop's own host.
+ */
+function wpdc_is_own_url( string $url ): bool {
+	$scheme = strtolower( (string) wp_parse_url( $url, PHP_URL_SCHEME ) );
+	return '' !== $url && strlen( $url ) <= 2048
+		&& in_array( $scheme, array( 'http', 'https' ), true )
+		&& wp_parse_url( $url, PHP_URL_HOST ) === wp_parse_url( home_url(), PHP_URL_HOST );
 }
 
 /**
