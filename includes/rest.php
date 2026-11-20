@@ -107,6 +107,25 @@ function wpdc_register_rest(): void {
 		)
 	);
 
+	// What the checkout's summary shows beside the frame: Dodo's own name, image and
+	// description, so a site that draws its own checkout shows what the plugin's does.
+	// Public and GET for the same reasons as /price; nothing in it varies per visitor.
+	register_rest_route(
+		'wp-dodo-checkout/v1',
+		'/item',
+		array(
+			'methods'             => 'GET',
+			'callback'            => 'wpdc_rest_item',
+			'permission_callback' => '__return_true',
+			'args'                => array(
+				'product' => array(
+					'required'          => true,
+					'validate_callback' => 'wpdc_is_product_id',
+				),
+			),
+		)
+	);
+
 	register_rest_route(
 		'wp-dodo-checkout/v1',
 		'/session',
@@ -491,4 +510,36 @@ function wpdc_remember_session( string $session ): void {
 
 function wpdc_session_known( string $session ): bool {
 	return false !== get_transient( wpdc_session_memory_key( $session ) );
+}
+
+/**
+ * The product as the checkout summary shows it: the same name, image and trimmed
+ * description wpdc_render_item() prints, read from the same catalogue.
+ *
+ * The same for every visitor, so a shared cache may keep it for a few minutes.
+ * An image is passed on only over https; anything else is dropped, not shown.
+ */
+function wpdc_rest_item( WP_REST_Request $request ): WP_REST_Response {
+	$product = (string) $request->get_param( 'product' );
+	$catalog = wpdc_catalog( false, true );
+	$item    = wpdc_is_error( $catalog ) ? null : ( $catalog[ $product ] ?? null );
+
+	if ( ! is_array( $item ) ) {
+		$response = new WP_REST_Response( array( 'ok' => false ), 200 );
+		$response->header( 'cache-control', 'private, no-store' );
+		return $response;
+	}
+
+	$image = (string) $item['image'];
+	$response = new WP_REST_Response(
+		array(
+			'ok'          => true,
+			'name'        => (string) $item['name'],
+			'image'       => str_starts_with( $image, 'https://' ) ? $image : '',
+			'description' => '' === $item['description'] ? '' : wp_trim_words( wpdc_plain_text( (string) $item['description'] ), 22 ),
+		),
+		200
+	);
+	$response->header( 'cache-control', 'public, max-age=300' );
+	return $response;
 }

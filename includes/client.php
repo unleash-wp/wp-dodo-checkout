@@ -280,6 +280,21 @@ function wpdc_catalog( bool $fresh = false, bool $render = false ) {
 }
 
 /**
+ * Dodo's product descriptions come back as MARKDOWN, which nothing in the API
+ * says. `wp_strip_all_tags` takes the HTML and leaves `**Nur hier erhaeltlich**`
+ * sitting in a checkout window with its asterisks showing. Unwrapped rather than
+ * rendered: two lines of prose do not need a Markdown renderer.
+ */
+function wpdc_plain_text( string $markdown ): string {
+	$text = wp_strip_all_tags( $markdown );
+	// [label](url) -> label, before the emphasis pass or the brackets survive.
+	$text = (string) preg_replace( '/\[([^\]]*)\]\([^)]*\)/', '$1', $text );
+	$text = (string) preg_replace( '/[*_`~]+/', '', $text );
+	$text = (string) preg_replace( '/^\s*#+\s*/m', '', $text );
+	return trim( (string) preg_replace( '/\s+/', ' ', $text ) );
+}
+
+/**
  * The prices a product carries besides its base one.
  *
  * `GET /products/{id}/localized-prices` returns EVERY rule at once, so this is

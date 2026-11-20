@@ -233,6 +233,7 @@ einmal danach ab, nur in Textknoten.
 | checkout.js | POST | `/wp-json/wp-dodo-checkout/v1/session` | `{url, session}` | 400 `unknown_product` oder falsche Form, 429 Deckel voll, 503 Dodo nicht erreichbar |
 | checkout.js | POST | `/wp-json/wp-dodo-checkout/v1/status` | `{finished, redirect, files, keys}`, `private, no-store` | immer 200; unbekannte Session, Deckel, Dodo-Fehler heißen `finished:false` |
 | checkout.js | GET | `/wp-json/wp-dodo-checkout/v1/price?product=pdt_...` | Preis für das Land des Besuchers | unbekanntes Produkt, Deckel: Seite behält den Grundpreis |
+| Website (unleashwp-web) | GET | `/wp-json/wp-dodo-checkout/v1/item?product=pdt_...` | Name, Bild (nur https) und gekürzte Beschreibung aus dem Dodo-Katalog, wie `wpdc_render_item` | unbekanntes Produkt oder Dodo weg: `ok: false`, Website zeigt den Namen vom Knopf |
 | checkout.js | POST | `/wp-json/wp-dodo-checkout/v1/account-code` | `{sent:true, email}` oder `{sent:false}` | immer 200, `private, no-store` |
 | Apple | GET | `/.well-known/apple-developer-merchantid-domain-association` | die Datei als text/plain | 404, solange die Datei fehlt (Absicht) |
 | Redakteur | Shortcode | `[wpdc_checkout]`, `[wpdc_price]`, `[wpdc_account]` | HTML | ungültige Id wird in der Seite gesagt |
