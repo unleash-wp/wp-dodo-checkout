@@ -536,7 +536,8 @@ function wpdc_rest_item( WP_REST_Request $request ): WP_REST_Response {
 			'ok'          => true,
 			'name'        => (string) $item['name'],
 			'image'       => str_starts_with( $image, 'https://' ) ? $image : '',
-			'description' => '' === $item['description'] ? '' : wp_trim_words( wpdc_plain_text( (string) $item['description'] ), 22 ),
+			// Plain text, not HTML: wp_trim_words ends on `&hellip;`, which a JSON reader shows as written.
+			'description' => '' === $item['description'] ? '' : html_entity_decode( wp_trim_words( wpdc_plain_text( (string) $item['description'] ), 22 ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ),
 		),
 		200
 	);
